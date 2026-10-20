@@ -11,7 +11,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Item } from '../../types';
-import { getItemStock, type StockCalculation } from '../../utils/stock';
+import { formatQuantity, getItemStock, stockRatio, type StockCalculation } from '../../utils/stock';
 import { useAppLanguage, useT } from '../../utils/naming';
 import type { EventType } from '../../types';
 import { useStorageLocations } from '../../hooks/useStorageLocations';
@@ -143,13 +143,11 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' } as const;
     /** Availability keeps its traffic-light color; damaged units always read as an error. */
     function availabilityText(row: ItemRow) {
-        const base = row.availability === 'none'
-            ? t('lists.itemsList.noneAvailable')
-            : t('lists.itemsList.stockOfTotalStockAvailable', { stock: String(row.stock), totalStock: String(row.totalStock) });
+        const base = stockRatio(row.stock, row.totalStock, row.item.isConsumable, row.item);
         const low = row.availability === 'low' ? ` · ${t('lists.itemsList.low')}` : '';
         return <>
             <Box component="span" sx={{ color: availabilityColor[row.availability] }}>{base + low}</Box>
-            {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {row.damaged} {t('lists.itemsList.damaged')}</Box>}
+            {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {formatQuantity(row.item, row.damaged)} {t('lists.itemsList.damaged')}</Box>}
         </>;
     }
 

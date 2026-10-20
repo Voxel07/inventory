@@ -37,6 +37,29 @@ class ItemCheckoutApiTest {
     }
 
     @Test
+    void consumableCheckoutIsConsumedAtOnceAndReversesAsOne() {
+        String location = TestLocations.section(ItemCheckoutApiTest::request,
+                Map.of("name", "Consumable source " + UUID.randomUUID()));
+        String item = request().body(Map.of("name", "Gaffer tape " + UUID.randomUUID(), "category", "Test",
+                "amount", 10, "storageLocation", location, "inventoryRole", "consumable"))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String checkout = request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 4,
+                "reason", "Testing", "locationId", location))
+                .post("/api/transactions").then().statusCode(200).extract().path("id");
+        request().get("/api/items/" + item).then().statusCode(200)
+                .body("stock.onHand", equalTo(6)).body("stock.checkedOut", equalTo(0));
+        request().get("/api/custody-balances").then().statusCode(200)
+                .body("find { it.itemId == '" + item + "' }", org.hamcrest.Matchers.nullValue());
+        request().body(Map.of("itemId", item, "transactionType", "checkin", "quantityChanged", 1, "reason", "Testing"))
+                .post("/api/transactions").then().statusCode(409);
+
+        request().body(Map.of("commandId", UUID.randomUUID().toString(), "reason", "Wrong item"))
+                .post("/api/transactions/" + checkout + "/reversal").then().statusCode(200);
+        request().get("/api/items/" + item).then().statusCode(200)
+                .body("stock.onHand", equalTo(10)).body("stock.checkedOut", equalTo(0));
+    }
+
+    @Test
     void boxRemainderFollowsIndividualCheckoutsWholeBoxesReturnsAndRestocking() {
         String location = TestLocations.section(ItemCheckoutApiTest::request,
                 Map.of("name", "Box source " + UUID.randomUUID()));

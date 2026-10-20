@@ -31,6 +31,7 @@ import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { LoadMore } from '../shared/LoadMore';
 import { type GeneralOrderSummary, type Item } from '../../types';
+import { formatQuantity } from '../../utils/stock';
 import { translate, useT } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { Link as RouterLink } from 'react-router-dom';
@@ -73,7 +74,7 @@ export function GeneralOrders() {
   const { user } = useAuth();
   // ASH crew change their own general orders; warehouse workers change every order.
   const canChange = (order: GeneralOrderSummary) => (order.createdBy === user?.id && canUseGeneralOrders(user)) || canOperateWarehouse(user);
-  const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'} | null>(null);
+  const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'restock' | 'history'} | null>(null);
   const [pickupOrder, setPickupOrder] = useState<string | null>(null);
   const [editing, setEditing] = useState<GeneralOrderSummary | null | 'new'>(null);
   const [name, setName] = useState('');
@@ -120,9 +121,9 @@ export function GeneralOrders() {
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-          <Typography variant="caption" color="text.secondary">{item.category} · {t('enum.itemStatus.available')}: {item.stock?.available ?? 0}</Typography>
+          <Typography variant="caption" color="text.secondary">{item.category} · {t('enum.itemStatus.available')}: {formatQuantity(item, item.stock?.available ?? 0)}</Typography>
         </Box>
-        <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''}
+        <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
           onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
       </Stack>
     </Paper>
@@ -151,6 +152,8 @@ export function GeneralOrders() {
         {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.markThisOrderReadyForPickup')} onClick={() => advance(order, 'ready')}>{t('orders.generalOrders.markReady')}</Button>}
         {order.status === 'ready' && canTakeOut(user) && <Button title={translate('orders.generalOrders.recordPickupAndTheResponsiblePerson')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('orders.generalOrders.pickUp')}</Button>}
         {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('orders.generalOrders.enterReturnQuantitiesAndCondition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('orders.generalOrders.recordReturn')}</Button>}
+        {['returned', 'closed'].includes(order.status) && canOperateWarehouse(user) && Object.values(order.consumedQuantities ?? {}).some((quantity) => quantity > 0)
+          && <Button title={translate('orders.restockUnused.openRestockTitle')} size="small" onClick={() => setWorkflow({ order, action: 'restock' })}>{t('orders.restockUnused.openRestock')}</Button>}
         {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('orders.generalOrders.closeThisOrder')} size="small" onClick={() => advance(order, 'close')}>{t('orders.generalOrders.close')}</Button>}
         {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('orders.generalOrders.cancelThisOrder')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('orders.generalOrders.cancel')}</Button>}
       </>,
@@ -222,7 +225,7 @@ export function GeneralOrders() {
               {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
-                  <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''}
+                  <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
                     onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
                   <Button title={translate('orders.generalOrders.removeThisItemFromTheOrder')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('common.remove')}</Button>
                 </Stack>

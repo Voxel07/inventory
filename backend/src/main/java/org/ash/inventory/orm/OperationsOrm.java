@@ -113,6 +113,24 @@ public class OperationsOrm extends EntityOrm {
         return query.getSingleResult();
     }
 
+    /** Units already restocked from one direct checkout. */
+    public int restockedQuantity(StockTransaction checkout) {
+        return Math.toIntExact(entityManager.createQuery("select coalesce(sum(tx.quantity), 0) from StockTransaction tx"
+                + " where tx.relatedEntityType = 'restock' and tx.relatedEntityId = :checkout and tx.type = :checkin", Long.class)
+                .setParameter("checkout", checkout.id)
+                .setParameter("checkin", org.ash.inventory.model.DomainEnums.TransactionType.checkin).getSingleResult());
+    }
+
+    /** Recent direct (non-order) checkouts of an item, newest first. */
+    public List<StockTransaction> directCheckouts(Item item, int limit) {
+        return entityManager.createQuery("from StockTransaction tx join fetch tx.user left join fetch tx.eventOccurrence"
+                + " where tx.item = :item and tx.type = :checkout and tx.order is null and tx.reverses is null"
+                + " and not exists (select r.id from StockTransaction r where r.reverses = tx)"
+                + " order by tx.occurredAt desc", StockTransaction.class).setParameter("item", item)
+                .setParameter("checkout", org.ash.inventory.model.DomainEnums.TransactionType.checkout)
+                .setMaxResults(limit).getResultList();
+    }
+
     public StockTransaction transactionByIdempotencyKey(UUID key) {
         return entityManager.createQuery("from StockTransaction tx where tx.idempotencyKey = :key", StockTransaction.class)
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);

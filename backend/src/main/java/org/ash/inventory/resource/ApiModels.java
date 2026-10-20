@@ -29,7 +29,8 @@ public final class ApiModels {
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
             LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime,
             @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber,
-            @Size(max = 20) List<@NotNull @Valid ItemScheduleInput> maintenanceSchedules) {}
+            @Size(max = 20) List<@NotNull @Valid ItemScheduleInput> maintenanceSchedules,
+            @Size(max = 32) String unit, @Min(0) @jakarta.validation.constraints.Max(3) Integer quantityDecimals) {}
 
     /** Creation only: an item-wide maintenance plan created together with the item. */
     public record ItemScheduleInput(@NotNull DomainEnums.MaintenanceType maintenanceType,
@@ -96,10 +97,21 @@ public final class ApiModels {
     public record PreparationInput(Map<@NotNull UUID, @NotNull @Min(0) Integer> preparedQuantities,
             Map<@NotNull UUID, @NotNull List<@NotNull UUID>> assetAssignments,
             boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {}
-    /** {@code missing} is the unresolved total after this command; the other quantities are reconciled now. */
+    /** {@code missing} is the unresolved total after this command; the other quantities are reconciled now. Consumables are consumed at pickup. */
     public record ReturnLine(
-            @Min(0) int returned, @Min(0) int consumed, @Min(0) int missing, @Min(0) int damaged,
+            @Min(0) int returned, @Min(0) int missing, @Min(0) int damaged,
             @Min(0) int writtenOff, BigDecimal operatingHours, String notes) {}
+    /**
+     * Unused consumables brought back after pickup, per item in the item's steps (7.5 L with one decimal is 75). They
+     * leave the consumed total and go back to stock at {@code locationId} (default: the item's return location).
+     */
+    public record OrderRestockInput(@NotEmpty Map<@NotNull UUID, @NotNull @Min(1) Integer> quantities,
+            UUID idempotencyKey, UUID locationId, @Size(max = 2000) String notes) {}
+    /** Unused consumables of one direct checkout brought back to stock. */
+    public record RestockInput(@Min(1) int quantity, UUID idempotencyKey, UUID locationId, @Size(max = 2000) String notes) {}
+    /** A direct consumable checkout that can still take restocked units. */
+    public record RestockableCheckout(UUID checkoutId, Instant occurredAt, String person, String event, String faction,
+            int issued, int restocked) {}
     public record AssetReturnLine(
             @NotNull DomainEnums.ReconciliationOutcome outcome,
             BigDecimal operatingHours,

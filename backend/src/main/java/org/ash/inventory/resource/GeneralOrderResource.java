@@ -100,6 +100,14 @@ public class GeneralOrderResource {
         return queries.projectGeneralOrder(service.returnItems(id, input));
     }
 
+    @POST
+    @Path("/{id}/restock")
+    @Transactional
+    public ApiResponses.GeneralOrderResponse restock(@PathParam("id") UUID id, @Valid ApiModels.OrderRestockInput input) {
+        queries.generalOrder(id);
+        return queries.projectGeneralOrder(service.restockUnused(id, input));
+    }
+
     @GET
     @Path("/{id}/pickup-groups")
     public OrderPickupService.Plan pickupGroups(@PathParam("id") UUID id) {

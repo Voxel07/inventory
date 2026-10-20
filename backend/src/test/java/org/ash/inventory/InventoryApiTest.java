@@ -736,17 +736,17 @@ class InventoryApiTest {
     }
 
     @Test
-    void unopenedConsumablesReturnToStockAndConsumedUnitsDoNot() {
+    void consumablesAreConsumedAtOrderPickupAndCannotBeReturned() {
         String warehouseId = TestLocations.section(() -> request(), Map.of("name", "Consumable warehouse", "mapZoom", 16));
         String eventSiteId = TestLocations.section(() -> request(), Map.of("name", "Consumable event site", "mapZoom", 16,
                         "latitude", 52.5, "longitude", 13.4));
-        String itemId = request().body(Map.of("sku", "CONSUMABLE-RETURN-001", "name", "Returnable boxes",
+        String itemId = request().body(Map.of("sku", "CONSUMABLE-PICKUP-001", "name", "Cable ties",
                         "category", "Test", "amount", 4, "value", 0, "inventoryRole", "consumable",
                         "storageLocation", warehouseId))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
-        orderBody.put("faction", "Consumable return faction");
+        orderBody.put("faction", "Consumable pickup faction");
         orderBody.put("eventDate", "2037-06-10");
         orderBody.put("requestedQuantities", Map.of(itemId, 4));
         orderBody.put("requestedAssemblyQuantities", Map.of());
@@ -757,34 +757,62 @@ class InventoryApiTest {
         request().body(Map.of("pickupLocation", eventSiteId))
                 .post("/api/orders/faction/" + orderId + "/transitions/ready").then().statusCode(200);
         String pickupCommand = java.util.UUID.randomUUID().toString();
+        // Nothing returnable was handed over, so the order is complete at pickup.
         request().body(Map.of("idempotencyKey", pickupCommand))
-                .post("/api/orders/faction/" + orderId + "/transitions/picked_up").then().statusCode(200);
-
-        String returnCommand = java.util.UUID.randomUUID().toString();
-        request().body(Map.of("idempotencyKey", returnCommand, "lines", Map.of(itemId,
-                        Map.of("returned", 2, "consumed", 2, "missing", 0, "damaged", 0))))
-                .post("/api/orders/faction/" + orderId + "/return").then().statusCode(200)
+                .post("/api/orders/faction/" + orderId + "/transitions/picked_up").then().statusCode(200)
                 .body("status", equalTo("returned"))
-                .body("returnedQuantities.'" + itemId + "'", equalTo(2))
-                .body("consumedQuantities.'" + itemId + "'", equalTo(2));
+                .body("consumedQuantities.'" + itemId + "'", equalTo(4));
+        request().body(Map.of("idempotencyKey", pickupCommand))
+                .post("/api/orders/faction/" + orderId + "/transitions/picked_up").then().statusCode(200)
+                .body("status", equalTo("returned"));
 
+        request().get("/api/items/" + itemId).then().statusCode(200)
+                .body("stock.onHand", equalTo(0)).body("stock.checkedOut", equalTo(0));
+        request().get("/api/custody-balances").then().statusCode(200)
+                .body("find { it.itemId == '" + itemId + "' }", nullValue());
         request().get("/api/transactions?itemId=" + itemId).then().statusCode(200)
                 .body("find { it.transactionType == 'checkout' }.clientCommandId", equalTo(pickupCommand))
                 .body("find { it.transactionType == 'checkout' }.sourceLocationId", equalTo(warehouseId))
-                .body("find { it.transactionType == 'checkout' }.destinationLocationId", equalTo(eventSiteId))
-                .body("find { it.transactionType == 'checkin' }.quantityChanged", equalTo(2))
-                .body("find { it.transactionType == 'checkin' }.clientCommandId", equalTo(returnCommand))
-                .body("find { it.transactionType == 'checkin' }.sourceLocationId", equalTo(eventSiteId))
-                .body("find { it.transactionType == 'checkin' }.destinationLocationId", equalTo(warehouseId))
-                .body("find { it.transactionType == 'consumed' }.quantityChanged", equalTo(2));
+                .body("find { it.transactionType == 'consumed' }.quantityChanged", equalTo(4));
+    }
 
-        var demand = new java.util.HashMap<String, Object>(orderBody);
-        demand.put("faction", "Consumable stock verification");
-        demand.put("requestedQuantities", Map.of(itemId, 3));
-        String nextOrder = request().body(demand).post("/api/orders/faction").then().statusCode(200).extract().path("id");
-        request().body(Map.of()).post("/api/orders/faction/" + nextOrder + "/transitions/submitted").then().statusCode(200);
-        request().body(Map.of("preparedQuantities", Map.of(itemId, 3), "acknowledgeShortages", false))
-                .post("/api/orders/faction/" + nextOrder + "/prepare").then().statusCode(409);
+    @Test
+    void consumableReturnIsRejectedOnMixedOrder() {
+        String warehouseId = TestLocations.section(() -> request(), Map.of("name", "Mixed warehouse", "mapZoom", 16));
+        String eventSiteId = TestLocations.section(() -> request(), Map.of("name", "Mixed event site", "mapZoom", 16,
+                        "latitude", 52.5, "longitude", 13.4));
+        String consumable = request().body(Map.of("sku", "CONSUMABLE-MIXED-001", "name", "Gaffer tape",
+                        "category", "Test", "amount", 3, "value", 0, "inventoryRole", "consumable", "storageLocation", warehouseId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        String returnable = request().body(Map.of("sku", "RETURNABLE-MIXED-001", "name", "Tent",
+                        "category", "Test", "amount", 2, "value", 0, "storageLocation", warehouseId))
+                .post("/api/items").then().statusCode(200).extract().path("id");
+        var orderBody = new java.util.HashMap<String, Object>();
+        orderBody.put("eventType", "DE");
+        orderBody.put("faction", "Mixed pickup faction");
+        orderBody.put("eventDate", "2037-06-11");
+        orderBody.put("requestedQuantities", Map.of(consumable, 3, returnable, 2));
+        orderBody.put("requestedAssemblyQuantities", Map.of());
+        String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
+        request().body(Map.of()).post("/api/orders/faction/" + orderId + "/transitions/submitted").then().statusCode(200);
+        request().body(Map.of("preparedQuantities", Map.of(consumable, 3, returnable, 2), "acknowledgeShortages", false))
+                .post("/api/orders/faction/" + orderId + "/prepare").then().statusCode(200);
+        request().body(Map.of("pickupLocation", eventSiteId))
+                .post("/api/orders/faction/" + orderId + "/transitions/ready").then().statusCode(200);
+        request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString()))
+                .post("/api/orders/faction/" + orderId + "/transitions/picked_up").then().statusCode(200)
+                .body("status", equalTo("picked_up"));
+
+        request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString(), "lines", Map.of(consumable,
+                        Map.of("returned", 1, "missing", 0, "damaged", 0))))
+                .post("/api/orders/faction/" + orderId + "/return").then().statusCode(400);
+        request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString()))
+                .post("/api/orders/faction/" + orderId + "/return-all").then().statusCode(200)
+                .body("status", equalTo("returned"))
+                .body("returnedQuantities.'" + returnable + "'", equalTo(2))
+                .body("consumedQuantities.'" + consumable + "'", equalTo(3));
+        request().get("/api/items/" + consumable).then().statusCode(200).body("stock.onHand", equalTo(0));
+        request().get("/api/items/" + returnable).then().statusCode(200).body("stock.onHand", equalTo(2));
     }
 
     @Test
@@ -832,7 +860,7 @@ class InventoryApiTest {
 
         for (int missing : java.util.List.of(1, 1, 2)) {
             request().body(Map.of("idempotencyKey", java.util.UUID.randomUUID().toString(), "lines", Map.of(itemId,
-                            Map.of("returned", 0, "consumed", 0, "missing", missing, "damaged", 0))))
+                            Map.of("returned", 0, "missing", missing, "damaged", 0))))
                     .post("/api/orders/faction/" + orderId + "/return").then().statusCode(200)
                     .body("missingQuantities.'" + itemId + "'", equalTo(missing));
         }

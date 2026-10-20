@@ -103,6 +103,9 @@ export interface Item {
   isConsumable: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
+  /** Display unit ("L"); absent counts pieces. Every quantity of the item is in whole steps of 10^-quantityDecimals units. */
+  unit?: string | null;
+  quantityDecimals?: number;
   containerSize?: number;
   containerCount?: number;
   containerRemainingCount?: number;
@@ -145,6 +148,8 @@ export interface ItemFormData {
   hint?: string;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
+  unit?: string;
+  quantityDecimals?: number;
   imageFiles?: File[];
   imageReplacements?: Record<string, File>;
   removeImages?: string[];

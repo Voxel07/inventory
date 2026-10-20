@@ -51,7 +51,7 @@ import {
 import { useItem, useUpdateItem, useItemCategories } from '../hooks/useItems';
 import { locationLabel } from '../utils/locationHierarchy';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
-import { getItemStock } from '../utils/stock';
+import { formatQuantity, fromSteps, getItemStock } from '../utils/stock';
 import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
@@ -59,6 +59,8 @@ import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
 import { TransactionForm } from '../components/forms/TransactionForm';
+import type { RestockCheckoutData } from '../components/forms/RestockCheckoutForm';
+import { restockCheckout } from '../services/transactionService';
 import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { AssetInstancesList } from '../components/items/AssetInstancesList';
 import { ItemDamageReports } from '../components/items/ItemDamageReports';
@@ -69,7 +71,7 @@ import { canEditCatalog, canOperateWarehouse, canPerformCustody, canTakeOut } fr
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { getMaintenanceRecords } from '../services/maintenanceService';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -103,6 +105,8 @@ export function ItemDetail() {
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
+    const restock = useMutation({ mutationFn: (data: RestockCheckoutData) =>
+        restockCheckout(data.checkoutId, { quantity: data.quantity, notes: data.notes, idempotencyKey: crypto.randomUUID() }) });
     const createReturn = useCreateReturnSubmission();
     const { data: storageLocations } = useStorageLocations();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -222,7 +226,8 @@ export function ItemDetail() {
     }
 
     const physicalTotal = item.stock ? item.stock.onHand + item.stock.checkedOut + item.stock.inTransit : totalStock;
-    const totalValue = (item.value ?? 0) * physicalTotal;
+    // The unit value is per unit (per litre), stock is in the item's steps.
+    const totalValue = (item.value ?? 0) * fromSteps(item, physicalTotal);
     const ownershipLabels = { organization: t('enum.value.organization'), private_owner: t('pages.itemDetail.private'), external: t('enum.value.external') };
     const policyLabels = { available: t('enum.itemStatus.available'), commitment_required: t('enum.value.commitment_required'), unavailable: t('enum.value.unavailable') };
     const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 0) ? 'low' : 'ok';
@@ -268,7 +273,7 @@ export function ItemDetail() {
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={tinyChip} />
                         <Typography variant="body2" className="tabular" sx={{ fontWeight: 600 }}>
-                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${tx.quantityChanged}` : tx.quantityChanged}
+                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${formatQuantity(item, tx.quantityChanged)}` : formatQuantity(item, tx.quantityChanged)}
                         </Typography>
                     </Stack>
                     <Typography variant="body2" color="text.secondary">
@@ -300,7 +305,7 @@ export function ItemDetail() {
                                 <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={tinyChip} />
                             </TableCell>
                             <TableCell>{userName(tx)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>{tx.quantityChanged}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>{formatQuantity(item, tx.quantityChanged)}</TableCell>
                             <TableCell>
                                 {tx.reason || '—'}
                                 {assetLabel(tx) && <Box component="span" className="mono" sx={{ display: 'block', color: 'text.secondary' }}>{assetLabel(tx)}</Box>}
@@ -333,7 +338,7 @@ export function ItemDetail() {
                         </Stack>
                     </Box>
                     <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
-                        (canTransact || canCheckout) && { key: 'checkout', label: canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut'), icon: <SwapHorizIcon />,
+                        (canTransact || canCheckout) && { key: 'checkout', label: canTransact && !item.isConsumable ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut'), icon: <SwapHorizIcon />,
                             variant: 'contained', pinned: true, onClick: () => { setLotRequest(undefined); setCheckoutOpen(true); } },
                         canEdit && { key: 'edit', label: t('common.edit'), icon: <EditIcon />, variant: canTransact ? 'outlined' : 'contained', pinned: !canTransact && !canCheckout, onClick: () => setEditOpen(true) },
                         { key: 'label', label: t('pages.itemDetail.printLabel'), icon: <QrCode2Icon />, onClick: () => setQrOpen(true) },
@@ -350,13 +355,14 @@ export function ItemDetail() {
             <Stack spacing={1.5}>
                 <DetailPanel title={t('common.stock')}>
                     <MetricList minWidth={170}>
-                        <Metric label={t('enum.itemStatus.available')} color={availabilityColor}>{remaining}</Metric>
-                        <Metric label={t('pages.itemDetail.total')}>{physicalTotal}</Metric>
-                        <Metric label={t('nav.checkedOut')}>{checkedOut}</Metric>
-                        <Metric label={t('pages.itemDetail.inTransit')}>{inTransit}</Metric>
-                        <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{damaged}</Metric>
-                        <Metric label={t('enum.value.ordered')}>{item.stock?.ordered ?? 0}</Metric>
-                        <Metric label={t('pages.itemDetail.minimumStock')}>{item.minStock ?? 0}</Metric>
+                        <Metric label={t('enum.itemStatus.available')} color={availabilityColor}>{formatQuantity(item, remaining)}</Metric>
+                        <Metric label={t('pages.itemDetail.total')}>{formatQuantity(item, physicalTotal)}</Metric>
+                        {/* Consumables are consumed on checkout and never held. */}
+                        {!item.isConsumable && <Metric label={t('nav.checkedOut')}>{formatQuantity(item, checkedOut)}</Metric>}
+                        <Metric label={t('pages.itemDetail.inTransit')}>{formatQuantity(item, inTransit)}</Metric>
+                        <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{formatQuantity(item, damaged)}</Metric>
+                        <Metric label={t('enum.value.ordered')}>{formatQuantity(item, item.stock?.ordered ?? 0)}</Metric>
+                        <Metric label={t('pages.itemDetail.minimumStock')}>{formatQuantity(item, item.minStock ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.totalValue')}>{formatMoney(totalValue)}</Metric>
                         {(item.containerSize ?? 0) > 0 && <>
@@ -488,14 +494,18 @@ export function ItemDetail() {
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>{canTransact ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</DialogTitle>
+                <DialogTitle>{canTransact && !item.isConsumable ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</DialogTitle>
                 <DialogContent dividers>
                     <TransactionForm
                         items={[item]}
                         preselectedItemId={item.id}
                         initialData={lotRequest ? { itemId: item.id, transactionType: 'added', quantityChanged: 1, reason: '', notes: '', lotId: lotRequest } : undefined}
                         onSubmit={handleTransaction}
-                        isLoading={createTransaction.isPending || createReturn.isPending}
+                        onRestock={(data) => restock.mutate(data, {
+                            onSuccess: () => { setCheckoutOpen(false); showSnackbar(t('orders.restockUnused.restocked'), 'success'); },
+                            onError: (error) => showSnackbar(error.message, 'error'),
+                        })}
+                        isLoading={createTransaction.isPending || createReturn.isPending || restock.isPending}
                     />
                 </DialogContent>
             </Dialog>

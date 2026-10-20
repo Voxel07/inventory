@@ -7,6 +7,8 @@ import { translate, useT } from '../../utils/naming';
 import { RuntimeReturnField } from '../items/RuntimeReturnField';
 import { parseHoursRun, readingAfter } from '../../utils/runtimeHours';
 import { useEventReports } from '../../hooks/useEvents';
+import { RestockUnusedFields } from '../orders/RestockUnused';
+import { restockQuantities } from '../../utils/restock';
 
 type Outcome = ReturnLineInput;
 
@@ -17,12 +19,14 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
   /** inventory admins may write off units that will not come back, which lets the order close. */
   canWriteOff?: boolean;
   onCancel: () => void;
-  onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>) => void;
+  /** `restock`: unused consumables (item steps) going back to stock; empty keeps everything issued consumed. */
+  onSubmit: (lines: Record<string, Outcome>, assets: Record<string, AssetReturnOutcome>, restock: Record<string, number>) => void;
 }) {
   const t = useT();
   const outstanding: Record<string, number> = Object.fromEntries(items.map((item) => {
     const handedOver = order.handedOverQuantities?.[item.id] ?? 0;
     const reconciled = (order.returnedQuantities?.[item.id] ?? 0)
+      // Consumables are consumed at pickup and never outstanding.
       + (order.consumedQuantities?.[item.id] ?? 0)
       + (order.damagedQuantities?.[item.id] ?? 0)
       + (order.writtenOffQuantities?.[item.id] ?? 0);
@@ -35,6 +39,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     ]).filter(([, assets]) => (assets as AssetInstance[]).length > 0),
   ) as Record<string, AssetInstance[]>;
   const [assetOutcomes, setAssetOutcomes] = useState<Record<string, AssetReturnOutcome>>({});
+  const [restock, setRestock] = useState<Record<string, string>>({});
   // Hours run per returned unit (asset id) or per runtime-tracked bulk item (item id), booked to the order's event.
   const [hoursRun, setHoursRun] = useState<Record<string, string>>({});
   const { data: events = [] } = useEventReports();
@@ -47,7 +52,6 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       if (assets.length) {
         return [itemId, {
           returned: 0,
-          consumed: 0,
           missing: assets.filter((asset) => asset.availabilityStatus === 'lost').length,
           damaged: 0,
           writtenOff: 0,
@@ -56,7 +60,6 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       const existingMissing = Math.min(Number(quantity), order.missingQuantities?.[itemId] ?? 0);
       return [itemId, {
         returned: 0,
-        consumed: 0,
         missing: existingMissing,
         damaged: 0,
         writtenOff: 0,
@@ -71,7 +74,6 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     const assets = outstandingAssets[itemId] ?? [];
     return {
       returned: assets.filter((asset) => next[asset.id]?.outcome === 'returned_good').length,
-      consumed: 0,
       damaged: assets.filter((asset) => next[asset.id]?.outcome === 'returned_damaged').length,
       writtenOff: assets.filter((asset) => next[asset.id]?.outcome === 'written_off').length,
       missing: assets.filter((asset) => next[asset.id]?.outcome === 'missing'
@@ -88,8 +90,8 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     });
   };
   const exceedsOutstanding = Object.entries(lines).some(([itemId, value]) =>
-    value.returned < 0 || value.consumed < 0 || value.missing < 0 || value.damaged < 0 || value.writtenOff < 0
-    || value.returned + value.consumed + value.missing + value.damaged + value.writtenOff > Number(outstanding[itemId]));
+    value.returned < 0 || value.missing < 0 || value.damaged < 0 || value.writtenOff < 0
+    || value.returned + value.missing + value.damaged + value.writtenOff > Number(outstanding[itemId]));
   const writeOffWithoutReason = Object.values(lines).some((value) => value.writtenOff > 0 && !value.notes?.trim());
   const runtimeMissing = Object.keys(lines).some((itemId) => tracksRuntime(itemId) && ((outstandingAssets[itemId] ?? []).length
     ? outstandingAssets[itemId].some((asset) => assetBackInStock(asset.id) && parseHoursRun(hoursRun[asset.id]) == null)
@@ -109,7 +111,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       return [assetId, entry && tracksRuntime(entry[0]) && assetBackInStock(assetId)
         ? { ...outcome, operatingHours: readingAfter(asset?.operatingHours, parseHoursRun(hoursRun[assetId])) } : outcome];
     }));
-    onSubmit(withRuntime, assets);
+    onSubmit(withRuntime, assets, restockQuantities(restock));
   }
 
   function markAllReturned() {
@@ -120,7 +122,6 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
         itemId,
         {
           returned: Number(quantity),
-          consumed: 0,
           missing: 0,
           damaged: 0,
           writtenOff: 0,
@@ -129,27 +130,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
     ));
   }
 
-  function markAllConsumablesConsumed() {
-    setLines((current) => {
-      const next = { ...current };
-      for (const [itemId, quantity] of Object.entries(outstanding)) {
-        const item = items.find((candidate) => candidate.id === itemId);
-        if (item?.isConsumable) {
-          next[itemId] = {
-            returned: 0,
-            consumed: Number(quantity),
-            missing: 0,
-            damaged: 0,
-            writtenOff: 0,
-            notes: current[itemId]?.notes,
-          };
-        }
-      }
-      return next;
-    });
-  }
-
-  function markItemComplete(itemId: string, quantity: number, isConsumable?: boolean) {
+  function markItemComplete(itemId: string, quantity: number) {
     if ((outstandingAssets[itemId] ?? []).length) {
       setAssetOutcomes((current) => ({
         ...current,
@@ -160,8 +141,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
       ...current,
       [itemId]: {
         ...current[itemId],
-        returned: isConsumable ? 0 : quantity,
-        consumed: isConsumable ? quantity : 0,
+        returned: quantity,
         missing: 0,
         damaged: 0,
         writtenOff: 0,
@@ -197,7 +177,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
         e.preventDefault();
         const max = outstanding[matchedItem.id];
         setLines((prev) => {
-          const currentLine = prev[matchedItem.id] || { returned: 0, consumed: 0, missing: 0, damaged: 0, writtenOff: 0 };
+          const currentLine = prev[matchedItem.id] || { returned: 0, missing: 0, damaged: 0, writtenOff: 0 };
           if (currentLine.returned < max) {
             return {
               ...prev,
@@ -229,16 +209,6 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
         >
           {t('forms.orderReturnChecklist.allReturnedCompleteIntact')}
         </Button>
-        {items.some((i) => i.isConsumable && (outstanding[i.id] ?? 0) > 0) && (
-          <Button title={translate('forms.orderReturnChecklist.markAllConsumableQuantitiesAsConsumed')}
-            variant="outlined"
-            color="warning"
-            size="small"
-            onClick={markAllConsumablesConsumed}
-          >
-            {t('forms.orderReturnChecklist.recordConsumablesAsConsumed')}
-          </Button>
-        )}
       </Box>
       <Stack spacing={1.5}>
         {Object.entries(outstanding).map(([itemId, quantity]) => {
@@ -249,35 +219,14 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography sx={{ fontWeight: 800 }}>{item?.name ?? itemId} · {quantity} {t('forms.orderReturnChecklist.outstanding')}</Typography>
                 <Stack direction="row" spacing={0.5}>
-                  {item?.isConsumable ? (
-                    <>
-                      <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsReturnedIntact')}
-                        size="small"
-                        variant="text"
-                        color="success"
-                        onClick={() => markItemComplete(itemId, Number(quantity), false)}
-                      >
-                        {t('forms.orderReturnChecklist.allReturned')}
-                      </Button>
-                      <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsConsumed')}
-                        size="small"
-                        variant="text"
-                        color="warning"
-                        onClick={() => markItemComplete(itemId, Number(quantity), true)}
-                      >
-                        {t('forms.orderReturnChecklist.allConsumed')}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsReturnedIntact')}
-                      size="small"
-                      variant="text"
-                      color="success"
-                      onClick={() => markItemComplete(itemId, Number(quantity), false)}
-                    >
-                      {t('forms.orderReturnChecklist.allReturned')}
-                    </Button>
-                  )}
+                  <Button title={translate('forms.orderReturnChecklist.markAllOutstandingUnitsOfThisItemAsReturnedIntact')}
+                    size="small"
+                    variant="text"
+                    color="success"
+                    onClick={() => markItemComplete(itemId, Number(quantity))}
+                  >
+                    {t('forms.orderReturnChecklist.allReturned')}
+                  </Button>
                 </Stack>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
@@ -307,8 +256,7 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
                   </Stack>
                 ) : (
                   <>
-                    <TextField size="small" type="number" label={item?.isConsumable ? t('forms.orderReturnChecklist.returnedUnopened') : t('forms.orderReturnChecklist.returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
-                    {item?.isConsumable && <TextField size="small" type="number" label={t('enum.transactionType.consumed')} value={value.consumed} onChange={(e) => setValue(itemId, 'consumed', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />}
+                    <TextField size="small" type="number" label={t('forms.orderReturnChecklist.returned')} value={value.returned} onChange={(e) => setValue(itemId, 'returned', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     <TextField size="small" type="number" label={t('forms.orderReturnChecklist.missing')} value={value.missing} onChange={(e) => setValue(itemId, 'missing', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     <TextField size="small" type="number" label={t('enum.itemStatus.damaged')} value={value.damaged} onChange={(e) => setValue(itemId, 'damaged', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} />
                     {canWriteOff && <TextField size="small" type="number" label={t('common.writeOff')} value={value.writtenOff} onChange={(e) => setValue(itemId, 'writtenOff', e.target.value)} slotProps={{ htmlInput: { min: 0, max: quantity } }} helperText={t('forms.orderReturnChecklist.missingUnitsFirst')} />}
@@ -322,12 +270,15 @@ export function OrderReturnChecklist({ order, items, busy, canWriteOff = false, 
           );
         })}
       </Stack>
+      <Box sx={{ mt: 1.5 }}>
+        <RestockUnusedFields items={items} consumed={order.consumedQuantities} value={restock} onChange={setRestock} />
+      </Box>
       {exceedsOutstanding && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.theOutcomeTotalCannotExceedTheOutstandingQuantityWrittenOff')}</Alert>}
       {writeOffWithoutReason && <Alert severity="error" sx={{ mt: 2 }}>{t('forms.orderReturnChecklist.aReasonIsRequiredForWriteOffs')}</Alert>}
       {runtimeMissing && <Alert severity="warning" sx={{ mt: 2 }}>{t('items.runtimeReturnField.enterHoursForEveryReturnedUnit')}</Alert>}
       <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
         <Button title={translate('common.discardChangesAndClose')} onClick={onCancel}>{t('common.cancel')}</Button>
-        <Button title={translate('forms.orderReturnChecklist.recordTheReviewedReturnQuantities')} variant="contained" disabled={invalid || busy || !Object.keys(lines).length} onClick={submit}>{t('forms.orderReturnChecklist.recordReturn')}</Button>
+        <Button title={translate('forms.orderReturnChecklist.recordTheReviewedReturnQuantities')} variant="contained" disabled={invalid || busy || (!Object.keys(lines).length && !Object.keys(restockQuantities(restock)).length)} onClick={submit}>{t('forms.orderReturnChecklist.recordReturn')}</Button>
       </DialogActions>
     </>
   );

@@ -77,6 +77,20 @@ public class OperationsResource {
         return mapper.transaction(service.transact(input));
     }
 
+    @POST
+    @Path("/transactions/{id}/restock")
+    @Transactional
+    public ApiResponses.TransactionResponse restock(@jakarta.ws.rs.PathParam("id") UUID id, @Valid ApiModels.RestockInput input) {
+        return mapper.transaction(service.restockUnused(id, input));
+    }
+
+    @GET
+    @Path("/transactions/restockable")
+    public List<ApiModels.RestockableCheckout> restockable(@QueryParam("itemId") UUID itemId) {
+        if (itemId == null) throw org.ash.inventory.resource.ApiException.badRequest("itemId is required");
+        return service.restockable(itemId);
+    }
+
     @Paged @GET
     @Path("/damage-reports")
     public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,

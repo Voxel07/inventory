@@ -215,7 +215,7 @@ class PriorityRefactorApiTest {
             admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
             String submission = submitReturn(item, asset, order);
             if (reconcile) admin().body(Map.of("idempotencyKey", UUID.randomUUID(),
-                    "lines", Map.of(item, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0)),
+                    "lines", Map.of(item, Map.of("returned", 1, "damaged", 0, "missing", 0)),
                     "assets", Map.of(asset, Map.of("outcome", "returned_good"))))
                     .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
             reject(submission); state(item, asset, reconcile ? "available" : "in_field");

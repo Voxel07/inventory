@@ -16,14 +16,14 @@ final class OrderReturnPolicy {
     private OrderReturnPolicy() {}
 
     /** One item's return outcome; {@code missing} is the unresolved total after this command. */
-    record Outcome(int returned, int consumed, int damaged, int writtenOff, int missing, String writeOffReason) {
-        int reconciled() { return returned + consumed + damaged + writtenOff; }
+    record Outcome(int returned, int damaged, int writtenOff, int missing, String writeOffReason) {
+        int reconciled() { return returned + damaged + writtenOff; }
     }
 
-    /** Consumption needs a consumable item, write-offs need an admin and a reason, and nothing exceeds the outstanding quantity. */
+    /** Consumables are consumed at pickup, write-offs need an admin and a reason, and nothing exceeds the outstanding quantity. */
     static void validate(Item item, Outcome outcome, int outstanding, ActorService actors) {
-        if (outcome.consumed() > 0 && !item.consumable())
-            throw ApiException.badRequest("Only consumable items can be recorded as consumed");
+        if (item.consumable())
+            throw ApiException.badRequest(item.name + " is a consumable: it was consumed at pickup and is not returned");
         if (outcome.writtenOff() > 0) {
             actors.requireAdmin();
             if (outcome.writeOffReason() == null || outcome.writeOffReason().isBlank())

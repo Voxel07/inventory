@@ -47,7 +47,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { useAuth } from '../../hooks/useAuth';
 import { canWriteFaction, factionKeyOf } from '../../utils/access';
-import { getItemStock } from '../../utils/stock';
+import { formatQuantity, getItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { apiFileUrl } from '../../services/apiClient';
@@ -478,13 +478,13 @@ export function FactionOrderForm({
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
-                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {available}</Typography>
+                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {formatQuantity(item, available)}</Typography>
                     {/* Always reserve the line so the tile does not grow when the item is added. */}
                     <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 0) ? 'warning.main' : 'success.main'}>
-                      {t('forms.factionOrderForm.afterOrder')}: {projected}
+                      {t('forms.factionOrderForm.afterOrder')}: {formatQuantity(item, projected)}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
+                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item} />
                     </Stack>
                     {isSelected && !isMobile && (
 
@@ -520,7 +520,7 @@ export function FactionOrderForm({
                         </Typography>
                       </Box>
                       <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-                        <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} />
+                        <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item} />
                         {!isMobile && (
                           <Box sx={{ width: 34, flexShrink: 0 }}>
                             {quantity > 0 && (
@@ -566,13 +566,13 @@ export function FactionOrderForm({
             <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
               {[
                 ...selectedAssemblies.map((assembly) => ({
-                  key: `selected-assembly-${assembly.id}`, id: assembly.id, name: assembly.name, assembly: true,
+                  key: `selected-assembly-${assembly.id}`, id: assembly.id, name: assembly.name, assembly: true, item: undefined,
                   detail: `${t('enum.value.assembly')} · ${Object.keys(assembly.itemQuantities ?? {}).length} ${t('forms.factionOrderForm.components')}`,
                   value: assemblyQuantities[assembly.id] ?? '',
                 })),
                 ...selectedItems.map((item) => ({
-                  key: `selected-item-${item.id}`, id: item.id, name: item.name, assembly: false,
-                  detail: `${item.category} · ${t('enum.itemStatus.available')}: ${availableByItem.get(item.id) ?? 0}`,
+                  key: `selected-item-${item.id}`, id: item.id, name: item.name, assembly: false, item,
+                  detail: `${item.category} · ${t('enum.itemStatus.available')}: ${formatQuantity(item, availableByItem.get(item.id) ?? 0)}`,
                   value: quantities[item.id] ?? '',
                 })),
               ].map((entry) => (
@@ -582,7 +582,7 @@ export function FactionOrderForm({
                     <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{entry.name}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{entry.detail}</Typography>
                   </Box>
-                  <QuantityControl label={`${entry.name} ${t('forms.factionOrderForm.quantity')}`} value={entry.value} onChange={(value) => setQuantity(entry.id, value, entry.assembly)} />
+                  <QuantityControl label={`${entry.name} ${t('forms.factionOrderForm.quantity')}`} value={entry.value} onChange={(value) => setQuantity(entry.id, value, entry.assembly)} item={entry.item} />
                   <IconButton
                     title={entry.assembly
                       ? translate('forms.factionOrderForm.removeThisAssemblyFromTheOrderList')

@@ -240,7 +240,7 @@ class ArchitectureApiCoverageTest {
         admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4)).post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
         admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
         admin().get("/api/orders/faction/" + order + "/handovers").then().statusCode(200).body("size()", equalTo(1));
-        admin().body(Map.of("lines", Map.of(id, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0))))
+        admin().body(Map.of("lines", Map.of(id, Map.of("returned", 1, "damaged", 0, "missing", 0))))
                 .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
         admin().get("/api/orders/faction/" + order + "/reconciliations").then().statusCode(200).body("size()", equalTo(1));
         String notification = QuarkusTransaction.requiringNew().call(() -> {

@@ -9,7 +9,7 @@ import { catalogGridSx } from '../lists/catalogGrid';
 import { usePagedItems } from '../../hooks/useItems';
 import { usePagedAssemblies } from '../../hooks/useAssemblies';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { getItemStock } from '../../utils/stock';
+import { getItemStock, stockRatio } from '../../utils/stock';
 import { useAppLanguage, useT } from '../../utils/naming';
 import type { Assembly, Item } from '../../types';
 
@@ -45,7 +45,7 @@ export function AddEventItemsDialog({ open, onClose, onAdd }: { open: boolean; o
   const itemRows: PickerRow[] = (items.data ?? []).map((item) => {
     const stock = getItemStock(item);
     return { id: item.id, name: item.name, detail: [item.category, item.subcategory].filter(Boolean).join(' · '),
-      available: t('lists.itemsList.stockOfTotalStockAvailable', { stock: String(stock.remaining), totalStock: String(stock.totalStock) }) };
+      available: stockRatio(stock.remaining, stock.totalStock, item.isConsumable, item) };
   });
   const assemblyRows: PickerRow[] = (assemblies.data ?? []).map((assembly) => ({ id: assembly.id, name: assembly.name,
     // List pages may omit expanded components; the count still tells assemblies apart.

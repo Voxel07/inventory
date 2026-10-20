@@ -23,6 +23,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import type { Assembly, AssetInstance, FactionOrder, Item } from '../../../types';
+import { formatQuantity } from '../../../utils/stock';
 import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
 import { translate, useT } from '../../../utils/naming';
@@ -139,6 +140,7 @@ function PickRow({
   quantityLabel,
   done,
   children,
+  item,
 }: {
   leading?: ReactNode;
   title: string;
@@ -153,6 +155,8 @@ function PickRow({
   quantityLabel: string;
   done?: boolean;
   children?: ReactNode;
+  /** Measured items (litres) show and accept their unit. */
+  item?: Item;
 }) {
   const t = useT();
   const complete = (Number(value) || 0) === requested;
@@ -166,11 +170,11 @@ function PickRow({
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 'auto', flexShrink: 0 }}>
           <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-            {t('enum.value.ordered')} <strong>{requested}</strong>
-            {!editing && <> · {storedLabel} <Box component="strong" sx={{ color: stored === requested ? 'success.main' : undefined }}>{stored}</Box></>}
+            {t('enum.value.ordered')} <strong>{formatQuantity(item, requested)}</strong>
+            {!editing && <> · {storedLabel} <Box component="strong" sx={{ color: stored === requested ? 'success.main' : undefined }}>{formatQuantity(item, stored)}</Box></>}
           </Typography>
           {editing && <>
-            <QuantityControl label={quantityLabel} value={value} max={requested} onChange={onChange} />
+            <QuantityControl label={quantityLabel} value={value} max={requested} onChange={onChange} item={item} />
             <Button title={translate('orders.detail.orderPickListTable.setThePreparedQuantityToTheRequestedAmount')}
               size="small" variant={complete ? 'contained' : 'outlined'} color={complete ? 'success' : 'primary'} onClick={onMax}
               sx={{ minWidth: 48, height: 28, px: 1, fontSize: '0.75rem' }}>
@@ -368,6 +372,7 @@ export function OrderPickListTable({
                 onChange={(value) => onSetPrepared((current) => ({ ...current, [item.id]: value }))}
                 onMax={() => onSetPrepared((current) => ({ ...current, [item.id]: String(requested) }))}
                 quantityLabel={`${item.name} ${t('orders.detail.orderPickListTable.prepared')}`}
+                item={item}
               />
             );
           })}

@@ -1,11 +1,11 @@
-import { Chip, IconButton, ListItemButton } from '../shared/ActionButtons';
+import { Chip, ListItemButton } from '../shared/ActionButtons';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { DialogForm, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import { Box, TextField, Stack, List, ListItem, ListItemIcon, ListItemText, Checkbox, Paper, Typography, Autocomplete, FormControlLabel, FormHelperText, Switch } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import RemoveIcon from '@mui/icons-material/Remove';
+import { QuantityControl } from '../orders/QuantityControl';
+import { quantityScale } from '../../utils/stock';
 import { type AssemblyFormData, type Assembly } from '../../types';
 import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -49,7 +49,8 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
     const filteredItems = results.data ?? [];
     const selected = useItemsByIds(formData.itemIds);
 
-    function handleToggle(itemId: string) {
+    /** A new component starts at one unit of its item (1 L for an item booked in tenths of a litre). */
+    function handleToggle(itemId: string, unitSteps = 1) {
         setFormData((prev) => {
             const selected = new Set(prev.itemIds);
             const quantities = { ...prev.itemQuantities };
@@ -58,19 +59,16 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                 delete quantities[itemId];
             } else {
                 selected.add(itemId);
-                quantities[itemId] = 1;
+                quantities[itemId] = unitSteps;
             }
             return { ...prev, itemIds: [...selected], itemQuantities: quantities };
         });
     }
 
-    function handleQuantityChange(itemId: string, delta: number) {
-        setFormData((prev) => {
-            const current = prev.itemQuantities[itemId] ?? 1;
-            const newQty = Math.max(1, current + delta);
-            return { ...prev, itemQuantities: { ...prev.itemQuantities, [itemId]: newQty } };
-        });
+    function handleQuantityChange(itemId: string, value: string) {
+        setFormData((prev) => ({ ...prev, itemQuantities: { ...prev.itemQuantities, [itemId]: value === '' ? 0 : Number(value) } }));
     }
+    const quantityMissing = formData.itemIds.some((id) => (formData.itemQuantities[id] ?? 1) < 1);
 
     function handleSubmit() {
         onSubmit({ ...formData, imageFile: images.files[0] ?? (initialData?.image && !images.removed.includes(initialData.image) ? images.replacements[initialData.image] : undefined), removeImage: Boolean(initialData?.image && images.removed.includes(initialData.image)) });
@@ -79,7 +77,7 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
     const selectedItems = (selected.data ?? []).filter((i) => formData.itemIds.includes(i.id));
 
     return (
-        <DialogForm title={title} onSubmit={handleSubmit} onCancel={onCancel} noValidate pending={isLoading} submitDisabled={!formData.name.trim()}
+        <DialogForm title={title} onSubmit={handleSubmit} onCancel={onCancel} noValidate pending={isLoading} submitDisabled={!formData.name.trim() || quantityMissing}
             submitLabel={initialData ? t('forms.assemblyForm.saveAssembly') : t('forms.assemblyForm.createAssembly')}>
             <FormSection title={t('forms.assemblyForm.basicDetails')}>
                 <TextField
@@ -141,15 +139,10 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                                     onDelete={() => handleToggle(item.id)}
                                     sx={{ flexGrow: 1, justifyContent: 'space-between', minWidth: 0 }}
                                 />
-                                <IconButton title={t('forms.assemblyForm.decreaseQuantity')} type="button" onClick={() => handleQuantityChange(item.id, -1)}>
-                                    <RemoveIcon fontSize="small" />
-                                </IconButton>
-                                <Typography variant="body2" className="tabular" aria-live="polite" sx={{ minWidth: 24, textAlign: 'center', fontWeight: 600 }}>
-                                    {formData.itemQuantities[item.id] ?? 1}
-                                </Typography>
-                                <IconButton title={t('forms.assemblyForm.increaseQuantity')} type="button" onClick={() => handleQuantityChange(item.id, 1)}>
-                                    <AddIcon fontSize="small" />
-                                </IconButton>
+                                {/* Components keep their own unit: "20 L" diesel in a filled canister. */}
+                                <QuantityControl label={`${item.name} ${t('common.quantity')}`} item={item}
+                                    value={(formData.itemQuantities[item.id] ?? 1) > 0 ? String(formData.itemQuantities[item.id] ?? 1) : ''}
+                                    onChange={(value) => handleQuantityChange(item.id, value)} />
                             </Box>
                         ))}
                     </Stack>
@@ -170,7 +163,7 @@ export function AssemblyForm({ title, initialData, onSubmit, onCancel, isLoading
                         <List dense disablePadding>
                             {filteredItems.map((item) => (
                                 <ListItem key={item.id} disablePadding>
-                                    <ListItemButton onClick={() => handleToggle(item.id)} sx={{ minHeight: 44 }}>
+                                    <ListItemButton onClick={() => handleToggle(item.id, quantityScale(item))} sx={{ minHeight: 44 }}>
                                         <ListItemIcon sx={{ minWidth: 36 }}>
                                             <Checkbox
                                                 edge="start"

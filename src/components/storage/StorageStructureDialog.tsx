@@ -102,7 +102,8 @@ export function StorageStructureDialog({ onClose, locations, rootId, focusId, ca
   /** Expands the editor down to this section or storage place. */
   focusId?: string;
   canCreatePublic: boolean;
-  onSaved: (rootId: string) => void;
+  /** The saved top-level location and its whole saved tree. */
+  onSaved: (rootId: string, saved: StorageLocation[]) => void;
 }) {
   const t = useT();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
@@ -154,7 +155,7 @@ export function StorageStructureDialog({ onClose, locations, rootId, focusId, ca
         const savedRoot = saved.find((location) => location.depth === 0) ?? saved[0];
         showSnackbar(t('pages.storageLocations.structureSaved'), 'success');
         onClose();
-        if (savedRoot) onSaved(savedRoot.id);
+        if (savedRoot) onSaved(savedRoot.id, saved);
       },
       onError: (error) => showSnackbar(error.message, 'error'),
     });

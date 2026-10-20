@@ -149,7 +149,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 
 ## 5. Required business behavior
 
-- Tracking modes are bulk, serialized and lot-tracked; inventory roles are consumable and returnable. Serialized operations require exact assets, and serialized items cannot be consumable.
+- Tracking modes are bulk, serialized and lot-tracked; inventory roles are consumable and returnable; consumables are booked as consumed when checked out or picked up with an order, so they are never checked out or returned; unused amounts are restocked against the order or checkout afterwards. Bulk items may carry a unit and decimal places (e.g. diesel in 0.1 L), stored as whole steps. Serialized operations require exact assets, and serialized items cannot be consumable.
 - Only usable, unreserved availability can be allocated. Preparation reserves; pickup moves into custody. Physical transfer transit is distinct from outstanding supplier orders and checked-out custody.
 - Maintenance, unsafe/damaged condition, quarantine/expiry, contributor damage review and owner-consent windows can block supply. Repair changes condition; write-off reduces owned stock under the required permission.
 - A submitted return is still custody until warehouse acceptance. Order outcomes reconcile against actual handover; missing units are tracked within outstanding custody.

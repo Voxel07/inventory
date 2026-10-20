@@ -55,6 +55,8 @@ export interface OrderDetailHeaderProps {
   onReopenPreparation: () => void;
   onPickUp: () => void;
   onOpenReturn: () => void;
+  /** Unused consumables back to stock; offered while some are still booked as consumed, also on completed orders. */
+  onOpenRestock?: () => void;
   onCancel: () => void;
   isSavingPreparation: boolean;
   isSubmitting: boolean;
@@ -101,6 +103,7 @@ export function OrderDetailHeader({
   onReopenPreparation,
   onPickUp,
   onOpenReturn,
+  onOpenRestock,
   onCancel,
   isSavingPreparation,
   isSubmitting,
@@ -158,6 +161,10 @@ export function OrderDetailHeader({
     custody && ['picked_up', 'partially_returned'].includes(order.status) && {
       key: 'return', label: t('orders.detail.orderDetailHeader.reconcileComponentReturn'), title: translate('orders.detail.orderDetailHeader.reviewReturnsForEachComponent'),
       icon: <ReplayIcon />, variant: 'contained', pinned: true, onClick: onOpenReturn,
+    },
+    warehouse && !!onOpenRestock && ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && {
+      key: 'restock', label: t('orders.restockUnused.openRestock'), title: translate('orders.restockUnused.openRestockTitle'),
+      icon: <ReplayIcon />, onClick: onOpenRestock,
     },
     canCancel && {
       key: 'cancel', label: t('orders.detail.orderDetailHeader.cancel'), title: translate('orders.detail.orderDetailHeader.reviewCancellationOfThisOrderList'),

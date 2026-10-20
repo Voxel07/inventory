@@ -466,6 +466,8 @@ create table items (
     tracks_runtime boolean not null default false,
     fuel_consumption_l_100km numeric(38,2),
     min_stock integer not null,
+    unit varchar(32),
+    quantity_decimals integer not null default 0 check (quantity_decimals between 0 and 3),
     unit_value_cents integer not null,
     created_at timestamp(6) with time zone not null,
     updated_at timestamp(6) with time zone not null,
@@ -1328,7 +1330,9 @@ alter table stock_transactions add column reverses_id uuid unique references sto
 alter table stock_transactions add column reversed_by_id uuid references app_users(id);
 alter table stock_transactions add constraint ck_reversal_executor check ((reverses_id is null) = (reversed_by_id is null));
 alter table stock_transactions add column asset_before jsonb not null default '{}';
-alter table stock_transactions add constraint ck_movement_signed_quantity check (quantity>0 or type='adjusted' or (reverses_id is not null and quantity<0));
+-- Negative rows: reversals, and the consumption taken back when unused consumables are restocked.
+alter table stock_transactions add constraint ck_movement_signed_quantity check (quantity>0 or type='adjusted' or (reverses_id is not null and quantity<0)
+    or (type='consumed' and quantity<0 and related_entity_type='restock'));
 
 create unique index uq_items_sku_lower on items(lower(sku));
 

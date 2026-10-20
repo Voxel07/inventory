@@ -57,6 +57,14 @@ public class Item extends BaseEntity {
     public boolean consumable() {
         return inventoryRole == DomainEnums.InventoryRole.consumable;
     }
+    /**
+     * Display unit of bulk quantities ("L", "m"); {@code null} counts pieces. Stock is kept in whole steps of
+     * 10^-quantityDecimals units (7.5 L with one decimal is 75), so all stock arithmetic stays exact.
+     */
+    @Column(name = "unit")
+    public String unit;
+    @Column(name = "quantity_decimals", nullable = false)
+    public int quantityDecimals;
     @Column(name = "min_stock", nullable = false)
     public int minStock;
     @Column(name = "unit_value_cents", nullable = false)

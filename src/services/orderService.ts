@@ -25,10 +25,9 @@ export function transitionOrder(id: string, action: 'submit' | 'ready' | 'pickup
   const statuses = { submit: 'submitted', ready: 'ready', pickup: 'picked_up', close: 'closed', cancel: 'cancelled' } as const;
   return changeOrderStatus<GeneralOrder>('general', id, statuses[action]);
 }
-export function returnOrder(id: string, returnedQuantities: Record<string, number>, consumedQuantities: Record<string, number>) {
-  const ids = new Set([...Object.keys(returnedQuantities), ...Object.keys(consumedQuantities)]);
-  return reconcileOrder<GeneralOrder>('general', id, { lines: Object.fromEntries([...ids].map((itemId) => [itemId, {
-    returned: returnedQuantities[itemId] ?? 0, consumed: consumedQuantities[itemId] ?? 0, damaged: 0, missing: 0, writtenOff: 0,
+export function returnOrder(id: string, returnedQuantities: Record<string, number>) {
+  return reconcileOrder<GeneralOrder>('general', id, { lines: Object.fromEntries(Object.entries(returnedQuantities).map(([itemId, returned]) => [itemId, {
+    returned, damaged: 0, missing: 0, writtenOff: 0,
   }])) });
 }
 

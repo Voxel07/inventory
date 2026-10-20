@@ -26,8 +26,11 @@ public class MovementReversalService {
         if(original.reverses!=null || original.order!=null || original.damageReport!=null || original.relatedEntityId!=null || original.custodyWriteOff
                 || !Set.of(DomainEnums.TransactionType.added,DomainEnums.TransactionType.adjusted,DomainEnums.TransactionType.checkout,DomainEnums.TransactionType.checkin).contains(original.type))
             throw ApiException.conflict("Use the originating document's reconciliation workflow for this movement");
-        if(em.createQuery("select count(t) from StockTransaction t where t.item=:item and t.id<>:id and (t.createdAt>:created or t.createdAt=:created and t.id>:id)",Long.class)
-                .setParameter("item",original.item).setParameter("id",id).setParameter("created",original.createdAt).getSingleResult()>0)
+        var later=em.createQuery("from StockTransaction t where t.item=:item and t.id<>:id and (t.createdAt>:created or t.createdAt=:created and t.id>:id)",StockTransaction.class)
+                .setParameter("item",original.item).setParameter("id",id).setParameter("created",original.createdAt).getResultList();
+        // A consumable's direct checkout is consumed at once; that paired row is reversed with it.
+        var consumed=later.stream().filter(t->isConsumedPair(original,t)).findFirst().orElse(null);
+        if(later.size()>(consumed==null?0:1))
             throw ApiException.conflict("Reverse later movements first");
         if(em.createQuery("select count(r) from ReturnSubmission r where r.item=:item and r.status=:status",Long.class)
                 .setParameter("item",original.item).setParameter("status",DomainEnums.ReturnSubmissionStatus.pending).getSingleResult()>0)
@@ -55,9 +58,22 @@ public class MovementReversalService {
             asset.currentLocation=reference(StorageLocation.class,original.assetBefore.get("location"));
             asset.currentCustodian=reference(UserAccount.class,original.assetBefore.get("custodian"));value.assetInstance=asset;
         }
-        em.persist(value);em.flush();value.availabilityAfter=inventory.stock(original.item).available();
+        em.persist(value);
+        if(consumed!=null) {
+            var undo=new StockTransaction();undo.item=consumed.item;undo.user=consumed.user;undo.type=consumed.type;undo.quantity=-consumed.quantity;
+            undo.reverses=consumed;undo.reversedBy=value.reversedBy;undo.reason=value.reason;undo.notes="Reversal of "+consumed.id;undo.clientCommandId=input.commandId();
+            undo.eventOccurrence=consumed.eventOccurrence;undo.eventType=consumed.eventType;undo.faction=consumed.faction;undo.lot=consumed.lot;
+            undo.availabilityBefore=value.availabilityBefore;
+            em.persist(undo);
+        }
+        em.flush();value.availabilityAfter=inventory.stock(original.item).available();
         events.record("stock.reversed","item",original.item.id,actors.current().id,input.commandId(),Map.of("originalId",id,"reversalId",value.id,"reason",input.reason()));
         return value;
+    }
+    private static boolean isConsumedPair(StockTransaction checkout,StockTransaction candidate) {
+        return checkout.type==DomainEnums.TransactionType.checkout && checkout.item.consumable() && checkout.assetInstance==null
+                && candidate.type==DomainEnums.TransactionType.consumed && candidate.order==null && candidate.reverses==null
+                && candidate.quantity==checkout.quantity && candidate.user.id.equals(checkout.user.id);
     }
     private <T> T reference(Class<T> type,String id) {return id==null?null:em.getReference(type,UUID.fromString(id));}
 }

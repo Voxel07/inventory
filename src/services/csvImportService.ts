@@ -456,8 +456,9 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           order = await transitionOrder(order.id, 'ready');
         }
         if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) order = await transitionOrder(order.id, 'pickup');
-        if (['partially_returned', 'returned', 'closed'].includes(row.targetStatus)) {
-          order = await returnOrder(order.id, resolve(row.returnedItems), resolve(row.consumedItems));
+        // An order of consumables only is complete at pickup.
+        if (['partially_returned', 'returned', 'closed'].includes(row.targetStatus) && row.returnedItems.length && order.status === 'picked_up') {
+          order = await returnOrder(order.id, resolve(row.returnedItems));
         }
         if (row.targetStatus === 'closed') await transitionOrder(order.id, 'close');
         successGeneralOrders++;
@@ -482,7 +483,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
             && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
           if (!order) throw new Error(translate('services.csvImportService.generalOrderGeneralOrderNameNotFound', { generalOrderName: String(ret.generalOrderName) }));
           if (['returned', 'closed'].includes(order.status)) continue;
-          const updated = await returnOrder(order.id, { [item.id]: ret.quantity }, {});
+          const updated = await returnOrder(order.id, { [item.id]: ret.quantity });
           existingGeneralOrders.splice(existingGeneralOrders.findIndex((candidate) => candidate.id === order.id), 1, updated);
         } else if (item.trackingMode === 'serialized') {
           const assets = await getAllItemAssets(item.id);

@@ -18,19 +18,28 @@ import { useT } from '../../utils/naming';
 import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 import { CustodyEvidence } from './CustodyEvidence';
+import { restockOrder } from '../../services/orderCommands';
+import { formatQuantity, fromSteps, inputStep, toSteps } from '../../utils/stock';
 
-/** `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. */
-export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'history'; itemIds?: string[]; onClose: () => void }) {
+/**
+ * `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. `restock` brings
+ * unused consumables back on its own, also once the order is returned or closed; the return offers the same rows.
+ */
+export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'restock' | 'history'; itemIds?: string[]; onClose: () => void }) {
   // Only this order's items are read, never the catalog.
   const { data: items = [], isSuccess: itemsLoaded } = useItemsByIds(Object.keys(order.requestedQuantities));
   const history = useQuery({ queryKey: ['general-orders', 'detail', order.id], queryFn: () => generalOrderApi.getById(order.id), enabled: action === 'history' });
   const equipment = useEquipmentAvailability(order.eventOccurrenceId);
   const t = useT(); const { user } = useAuth(); const [key] = useState(() => crypto.randomUUID());
+  // Its own command key: the return's key is already recorded on the order history.
+  const [restockKey] = useState(() => crypto.randomUUID());
   const assets = useQuery({ queryKey: ['items', 'general-assets', order.id], queryFn: async () => {
     const ids = Object.keys(order.requestedQuantities).filter((id) => items.find((item) => item.id === id)?.trackingMode === 'serialized');
     return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await getAllItemAssets(id)] as const)));
   }, enabled: action !== 'history' && itemsLoaded });
-  const ids = Object.keys(action === 'return' ? order.handedOverQuantities : order.requestedQuantities).filter((id) => !itemIds || itemIds.includes(id));
+  const ids = Object.keys(action === 'return' || action === 'restock' ? order.handedOverQuantities : order.requestedQuantities).filter((id) => !itemIds || itemIds.includes(id));
+  // Unused consumables: optional, capped at what the order still books as consumed.
+  const restockable = (id: string) => Boolean(items.find((item) => item.id === id)?.isConsumable) && (order.consumedQuantities[id] ?? 0) > 0;
   const outstanding = (id: string) => (order.handedOverQuantities[id] ?? 0) - (order.returnedQuantities[id] ?? 0) - (order.consumedQuantities[id] ?? 0) - (order.damagedQuantities?.[id] ?? 0) - (order.writtenOffQuantities?.[id] ?? 0);
   const eventName = useEventReports().data?.find((event) => event.id === order.eventOccurrenceId)?.name;
   const hoursHelp = eventName ? t('items.runtimeReturnField.bookedToEvent', { event: eventName }) : t('items.runtimeReturnField.bookedWithoutEvent');
@@ -42,6 +51,11 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
       { key: `prepare:${id}`, label: `${name} · ${t('common.prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('orders.generalOrderWorkflow.requested')}: ${order.requestedQuantities[id]}` },
       ...(assets.data?.[id] ?? []).filter((asset) => (asset.availabilityStatus === 'available' && (!equipment.data?.[id] || equipment.data[id].assetIds.includes(asset.id))) || order.assetAssignments[id]?.includes(asset.id)).map((asset): Field => ({ key: `asset:${asset.id}`, label: `${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox' })),
     ];
+    if ((action === 'return' || action === 'restock') && restockable(id) && item) {
+      const consumed = order.consumedQuantities[id] ?? 0;
+      return [{ key: `restock:${id}`, label: `${name} · ${t('orders.restockUnused.unusedAmount')}${item.unit ? ` (${item.unit})` : ''}`, type: 'number',
+        min: 0, step: inputStep(item), max: fromSteps(item, consumed), help: t('orders.restockUnused.consumed', { quantity: formatQuantity(item, consumed) }) }];
+    }
     if (action !== 'return' || outstanding(id) <= 0) return [];
     if (item?.trackingMode === 'serialized') return (order.assetAssignments[id] ?? []).filter((assetId) => !order.reconciledAssets?.[id]?.includes(assetId)).flatMap((assetId): Field[] => {
       const label = `${name} · ${assets.data?.[id]?.find((asset) => asset.id === assetId)?.assetCode ?? assetId}`;
@@ -51,7 +65,6 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     });
     return [
       { key: `returned:${id}`, label: `${name} · ${t('orders.generalOrderWorkflow.returnedGood')}`, type: 'number', min: 0, max: outstanding(id) },
-      ...(item?.isConsumable ? [{ key: `consumed:${id}`, label: t('enum.transactionType.consumed'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
       { key: `damaged:${id}`, label: t('orders.generalOrderWorkflow.returnedDamaged'), type: 'number', min: 0, max: outstanding(id) },
       { key: `missing:${id}`, label: t('orders.generalOrderWorkflow.currentlyMissingTotal'), type: 'number', min: 0, max: outstanding(id) },
       ...(canManageUsers(user) ? [{ key: `writtenOff:${id}`, label: t('common.writeOff'), type: 'number' as const, min: 0, max: outstanding(id) }] : []),
@@ -64,8 +77,13 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     Object.values(order.assetAssignments).flat().forEach((asset) => { initial[`asset:${asset}`] = true; });
   }
   if (action === 'return') ids.forEach((id) => { initial[`missing:${id}`] = order.missingQuantities[id] ?? 0; });
-  return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : (values) => [...fields(values), { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' }]} onClose={onClose} onSave={async (values) => {
+  return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : (values) => [...fields(values), { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' && ids.some((id) => outstanding(id) > 0) }]} onClose={onClose} onSave={async (values) => {
     if (action === 'history') return;
+    // Typed in the item's unit (7.5 L), restocked in its steps (75).
+    const restock = Object.fromEntries(ids.filter(restockable).map((id) => [id, toSteps(items.find((item) => item.id === id), String(values[`restock:${id}`] || 0))])
+      .filter(([, steps]) => Number(steps) > 0));
+    const restockUnused = () => restockOrder('general', order.id, { quantities: restock, idempotencyKey: restockKey, notes: optionalText(values.notes) });
+    if (action === 'restock') return Object.keys(restock).length ? restockUnused() : undefined;
     if (action === 'prepare') {
       const preparedQuantities = Object.fromEntries(ids.map((id) => [id, Number(values[`prepare:${id}`] || 0)]));
       const assetAssignments = Object.fromEntries(ids.map((id) => [id, (assets.data?.[id] ?? []).filter((asset) => values[`asset:${asset.id}`]).map((asset) => asset.id)]));
@@ -75,7 +93,7 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
       const data: OrderReturnInput = { lines: {}, assets: {}, idempotencyKey: key, notes: optionalText(values.notes) };
       const outcomeNames = { returned: 'returned_good', damaged: 'returned_damaged', missing: 'missing', writtenOff: 'written_off' } as const;
       for (const id of ids.filter((id) => outstanding(id) > 0)) {
-        const line = { returned: 0, consumed: 0, damaged: 0, missing: 0, writtenOff: 0, notes: optionalText(values.notes) ?? undefined };
+        const line = { returned: 0, damaged: 0, missing: 0, writtenOff: 0, notes: optionalText(values.notes) ?? undefined };
         if (items.find((item) => item.id === id)?.trackingMode === 'serialized') {
           for (const assetId of (order.assetAssignments[id] ?? []).filter((asset) => !order.reconciledAssets[id]?.includes(asset))) {
             const outcome = values[`outcome:${assetId}`];
@@ -88,14 +106,15 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
             } else if (wasMissing) line.missing++;
           }
         } else {
-          for (const outcome of ['returned', 'consumed', 'damaged', 'missing', 'writtenOff'] as const)
+          for (const outcome of ['returned', 'damaged', 'missing', 'writtenOff'] as const)
             line[outcome] = Number(values[`${outcome}:${id}`] || 0);
           const item = items.find((candidate) => candidate.id === id);
           if (item?.tracksRuntime) Object.assign(line, { operatingHours: readingAfter(item.currentOperatingHours, parseHoursRun(String(values[`hours:${id}`] ?? ''))) });
         }
         data.lines[id] = line;
       }
-      return generalOrderCommand(order.id, 'return', data);
+      const returned = Object.keys(data.lines).length ? await generalOrderCommand(order.id, 'return', data) : undefined;
+      return Object.keys(restock).length ? restockUnused() : returned;
     }
     return generalOrderCommand(order.id, action, { notes: optionalText(values.notes), idempotencyKey: key });
   }}>

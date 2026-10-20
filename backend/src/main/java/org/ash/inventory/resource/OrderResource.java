@@ -113,6 +113,14 @@ public class OrderResource {
     }
 
     @POST
+    @Path("/{id}/restock")
+    @Transactional
+    public ApiResponses.OrderResponse restock(@PathParam("id") UUID id, @Valid ApiModels.OrderRestockInput input) {
+        queries.order(id);
+        return queries.projectOrder(service.restockUnused(id, input));
+    }
+
+    @POST
     @Path("/{id}/return-all")
     @Transactional
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {

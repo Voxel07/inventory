@@ -369,6 +369,11 @@ public class OrderService {
         if (target == DomainEnums.OrderStatus.closed && hasOutstanding(order))
             throw ApiException.conflict("Order still has outstanding units");
         transition(order, target, input.idempotencyKey(), actionFor(target), input.notes(), lineSnapshot(order));
+        // Consumables are consumed at pickup; an order holding nothing returnable is complete at once.
+        if (target == DomainEnums.OrderStatus.picked_up && !hasOutstanding(order)) {
+            order.returnedBy = actor;
+            transition(order, DomainEnums.OrderStatus.returned, null, "returned", "Only consumables: consumed at pickup", lineSnapshot(order));
+        }
         if (target == DomainEnums.OrderStatus.ready && !pickupGroups.alreadyNotified(order.createdBy, "order_ready", order.kind.name(), order.id)) {
             if (order.kind == InventoryOrder.Kind.faction) createReadyNotification(order);
             else pickupGroups.notifyCreatorReady(order.kind.name(), order.id);
@@ -414,7 +419,7 @@ public class OrderService {
             int outstanding = relevant.stream().mapToInt(this::outstandingQuantity).sum();
             var outcome = entry.getValue();
             StockTransaction damagedCheckin = null;
-            OrderReturnPolicy.validate(item, new OrderReturnPolicy.Outcome(outcome.returned(), outcome.consumed(), outcome.damaged(),
+            OrderReturnPolicy.validate(item, new OrderReturnPolicy.Outcome(outcome.returned(), outcome.damaged(),
                     outcome.writtenOff(), outcome.missing(), outcome.notes()), outstanding, actors);
             if (item.trackingMode != DomainEnums.TrackingMode.serialized)
                 OrderReturnPolicy.validateReading(item, outcome.operatingHours(), item.currentOperatingHours,
@@ -423,15 +428,12 @@ public class OrderService {
                 applySerializedAssetOutcomes(item, order, actor, outcome, input.idempotencyKey(), assetOutcomes,
                         assignmentsByAsset, handoverDetails);
             } else {
-                distributeReturn(order, relevant, item, actor, outcome.returned(), outcome.consumed(),
+                distributeReturn(order, relevant, item, actor, outcome.returned(),
                         outcome.damaged(), outcome.writtenOff(), outcome.missing(), input.idempotencyKey(),
                         outcome.notes(), handoverDetails);
                 if (outcome.returned() > 0)
                     createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.returned(), input.idempotencyKey(), "returned", outcome.notes());
-                if (outcome.consumed() > 0)
-                    createReturnTransaction(item, order, actor, DomainEnums.TransactionType.consumed,
-                            outcome.consumed(), input.idempotencyKey(), "consumed", outcome.notes());
                 if (outcome.damaged() > 0)
                     damagedCheckin = createReturnTransaction(item, order, actor, DomainEnums.TransactionType.checkin,
                             outcome.damaged(), input.idempotencyKey(), "damaged", "Returned damaged: " + outcome.notes());
@@ -464,6 +466,102 @@ public class OrderService {
         return order;
     }
 
+    /**
+     * Unused consumables come back after pickup, also once the order is complete: the units move from consumed to
+     * returned on the order lines and go back to stock, so the event's actual consumption stays exact. The total never
+     * exceeds what is still booked as consumed, and a repeated command changes nothing.
+     */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
+    public InventoryOrder restockUnused(UUID id, ApiModels.OrderRestockInput input) {
+        actors.requireWarehouse();
+        if (input == null || input.quantities() == null || input.quantities().isEmpty())
+            throw ApiException.badRequest("Enter the unused quantity to restock");
+        var order = lockedOrder(id);
+        if (idempotent(order, input.idempotencyKey())) return order;
+        if (!Set.of(DomainEnums.OrderStatus.picked_up, DomainEnums.OrderStatus.partially_returned,
+                DomainEnums.OrderStatus.returned, DomainEnums.OrderStatus.closed).contains(order.status))
+            throw ApiException.conflict("Consumables can be restocked once the order is picked up");
+        var actor = actors.current();
+        var destination = input.locationId() == null ? null : orm.require(StorageLocation.class, input.locationId(), "Storage location");
+        var lines = orm.lines(order);
+        var details = new ArrayList<ReturnHandoverDetail>();
+        itemLocks.lock(input.quantities().keySet());
+        for (var entry : input.quantities().entrySet()) {
+            var item = orm.findLocked(Item.class, entry.getKey());
+            if (item == null) throw ApiException.notFound("Item not found");
+            if (!item.consumable()) throw ApiException.badRequest(item.name + " is not a consumable; record its return instead");
+            int quantity = entry.getValue();
+            var relevant = lines.stream().filter(line -> line.item.id.equals(item.id)).toList();
+            int restockable = relevant.stream().mapToInt(line -> line.consumedQuantity).sum();
+            if (quantity > restockable)
+                throw ApiException.badRequest("Only " + restockable + " of " + item.name + " can be restocked on this order");
+            int remaining = quantity;
+            for (var line : relevant) {
+                int take = Math.min(remaining, line.consumedQuantity);
+                if (take == 0) continue;
+                line.consumedQuantity -= take;
+                line.returnedQuantity += take;
+                recordReconciliation(order, line, item, actor, DomainEnums.ReconciliationOutcome.returned_good, take,
+                        input.idempotencyKey(), input.notes() == null ? "Unused consumable restocked" : input.notes());
+                details.add(new ReturnHandoverDetail(line, null, take, input.notes()));
+                remaining -= take;
+                if (remaining == 0) break;
+            }
+            restockTransactions(item, order, actor, quantity, destination, input.idempotencyKey(), input.notes());
+        }
+        createReturnHandover(order, actor, input.idempotencyKey(),
+                new ApiModels.ReturnInput(Map.of(), Map.of(), input.idempotencyKey(), input.notes()), details);
+        audit(order, actor, "restocked", order.status, order.status, input.idempotencyKey(), input.notes(), lineSnapshot(order));
+        orderEvent("order.restocked", order, actor, input.idempotencyKey());
+        return order;
+    }
+
+    /** Unused units back to stock (check-in) and out of the consumed total (negative consumption), on the order. */
+    private void restockTransactions(Item item, InventoryOrder order, UserAccount actor, int quantity,
+            StorageLocation destination, UUID clientCommandId, String notes) {
+        var checkin = new StockTransaction();
+        checkin.item = item;
+        checkin.user = actor;
+        checkin.order = order;
+        checkin.eventOccurrence = order.eventOccurrence;
+        checkin.eventType = order.eventOccurrence.eventType;
+        checkin.faction = order.factionLabel();
+        checkin.type = DomainEnums.TransactionType.checkin;
+        checkin.quantity = quantity;
+        checkin.reason = "Unused consumable restocked " + order.label();
+        checkin.notes = notes;
+        checkin.idempotencyKey = transactionKey(clientCommandId, order, item, "restock");
+        checkin.relatedEntityType = InventoryOperationsService.RESTOCK;
+        checkin.relatedEntityId = order.id;
+        checkin.clientCommandId = clientCommandId;
+        checkin.sourceLocation = order.pickupLocation;
+        checkin.destinationLocation = destination != null ? destination : item.returnLocation != null ? item.returnLocation : item.storageLocation;
+        checkin.availabilityBefore = inventory.stock(item).available();
+        positions.apply(checkin);
+        orm.persist(checkin);
+        checkin.availabilityAfter = inventory.stock(item).available();
+        var unconsumed = new StockTransaction();
+        unconsumed.item = item;
+        unconsumed.user = actor;
+        unconsumed.order = order;
+        unconsumed.eventOccurrence = checkin.eventOccurrence;
+        unconsumed.eventType = checkin.eventType;
+        unconsumed.faction = checkin.faction;
+        unconsumed.type = DomainEnums.TransactionType.consumed;
+        unconsumed.quantity = -quantity;
+        unconsumed.reason = checkin.reason;
+        unconsumed.notes = notes;
+        unconsumed.idempotencyKey = transactionKey(clientCommandId, order, item, "restock-consumed");
+        unconsumed.relatedEntityType = InventoryOperationsService.RESTOCK;
+        unconsumed.relatedEntityId = order.id;
+        unconsumed.clientCommandId = clientCommandId;
+        unconsumed.availabilityBefore = checkin.availabilityAfter;
+        unconsumed.availabilityAfter = checkin.availabilityAfter;
+        unconsumed.createdAt = checkin.createdAt.plusNanos(1_000);
+        orm.persist(unconsumed);
+    }
+
     @Transactional
     @org.ash.inventory.helper.security.PrivateInventoryCommand(usage = true)
     public InventoryOrder returnAll(UUID id, UUID idempotencyKey) {
@@ -475,7 +573,7 @@ public class OrderService {
         var assetOutcomes = new LinkedHashMap<UUID, ApiModels.AssetReturnLine>();
         for (var entry : aggregateOutstanding(lines).entrySet())
             if (entry.getValue() > 0) outcomes.put(entry.getKey().id,
-                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, 0, null, "Full order return"));
+                    new ApiModels.ReturnLine(entry.getValue(), 0, 0, 0, null, "Full order return"));
         for (var assignment : orm.assetAssignments(order)) {
             if (assignment.reconciled) continue;
             var asset = assignment.assetInstance;
@@ -544,11 +642,39 @@ public class OrderService {
             transaction.destinationLocation = order.pickupLocation;
             positions.apply(transaction);
         orm.persist(transaction);
+            if (item.consumable()) consumeAtPickup(transaction, idempotencyKey);
         }
-        for (var line : lines)
+        for (var line : lines) {
             line.handedOverQuantity = line.preparedQuantity;
+            if (line.item.consumable() && line.handedOverQuantity > 0) {
+                line.consumedQuantity = line.handedOverQuantity;
+                recordReconciliation(order, line, line.item, actor, DomainEnums.ReconciliationOutcome.consumed,
+                        line.handedOverQuantity, idempotencyKey, "Consumed at pickup");
+            }
+        }
         convertReservationsToCustody(order);
         createHandover(order, actor, idempotencyKey, lines);
+    }
+
+    /** Consumables are used up, never returned: the pickup books them as consumed, so the order holds no custody of them. */
+    private void consumeAtPickup(StockTransaction checkout, UUID idempotencyKey) {
+        var consumed = new StockTransaction();
+        consumed.item = checkout.item;
+        consumed.user = checkout.user;
+        consumed.order = checkout.order;
+        consumed.eventOccurrence = checkout.eventOccurrence;
+        consumed.eventType = checkout.eventType;
+        consumed.faction = checkout.faction;
+        consumed.type = DomainEnums.TransactionType.consumed;
+        consumed.quantity = checkout.quantity;
+        consumed.reason = checkout.reason;
+        consumed.idempotencyKey = transactionKey(idempotencyKey, checkout.order, checkout.item, "pickup-consumed");
+        consumed.clientCommandId = idempotencyKey;
+        consumed.sourceLocation = checkout.destinationLocation;
+        consumed.availabilityBefore = checkout.availabilityAfter;
+        consumed.availabilityAfter = checkout.availabilityAfter;
+        consumed.createdAt = checkout.createdAt.plusNanos(1_000);
+        orm.persist(consumed);
     }
 
     private void replaceLines(InventoryOrder order, ApiModels.OrderInput input) {
@@ -674,7 +800,7 @@ public class OrderService {
     }
 
     private void distributeReturn(InventoryOrder order, List<OrderLine> lines, Item item, UserAccount actor,
-            int returned, int consumed, int damaged, int writtenOff, int missing, UUID idempotencyKey, String notes,
+            int returned, int damaged, int writtenOff, int missing, UUID idempotencyKey, String notes,
             List<ReturnHandoverDetail> handoverDetails) {
         // Write-offs settle units already reported missing before any still-unchecked units.
         int unwritten = distributeOutcomePass(order, lines, item, actor, writtenOff,
@@ -683,8 +809,6 @@ public class OrderService {
                 DomainEnums.ReconciliationOutcome.written_off, false, idempotencyKey, notes, handoverDetails);
         undistributed += distributeOutcome(order, lines, item, actor, returned,
                 DomainEnums.ReconciliationOutcome.returned_good, idempotencyKey, notes, handoverDetails);
-        undistributed += distributeOutcome(order, lines, item, actor, consumed,
-                DomainEnums.ReconciliationOutcome.consumed, idempotencyKey, notes, handoverDetails);
         undistributed += distributeOutcome(order, lines, item, actor, damaged,
                 DomainEnums.ReconciliationOutcome.returned_damaged, idempotencyKey, notes, handoverDetails);
         if (undistributed > 0)
@@ -728,7 +852,6 @@ public class OrderService {
             if (take == 0) continue;
             switch (outcome) {
                 case returned_good -> line.returnedQuantity += take;
-                case consumed -> line.consumedQuantity += take;
                 case returned_damaged -> line.damagedQuantity += take;
                 case written_off -> line.writtenOffQuantity += take;
                 default -> throw new IllegalArgumentException("Unsupported reconciliation outcome " + outcome);
@@ -940,7 +1063,6 @@ public class OrderService {
     private void applySerializedAssetOutcomes(Item item, InventoryOrder order, UserAccount actor,
             ApiModels.ReturnLine summary, UUID clientCommandId, Map<UUID, ApiModels.AssetReturnLine> outcomes,
             Map<UUID, OrderLineAssetAssignment> assignmentsByAsset, List<ReturnHandoverDetail> handoverDetails) {
-        if (summary.consumed() > 0) throw ApiException.badRequest("Serialized assets cannot be consumed");
         int returned = 0;
         int damaged = 0;
         int writtenOff = 0;

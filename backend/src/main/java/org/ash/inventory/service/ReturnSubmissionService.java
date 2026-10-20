@@ -127,7 +127,7 @@ public class ReturnSubmissionService {
             int outstanding = relevant.stream().mapToInt(CustodyQuantities::outstanding).sum();
             int missing = relevant.stream().mapToInt(line -> line.missingQuantity).sum();
             // The order books the reading against its event (OrderService.returnItems).
-            var line = new ApiModels.ReturnLine(value.quantity, 0, Math.min(missing, Math.max(0, outstanding - value.quantity)), 0, 0,
+            var line = new ApiModels.ReturnLine(value.quantity, Math.min(missing, Math.max(0, outstanding - value.quantity)), 0, 0,
                     value.assetInstance == null ? reading : null, value.notes);
             Map<UUID, ApiModels.AssetReturnLine> assets = value.assetInstance == null ? Map.of()
                     : Map.of(value.assetInstance.id, new ApiModels.AssetReturnLine(

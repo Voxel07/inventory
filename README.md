@@ -43,7 +43,7 @@ Item and assembly rows both carry `Kategorie` and `Unterkategorie` (adjacent col
 
 Storage locations form a tree (warehouse → area → section → shelf → compartment). Each level has a short code unique among its siblings (derived from the name when left empty); the full code joins the warehouse code and all level codes. Pickers search by code, name or path.
 
-Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). General-order rows use `Typ=Allgemeine Bestellung`, `Zweck`, `Bestellte Artikel`, `Bestellstatus`, and optionally `Rückgabeartikel` / `Verbrauchte Artikel`. Preparation runs before marking orders ready, including exact serialized asset assignments.
+Combined CSV checkout rows use `Typ=Ausleihe`, `Name`, `Menge`, `Eventtyp`, and `Fraktion`; serialized items may also specify `AssetCodes` (one code per unit). General-order rows use `Typ=Allgemeine Bestellung`, `Zweck`, `Bestellte Artikel`, `Bestellstatus`, and optionally `Rückgabeartikel` (consumables are consumed at pickup and never returned). Preparation runs before marking orders ready, including exact serialized asset assignments.
 
 Admin CSV imports enable “Auto-create missing event types and factions” by default, so `sample_imports/sample_stock.csv` also works with an empty reference catalog. The preview lists new factions; import creates only those used by valid selected rows, before resolving attendee roles to database IDs. Disable this option to require existing references. Preview and import wait for all catalog dependencies; failed catalog reads show an error with retry.
 

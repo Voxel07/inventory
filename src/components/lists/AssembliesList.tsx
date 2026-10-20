@@ -15,7 +15,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Assembly } from '../../types';
 import { useAppLanguage, useT } from '../../utils/naming';
 import { assemblyAvailability } from '../../utils/factionOrderQuantities';
-import { getItemStock } from '../../utils/stock';
+import { getItemStock, stockRatio } from '../../utils/stock';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
 import { catalogGridSx } from './catalogGrid';
@@ -103,8 +103,7 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
     const rows = allRows;
 
     const availabilityText = (row: AssemblyRow) => !row.stockReady ? t('lists.assembliesList.calculatingStock')
-        : row.stock > 0 ? t('lists.assembliesList.stockOfTotalStockBuildable', { stock: String(row.stock), totalStock: String(row.totalStock) })
-        : t('lists.assembliesList.noneBuildable');
+        : stockRatio(row.stock, row.totalStock);
     const availabilityColor = (row: AssemblyRow) => !row.stockReady ? 'text.secondary' : row.stock > 0 ? 'success.main' : 'error.main';
 
     function rowActions(row: AssemblyRow): RowAction[] {

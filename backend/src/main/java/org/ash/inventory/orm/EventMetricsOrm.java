@@ -17,7 +17,7 @@ public class EventMetricsOrm extends EntityOrm {
 
     public List<StockTransaction> directMovements(Collection<UUID> eventIds) {
         if (eventIds.isEmpty()) return List.of();
-        return entityManager.createQuery("from StockTransaction tx join fetch tx.item where tx.eventOccurrence.id in :ids and tx.order is null and tx.relatedEntityType is null", StockTransaction.class)
+        return entityManager.createQuery("from StockTransaction tx join fetch tx.item where tx.eventOccurrence.id in :ids and tx.order is null and (tx.relatedEntityType is null or tx.relatedEntityType = 'restock')", StockTransaction.class)
                 .setParameter("ids", eventIds).getResultList();
     }
 

@@ -171,9 +171,117 @@ public class InventoryOperationsService {
         positions.apply(transaction);
         orm.persist(transaction);
         transaction.availabilityAfter = stock(item).available();
+        if (transaction.type == DomainEnums.TransactionType.checkout && item.consumable()) consumeOnCheckout(transaction);
         events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
                 Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return transaction;
+    }
+
+    /** Consumables are used up, never returned: a direct checkout is consumed at once, so no checked-out stock or custody remains. */
+    private void consumeOnCheckout(StockTransaction checkout) {
+        var consumed = new StockTransaction();
+        consumed.occurredAt = checkout.occurredAt;
+        consumed.item = checkout.item;
+        consumed.user = checkout.user;
+        consumed.type = DomainEnums.TransactionType.consumed;
+        consumed.quantity = checkout.quantity;
+        consumed.reason = checkout.reason;
+        consumed.notes = checkout.notes;
+        consumed.eventOccurrence = checkout.eventOccurrence;
+        consumed.eventType = checkout.eventType;
+        consumed.faction = checkout.faction;
+        consumed.lot = checkout.lot;
+        consumed.clientCommandId = checkout.clientCommandId;
+        consumed.availabilityBefore = checkout.availabilityAfter;
+        consumed.availabilityAfter = checkout.availabilityAfter;
+        // Strictly after its checkout (database precision is microseconds), so ledger order and reversal stay unambiguous.
+        consumed.createdAt = checkout.createdAt.plusNanos(1_000);
+        orm.persist(consumed);
+    }
+
+    static final String RESTOCK = "restock";
+
+    /**
+     * Unused consumables of one direct checkout go back to stock: a check-in and a negative consumption, both linked to
+     * the checkout, so it keeps who issued them while the ledger names who brought them back. The total never exceeds
+     * the issued quantity, and a repeated command returns the first result.
+     */
+    @Transactional
+    @org.ash.inventory.helper.security.PrivateInventoryCommand
+    public StockTransaction restockUnused(UUID checkoutId, ApiModels.RestockInput input) {
+        if (input.idempotencyKey() != null) {
+            var existing = orm.transactionByIdempotencyKey(input.idempotencyKey());
+            if (existing != null) {
+                actors.protect(existing, true);
+                if (!checkoutId.equals(existing.relatedEntityId)) throw ApiException.conflict("Idempotency key belongs to a different movement");
+                return existing;
+            }
+        }
+        var checkout = orm.find(StockTransaction.class, checkoutId);
+        if (checkout == null) throw ApiException.notFound("Checkout not found");
+        var item = lockedItem(checkout.item.id);
+        actors.requireItemEdit(item);
+        if (checkout.type != DomainEnums.TransactionType.checkout || checkout.order != null || checkout.reverses != null || !item.consumable())
+            throw ApiException.badRequest("Only a direct checkout of a consumable can be restocked");
+        int restockable = checkout.quantity - orm.restockedQuantity(checkout);
+        if (input.quantity() > restockable)
+            throw ApiException.badRequest("Only " + restockable + " of " + item.name + " can still be restocked from this checkout");
+        var actor = actors.current();
+        var checkin = new StockTransaction();
+        checkin.occurredAt = historicalTimestamp(null);
+        checkin.item = item;
+        checkin.user = actor;
+        checkin.type = DomainEnums.TransactionType.checkin;
+        checkin.quantity = input.quantity();
+        checkin.reason = "Unused consumable restocked";
+        checkin.notes = input.notes();
+        checkin.eventOccurrence = checkout.eventOccurrence;
+        checkin.eventType = checkout.eventType;
+        checkin.faction = checkout.faction;
+        checkin.lot = checkout.lot;
+        checkin.relatedEntityType = RESTOCK;
+        checkin.relatedEntityId = checkout.id;
+        checkin.idempotencyKey = input.idempotencyKey();
+        checkin.clientCommandId = input.idempotencyKey();
+        checkin.destinationLocation = input.locationId() != null ? positions.location(input.locationId())
+                : item.returnLocation != null ? item.returnLocation : item.storageLocation;
+        checkin.availabilityBefore = stock(item).available();
+        positions.apply(checkin);
+        orm.persist(checkin);
+        checkin.availabilityAfter = stock(item).available();
+        var unconsumed = new StockTransaction();
+        unconsumed.occurredAt = checkin.occurredAt;
+        unconsumed.item = item;
+        unconsumed.user = actor;
+        unconsumed.type = DomainEnums.TransactionType.consumed;
+        unconsumed.quantity = -input.quantity();
+        unconsumed.reason = checkin.reason;
+        unconsumed.notes = input.notes();
+        unconsumed.eventOccurrence = checkin.eventOccurrence;
+        unconsumed.eventType = checkin.eventType;
+        unconsumed.faction = checkin.faction;
+        unconsumed.lot = checkin.lot;
+        unconsumed.relatedEntityType = RESTOCK;
+        unconsumed.relatedEntityId = checkout.id;
+        unconsumed.clientCommandId = input.idempotencyKey();
+        unconsumed.availabilityBefore = checkin.availabilityAfter;
+        unconsumed.availabilityAfter = checkin.availabilityAfter;
+        unconsumed.createdAt = checkin.createdAt.plusNanos(1_000);
+        orm.persist(unconsumed);
+        events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
+                Map.of("itemId", item.id.toString(), "type", "restocked", "quantity", input.quantity()));
+        return checkin;
+    }
+
+    /** Direct consumable checkouts of the item that can still take restocked units, newest first. */
+    public List<ApiModels.RestockableCheckout> restockable(UUID itemId) {
+        var item = orm.require(Item.class, itemId, "Item");
+        actors.requireItemEdit(item);
+        if (!item.consumable()) return List.of();
+        return orm.directCheckouts(item, 100).stream().map(checkout -> new ApiModels.RestockableCheckout(checkout.id, checkout.occurredAt,
+                        checkout.user.name, checkout.eventOccurrence == null ? null : checkout.eventOccurrence.name, checkout.faction,
+                        checkout.quantity, orm.restockedQuantity(checkout)))
+                .filter(row -> row.restocked() < row.issued()).toList();
     }
 
     private StockTransaction transactSerialized(ApiModels.TransactionInput input, Item item, UserAccount actor, Instant occurredAt) {

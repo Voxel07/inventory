@@ -23,7 +23,8 @@ const item = (id: string, name: string, category: string, quantity: number, loca
   expand: { storageLocation: location }, stock: fixtureStock(quantity),
 });
 const items = [
-  item('seal', 'Siegelaufkleber HPA-Regulator (100 Stück)', 'Verbrauchsmaterial', 15, locations[0]),
+  // Consumable: consumed at pickup; unused stickers can be restocked even after the order is closed.
+  { ...item('seal', 'Siegelaufkleber HPA-Regulator (100 Stück)', 'Verbrauchsmaterial', 15, locations[0]), isConsumable: true, inventoryRole: 'consumable' as const },
   item('fuel', 'Benzinkanister 20l', 'Energie', 4, locations[1]),
   item('generator', 'Benzingenerator 3,5 kW', 'Energie', 4, locations[0]),
   item('fence', 'Bauzaun 3.5m x 2.0m', 'Infrastruktur', 40, locations[2]),
@@ -49,7 +50,7 @@ const factionOrder = (id: string, faction: string, status: FactionOrderStatus, e
 const factionOrders = [
   factionOrder('order-tera', 'TERA', 'preparing', { preparedQuantities: { seal: 2 } }),
   factionOrder('order-ucrf', 'UCRF', 'submitted'),
-  factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: '2026-06-13', requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, preparedAssemblyQuantities: { power: 1 } }),
+  factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: '2026-06-13', requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, consumedQuantities: { seal: 1 }, preparedAssemblyQuantities: { power: 1 } }),
 ];
 const generalOrder = (id: string, name: string, purpose: string, eventOccurrenceId: string, status: GeneralOrder['status'], extra: Partial<GeneralOrder>): GeneralOrder => ({
   kind: 'general', id, name, purpose, eventOccurrenceId, status, requestedQuantities: {}, preparedQuantities: {}, handedOverQuantities: {}, returnedQuantities: {},
@@ -111,8 +112,8 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/event-types') return ['LS', 'DE'];
   if (path === '/api/factions') return factions;
   if (path === '/api/orders/faction') return factionOrders;
-  if (/^\/api\/orders\/[^/]+$/.test(path)) return factionOrders.find((order) => order.id === path.split('/')[3]);
   if (path === '/api/orders/general') return generalOrders;
+  if (/^\/api\/orders\/faction\/[^/]+$/.test(path)) return factionOrders.find((order) => order.id === path.split('/')[4]);
   if (path === '/api/equipment-availability') return {};
   return [];
 });

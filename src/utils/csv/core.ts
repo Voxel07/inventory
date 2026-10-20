@@ -259,7 +259,6 @@ export const GENERAL_ORDER_NAME_ALIASES = ['name', 'ordername', 'bestellname'];
 
 export const GENERAL_ORDER_PURPOSE_ALIASES = ['purpose', 'zweck', 'beschreibung'];
 
-export const ORDER_CONSUMED_ITEMS_ALIASES = ['consumeditems', 'verbrauchteartikel', 'verbraucht'];
 
 export const RETURN_PERSON_ALIASES = [
   'person',

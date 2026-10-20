@@ -26,12 +26,13 @@ import type { CheckedOutRow } from '../../types/custody';
 import { useCustodyBalances } from '../../hooks/useCustodyBalances';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
-import { getItemStock } from '../../utils/stock';
+import { formatQuantity, fromSteps, getItemStock, inputStep, quantityScale, toSteps } from '../../utils/stock';
 import { translate, useNames, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canTakeOut } from '../../utils/access';
 import { factionOrderOf, generalOrderOf } from '../../utils/custody';
+import { RestockCheckoutForm, type RestockCheckoutData } from './RestockCheckoutForm';
 
 interface Props {
     items: Item[];
@@ -39,6 +40,8 @@ interface Props {
     onSubmit: (data: TransactionFormData) => void;
     isLoading?: boolean;
     initialData?: TransactionFormData;
+    /** Offers "restock unused" for consumables: unused amounts of an earlier direct checkout back to stock. */
+    onRestock?: (data: RestockCheckoutData) => void;
 }
 
 /** Event use books the checkout to a dated event and faction; general use is out-of-game (workshop, setup, transport). */
@@ -49,7 +52,7 @@ function returnable(row: CheckedOutRow) {
     return Math.max(0, row.checkedOut - (row.pendingQuantity ?? 0));
 }
 
-export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData }: Props) {
+export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData, onRestock }: Props) {
     const { user } = useAuth();
     const names = useNames();
     const lookup = useStockLookups();
@@ -80,18 +83,39 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const [usage, setUsage] = useState<Usage>(initialUsage);
     const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
     const [quantityUnit, setQuantityUnit] = useState<'items' | 'boxes'>('items');
+    const [restocking, setRestocking] = useState(false);
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
     const canCheckout = canTakeOut(user) && (!selectedItem?.access?.privateResource || selectedItem.access.canEdit || selectedItem.access.publicUse);
     const lots = useCompleteList(['operations', `transaction-lots:${formData.itemId}`], operationsApi.lots({ itemId: formData.itemId }), { enabled: Boolean(formData.itemId) });
     const isSerialized = selectedItem?.trackingMode === 'serialized';
+    const isConsumable = Boolean(selectedItem?.isConsumable);
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = getItemStock(selectedItem);
     const isCheckout = formData.transactionType === 'checkout';
     const eventUse = isCheckout && usage === 'event';
     const equipment = useEquipmentAvailability(formData.eventOccurrenceId);
     const commitment = equipment.data?.[formData.itemId];
-    const checkoutAvailable = commitment ? (commitment.pickupAllowed ? commitment.available : 0) : selectedStock.remaining;
+    // A checkout picks stock up where it actually lies: only locations holding usable stock of this item (and lot).
+    const positions = useCompleteList(['operations', `positions:${formData.itemId}:`], operationsApi.positions({ itemId: formData.itemId }),
+        { enabled: Boolean(formData.itemId) && isCheckout && !isSerialized });
+    const usableLots = new Set((lots.data ?? []).filter((lot) => lot.status === 'available').map((lot) => lot.id));
+    const sourceStock = new Map<string, number>();
+    for (const position of positions.data ?? []) {
+        if (position.availableQuantity <= 0) continue;
+        if (formData.lotId ? position.lotId !== formData.lotId
+            : selectedItem?.trackingMode === 'lot_tracked' && !(position.lotId && usableLots.has(position.lotId))) continue;
+        sourceStock.set(position.locationId, (sourceStock.get(position.locationId) ?? 0) + position.availableQuantity);
+    }
+    const sourceOptions = [...sourceStock].map(([value, quantity]) => ({ value, quantity,
+        label: lookup.locationOptions.find((location) => location.value === value)?.label ?? value }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    const sourceLocationId = formData.locationId && sourceStock.has(formData.locationId) ? formData.locationId
+        : selectedItem?.storageLocation && sourceStock.has(selectedItem.storageLocation) ? selectedItem.storageLocation : sourceOptions[0]?.value;
+    // Located stock exists, but none of it can be picked up.
+    const noSource = positions.isComplete && (positions.data?.length ?? 0) > 0 && sourceOptions.length === 0;
+    const sourceAvailable = sourceLocationId ? sourceStock.get(sourceLocationId) ?? 0 : noSource ? 0 : Infinity;
+    const checkoutAvailable = Math.min(sourceAvailable, commitment ? (commitment.pickupAllowed ? commitment.available : 0) : selectedStock.remaining);
     const isCheckin = formData.transactionType === 'checkin';
     // A return settles one exact custody: custodian, event and order. General orders return through their order screen.
     const custody = useCustodyBalances(false, isCheckin);
@@ -101,9 +125,10 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const custodySource = custodySources.find((row) => row.key === custodyKey);
     const returnLimit = custodySource ? returnable(custodySource) : 0;
     const hasBoxes = !isSerialized && (selectedItem?.containerSize ?? 0) > 0;
-    const quantity = Number(quantityInput) * (hasBoxes && quantityUnit === 'boxes' ? selectedItem!.containerSize! : 1);
+    // Typed in the item's unit (7.5 L), booked in its steps (75).
+    const quantity = hasBoxes && quantityUnit === 'boxes' ? Number(quantityInput) * selectedItem!.containerSize! : toSteps(selectedItem, quantityInput);
     const quantityLimit = isCheckout ? checkoutAvailable : isCheckin ? returnLimit : undefined;
-    const quantityInvalid = quantityInput === '' || !Number.isInteger(Number(quantityInput)) || quantity < 1 || !Number.isSafeInteger(quantity)
+    const quantityInvalid = quantityInput === '' || quantity < 1 || !Number.isSafeInteger(quantity)
         || (quantityLimit !== undefined && quantity > quantityLimit);
     const checkoutContextMissing = eventUse && (!formData.eventOccurrenceId || !formData.faction);
     const selectableAssets = itemAssets.filter((asset) => {
@@ -139,7 +164,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         }));
         if (row) {
             setQuantityUnit('items');
-            setQuantityInput(String(Math.min(quantity || 1, returnable(row))));
+            setQuantityInput(String(fromSteps(selectedItem, Math.min(Number.isSafeInteger(quantity) && quantity > 0 ? quantity : quantityScale(selectedItem), returnable(row)))));
         }
     }
 
@@ -171,6 +196,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             ...prev,
             transactionType: value,
             assetInstanceId: undefined,
+            locationId: undefined,
             userId: undefined,
             orderId: undefined,
             eventOccurrenceId: value === 'checkout' ? prev.eventOccurrenceId : undefined,
@@ -183,12 +209,15 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        // Enter inside the restock section must not post a checkout.
+        if (restocking && isConsumable) return;
         if ((isCheckout ? !canCheckout : !canEditStock)
             || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing) return;
         const general = isCheckout && usage === 'general';
         onSubmit({
             ...formData,
             quantityChanged: isSerialized ? 1 : quantity,
+            locationId: isCheckout && !isSerialized ? sourceLocationId : formData.locationId,
             ...(general ? { eventOccurrenceId: undefined, eventType: undefined, faction: undefined } : {}),
         });
     }
@@ -210,7 +239,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         const { remaining } = getItemStock(item);
                         return (
                             <MenuItem key={item.id} value={item.id}>
-                                {item.name} ({t('enum.itemStatus.available')}: {remaining})
+                                {item.name} ({t('enum.itemStatus.available')}: {formatQuantity(item, remaining)})
                             </MenuItem>
                         );
                     })}
@@ -222,15 +251,23 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     <ToggleButtonGroup
                         exclusive
                         fullWidth
-                        value={formData.transactionType}
-                        onChange={(_, value: TransactionType | null) => value && changeType(value)}
+                        value={restocking && isConsumable ? 'restock' : formData.transactionType}
+                        onChange={(_, value: TransactionType | 'restock' | null) => {
+                            if (!value) return;
+                            setRestocking(value === 'restock');
+                            if (value !== 'restock') changeType(value);
+                        }}
                         aria-label={t('forms.transactionForm.transactionType')}
                         sx={{ '& .MuiToggleButton-root': { minHeight: 52, gap: 0.75, textTransform: 'none', fontWeight: 700 } }}
                     >
                         <ToggleButton title={translate('forms.transactionForm.recordACheckout')} value="checkout" disabled={!canCheckout}><LogoutIcon />{names.action.checkout}</ToggleButton>
-                        <ToggleButton title={translate('forms.transactionForm.recordACheckIn')} value="checkin" disabled={!canEditStock || selectedStock.checkedOut < 1}>
-                            <AssignmentReturnIcon />{names.action.checkin} ({selectedStock.checkedOut} {t('forms.transactionForm.out')})
-                        </ToggleButton>
+                        {/* Consumables are consumed on checkout and never returned. */}
+                        {!isConsumable && <ToggleButton title={translate('forms.transactionForm.recordACheckIn')} value="checkin" disabled={!canEditStock || selectedStock.checkedOut < 1}>
+                            <AssignmentReturnIcon />{names.action.checkin} ({formatQuantity(selectedItem, selectedStock.checkedOut)} {t('forms.transactionForm.out')})
+                        </ToggleButton>}
+                        {isConsumable && onRestock && <ToggleButton title={translate('forms.transactionForm.recordUnusedConsumablesBackToStock')} value="restock" disabled={!canEditStock}>
+                            <AssignmentReturnIcon />{t('forms.transactionForm.restockUnused')}
+                        </ToggleButton>}
                         <ToggleButton title={translate('forms.transactionForm.recordAddedStock')} value="added" disabled={!canEditStock || isSerialized}><AddBoxIcon />{t('forms.transactionForm.addStock')}</ToggleButton>
                     </ToggleButtonGroup>
                     {isSerialized && (
@@ -241,6 +278,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </Typography>
                     )}
                 </Box>
+                {restocking && isConsumable && onRestock && selectedItem ? <RestockCheckoutForm item={selectedItem} onSubmit={onRestock} isLoading={isLoading} /> : <>
                 {isCheckout && (
                     <Box>
                         <Typography component="label" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
@@ -285,7 +323,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         </TextField>
                     </Box>
                 )}
-                {!isSerialized && <TextField select label={isCheckout ? t('forms.transactionForm.sourceLocation') : t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                {isCheckout && isConsumable && <Alert severity="info">{t('forms.transactionForm.consumablesAreConsumedOnCheckout')}</Alert>}
+                {isCheckout && !isSerialized && sourceOptions.length > 0 && <TextField select required label={t('forms.transactionForm.sourceLocation')} value={sourceLocationId ?? ''}
+                    helperText={t('forms.transactionForm.onlyLocationsHoldingThisItem')}
+                    onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                    {sourceOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label} ({formatQuantity(selectedItem, location.quantity)})</MenuItem>)}
+                </TextField>}
+                {isCheckout && noSource && <Alert severity="warning">{t('forms.transactionForm.noLocationHoldsUsableStock')}</Alert>}
+                {!isCheckout && !isSerialized && <TextField select label={t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
                     <MenuItem value="">{formData.transactionType === 'checkin' ? t('forms.transactionForm.itemReturnLocation') : t('forms.transactionForm.itemDefaultLocation')}</MenuItem>
                     {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
                 </TextField>}
@@ -296,7 +341,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                 {formData.transactionType === 'checkin' && (
                     <>
                         <Alert severity="info">
-                            {t('forms.transactionForm.checkedOutUnitsAreCurrentlyCheckedOut', { checkedOut: String(selectedStock.checkedOut) })}
+                            {t('forms.transactionForm.checkedOutUnitsAreCurrentlyCheckedOut', { checkedOut: formatQuantity(selectedItem, selectedStock.checkedOut) })}
                         </Alert>
                         <TextField
                             select
@@ -317,7 +362,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                                 <MenuItem key={row.key} value={row.key}>
                                     {[row.person, row.event || t('forms.transactionForm.noEvent'),
                                         factionOrderOf(row) && t('forms.transactionForm.factionOrder'),
-                                        `${returnable(row)} ${t('forms.transactionForm.outstanding')}`].filter(Boolean).join(' · ')}
+                                        `${formatQuantity(selectedItem, returnable(row))} ${t('forms.transactionForm.outstanding')}`].filter(Boolean).join(' · ')}
                                 </MenuItem>
                             ))}
                         </TextField>
@@ -363,7 +408,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     <MenuItem value="boxes">{t('forms.transactionForm.wholeBoxes', { count: selectedItem!.containerSize! })}</MenuItem>
                 </TextField>}
                 {!isSerialized && <TextField
-                    label={t('common.quantity')}
+                    label={selectedItem?.unit && !(hasBoxes && quantityUnit === 'boxes') ? `${t('common.quantity')} (${selectedItem.unit})` : t('common.quantity')}
                     type="number"
                     value={quantityInput}
                     onChange={(e) => setQuantityInput(e.target.value)}
@@ -371,9 +416,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     fullWidth
                     helperText={hasBoxes
                         ? t('forms.transactionForm.individualItemQuantity', { count: Number.isFinite(quantity) ? quantity : 0 })
-                        : quantityLimit !== undefined ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit }) : undefined}
+                        : quantityLimit !== undefined ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: formatQuantity(selectedItem, quantityLimit) }) : undefined}
                     error={quantityInvalid && quantityInput !== ''}
-                    slotProps={{ htmlInput: { min: 1, step: 1, ...(quantityLimit !== undefined ? { max: hasBoxes && quantityUnit === 'boxes' ? Math.floor(quantityLimit / selectedItem!.containerSize!) : quantityLimit } : {}) } }}
+                    slotProps={{ htmlInput: { min: inputStep(selectedItem), step: inputStep(selectedItem), ...(quantityLimit !== undefined ? { max: hasBoxes && quantityUnit === 'boxes' ? Math.floor(quantityLimit / selectedItem!.containerSize!) : fromSteps(selectedItem, quantityLimit) } : {}) } }}
                 />}
                 {isSerialized && (
                     <Alert severity="info">
@@ -429,6 +474,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         {t('forms.transactionForm.postTransaction')}
                     </Button>
                 </Box>
+                </>}
             </Stack>
         </Box>
     );

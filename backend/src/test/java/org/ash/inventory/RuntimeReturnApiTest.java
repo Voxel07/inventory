@@ -97,7 +97,7 @@ class RuntimeReturnApiTest {
         admin().body(Map.of("pickupLatitude", 52.5, "pickupLongitude", 13.4))
                 .post("/api/orders/faction/" + order + "/transitions/ready").then().statusCode(200);
         admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/picked_up").then().statusCode(200);
-        var line = Map.of(item, Map.of("returned", 1, "consumed", 0, "damaged", 0, "missing", 0));
+        var line = Map.of(item, Map.of("returned", 1, "damaged", 0, "missing", 0));
         // A tracked unit going back to stock needs the hours run, and the meter never runs backwards.
         admin().body(Map.of("idempotencyKey", UUID.randomUUID(), "lines", line,
                         "assets", Map.of(asset, Map.of("outcome", "returned_good"))))

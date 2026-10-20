@@ -9,6 +9,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
+import { RestockUnusedDialog } from '../components/orders/RestockUnused';
+import { restockableItems } from '../utils/restock';
+import { restockOrder } from '../services/orderCommands';
 import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { OrderDetailHeader } from '../components/orders/detail/OrderDetailHeader';
@@ -113,6 +116,7 @@ export function FactionOrderDetail() {
   const [editReady, setEditReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(false);
   const [pickupMapOpen, setPickupMapOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
@@ -332,6 +336,7 @@ export function FactionOrderDetail() {
         }
         onPickUp={() => setConfirmAction('pickup')}
         onOpenReturn={() => setReturnOpen(true)}
+        onOpenRestock={restockableItems(lineItems, order.consumedQuantities).length ? () => setRestockOpen(true) : undefined}
         onCancel={() => setConfirmAction('cancel')}
         isSavingPreparation={savePreparation.isPending}
         isSubmitting={submitOrder.isPending}
@@ -416,21 +421,26 @@ export function FactionOrderDetail() {
             busy={returnOrderItems.isPending}
             canWriteOff={canWriteOff(currentUser)}
             onCancel={() => setReturnOpen(false)}
-            onSubmit={(lines, assets) => {
+            onSubmit={(lines, assets, restock) => {
+              // The return settles the components; unused consumables follow as their own restock command.
+              const restockUnused = () => Object.keys(restock).length
+                ? restockOrder('faction', order.id, { quantities: restock }) : Promise.resolve();
+              const recorded = () => {
+                setReturnOpen(false);
+                success(t('pages.factionOrderDetail.returnSuccessfullyRecorded'));
+              };
+              if (!Object.keys(lines).length) { restockUnused().then(recorded, handleError); return; }
               returnOrderItems.mutate(
                 { id: order.id, lines, assets },
-                {
-                  onSuccess: () => {
-                    setReturnOpen(false);
-                    success(t('pages.factionOrderDetail.returnSuccessfullyRecorded'));
-                  },
-                  onError: handleError,
-                },
+                { onSuccess: () => restockUnused().then(recorded, handleError), onError: handleError },
               );
             }}
           />
         </DialogContent>
       </Dialog>
+
+      {restockOpen && <RestockUnusedDialog kind="faction" orderId={order.id} items={lineItems}
+        consumed={order.consumedQuantities} onClose={() => setRestockOpen(false)} />}
 
       <QrLabelDialog
         label={qrOpen ? { title: order.orderCode, itemId: order.id, itemName: `${order.eventType}-${order.faction}-${order.orderCode}`, resourceType: 'faction-order', textCode: order.orderCode } : null}

@@ -6,7 +6,6 @@ import { createResourceHooks } from './useResourceApi';
 export const {
   useAll: useStorageLocations,
   useDetail: useStorageLocation,
-  useCreate: useCreateStorageLocation,
   useUpdate: useUpdateStorageLocation,
   useDelete: useDeleteStorageLocation,
   useDeleteMany: useDeleteStorageLocations,

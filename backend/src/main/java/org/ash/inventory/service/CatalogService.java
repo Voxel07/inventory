@@ -281,11 +281,12 @@ public class CatalogService {
             throw ApiException.badRequest("Maintenance schedules of an existing item are managed through /api/maintenance-schedules");
         }
         var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
-        if (targetTrackingMode != item.trackingMode) {
+        int targetDecimals = input.quantityDecimals() != null ? input.quantityDecimals() : item.quantityDecimals;
+        if (targetTrackingMode != item.trackingMode || targetDecimals != item.quantityDecimals) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
             if (assetCount > 0 || txCount > 0) {
-                throw ApiException.badRequest("Cannot change tracking mode for an item with existing stock or transaction history");
+                throw ApiException.badRequest("Cannot change tracking mode or decimal places for an item with existing stock or transaction history");
             }
         }
         String previousCategory = item.category;
@@ -342,6 +343,11 @@ public class CatalogService {
                 && item.inventoryRole == DomainEnums.InventoryRole.consumable) {
             throw ApiException.badRequest("Serialized inventory cannot use the consumable role");
         }
+        item.unit = org.ash.inventory.helper.Inputs.blankToNull(input.unit() == null ? null : input.unit().trim());
+        if (input.quantityDecimals() != null) item.quantityDecimals = input.quantityDecimals();
+        // Serialized units are counted one by one.
+        if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.quantityDecimals != 0)
+            throw ApiException.badRequest("Serialized items are counted in whole units");
         if (input.minStock() != null) item.minStock = input.minStock();
         if (input.value() != null) item.unitValueCents = input.value().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
         item.storageLocation = input.storageLocation() == null ? null : orm.require(StorageLocation.class, input.storageLocation(), "Storage location");

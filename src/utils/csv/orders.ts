@@ -1,7 +1,7 @@
 import { type Item } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedFactionOrderRow, type ParsedAssemblyComponent, type FactionOrderImportStatus, type ParsedGeneralOrderRow } from '../../types/csvImport';
-import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_ALIASES, parseInlineComponents, ORDER_ITEMS_ALIASES, ORDER_STATUS_ALIASES, ORDER_RETURNED_ITEMS_ALIASES, HINT_ALIASES, GENERAL_ORDER_NAME_ALIASES, GENERAL_ORDER_PURPOSE_ALIASES, ORDER_CONSUMED_ITEMS_ALIASES, ORDER_PICKUP_POINT_ALIASES } from './core';
+import { getField, EVENT_REPORT_TYPE_ALIASES, EVENT_DATE_ALIASES, ORDER_FACTION_ALIASES, parseInlineComponents, ORDER_ITEMS_ALIASES, ORDER_STATUS_ALIASES, ORDER_RETURNED_ITEMS_ALIASES, HINT_ALIASES, GENERAL_ORDER_NAME_ALIASES, GENERAL_ORDER_PURPOSE_ALIASES, ORDER_PICKUP_POINT_ALIASES } from './core';
 
 /** Parses draft/submitted faction-order rows from a combined CSV. */
 export function parseFactionOrdersFromCsv(
@@ -148,7 +148,6 @@ export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items:
     const purpose = getField(raw, GENERAL_ORDER_PURPOSE_ALIASES) ?? '';
     const requestedItems = resolve(getField(raw, ORDER_ITEMS_ALIASES));
     const returnedItems = resolve(getField(raw, ORDER_RETURNED_ITEMS_ALIASES));
-    const consumedItems = resolve(getField(raw, ORDER_CONSUMED_ITEMS_ALIASES));
     const rawStatus = getField(raw, ORDER_STATUS_ALIASES)?.toLowerCase().trim();
     let targetStatus: FactionOrderImportStatus = 'draft';
     if (['closed', 'abgeschlossen'].includes(rawStatus ?? '')) targetStatus = 'closed';
@@ -161,27 +160,31 @@ export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items:
     for (const component of requestedItems) if (component.itemId) requestedQuantities[component.itemId] = (requestedQuantities[component.itemId] ?? 0) + component.quantity;
     let status: ParsedGeneralOrderRow['status'] = 'valid';
     let statusMessage: string | undefined;
-    const unmatched = [...requestedItems, ...returnedItems, ...consumedItems].filter((component) => !component.matched);
+    const unmatched = [...requestedItems, ...returnedItems].filter((component) => !component.matched);
+    // Consumables are consumed at pickup: they are never returned and need no return quantity.
+    const isConsumable = (component: ParsedAssemblyComponent) => Boolean(lookup.get(component.itemName.toLowerCase().trim())?.isConsumable);
+    const returnableRequested = requestedItems.filter((component) => !isConsumable(component));
     if (!name || !purpose) { status = 'error'; statusMessage = 'Name und Zweck fehlen'; }
     else if (!eventType || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
       status = 'error'; statusMessage = 'Eventtyp oder Eventdatum fehlt';
     } else if (!requestedItems.length) { status = 'error'; statusMessage = 'Bestellte Artikel fehlen'; }
     else if (unmatched.length) { status = 'error'; statusMessage = `Unbekannte Artikel: ${unmatched.map((item) => item.itemName).join(', ')}`; }
-    else if (consumedItems.some((component) => !lookup.get(component.itemName.toLowerCase().trim())?.isConsumable)) {
-      status = 'error'; statusMessage = 'Nur Verbrauchsmaterial kann als verbraucht erfasst werden';
+    else if (returnedItems.some(isConsumable)) {
+      status = 'error'; statusMessage = 'Verbrauchsmaterial wird bei der Ausgabe verbraucht und nicht zurückgegeben';
     }
-    else if (['returned', 'closed', 'partially_returned'].includes(targetStatus) && !returnedItems.length && !consumedItems.length) {
-      status = 'error'; statusMessage = 'Rückgabeartikel oder verbrauchte Artikel fehlen';
+    else if (['returned', 'closed', 'partially_returned'].includes(targetStatus) && returnableRequested.length && !returnedItems.length) {
+      status = 'error'; statusMessage = 'Rückgabeartikel fehlen';
     }
     const returnedTotals: Record<string, number> = {};
-    for (const component of [...returnedItems, ...consumedItems]) if (component.itemId) returnedTotals[component.itemId] = (returnedTotals[component.itemId] ?? 0) + component.quantity;
+    for (const component of returnedItems) if (component.itemId) returnedTotals[component.itemId] = (returnedTotals[component.itemId] ?? 0) + component.quantity;
     if (Object.entries(returnedTotals).some(([id, quantity]) => quantity > (requestedQuantities[id] ?? 0))) {
       status = 'error'; statusMessage = 'Rückgabe überschreitet bestellte Menge';
     }
-    if (['returned', 'closed'].includes(targetStatus) && Object.entries(requestedQuantities).some(([id, quantity]) => (returnedTotals[id] ?? 0) !== quantity)) {
+    if (['returned', 'closed'].includes(targetStatus) && returnableRequested.some((component) => component.itemId
+      && (returnedTotals[component.itemId] ?? 0) !== requestedQuantities[component.itemId])) {
       status = 'error'; statusMessage = 'Vollständige Rückgabe benötigt Mengen für alle bestellten Artikel';
     }
     return [{ index: index + 1, rawRow: raw, data: { name, purpose, requestedQuantities }, eventType, eventDate,
-      requestedItems, returnedItems, consumedItems, targetStatus, status, statusMessage }];
+      requestedItems, returnedItems, targetStatus, status, statusMessage }];
   });
 }

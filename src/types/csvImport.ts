@@ -81,7 +81,6 @@ export interface ParsedGeneralOrderRow {
   eventDate: string;
   requestedItems: ParsedAssemblyComponent[];
   returnedItems: ParsedAssemblyComponent[];
-  consumedItems: ParsedAssemblyComponent[];
   targetStatus: FactionOrderImportStatus;
   status: 'valid' | 'error';
   statusMessage?: string;

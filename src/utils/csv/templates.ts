@@ -37,7 +37,7 @@ export function generateSampleAssembliesCsv(): string {
 
 export function generateSampleCombinedCsv(): string {
   const header = ['Typ', 'Name', 'Kategorie', 'Unterkategorie', 'Menge', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Komponenten', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes', 'Lots',
-    'Eventtyp', 'Eventdatum', 'BestellteArtikel', 'RueckgabeArtikel', 'VerbrauchteArtikel', 'Bestellstatus', 'Zweck', 'Bestellname', 'Fraktion', 'Startdatum', 'Enddatum', 'Teilnehmer', 'Zeitplan', 'Aktion', 'Daten', 'Beschreibung'] as const;
+    'Eventtyp', 'Eventdatum', 'BestellteArtikel', 'RueckgabeArtikel', 'Bestellstatus', 'Zweck', 'Bestellname', 'Fraktion', 'Startdatum', 'Enddatum', 'Teilnehmer', 'Zeitplan', 'Aktion', 'Daten', 'Beschreibung'] as const;
   return csv(header, [
     { Typ: 'Artikel', Name: 'Feld-PC', Kategorie: 'IT & Elektronik', Unterkategorie: 'Computer', Menge: '2', Mindestbestand: '1', Einzelwert: '650,00', Lagerort: 'Lager A / Technik / Regal 1', Events: 'DE,TNO', Hinweis: 'Live-Map Rechner', TrackingMode: 'serialized', AssetCodes: quote('PC-01, PC-02') },
     { Typ: 'Artikel', Name: 'Zeltgestänge 4x4m', Kategorie: 'Infrastruktur', Unterkategorie: 'Zelte', Menge: '6', Mindestbestand: '2', Einzelwert: '120,00', Lagerort: 'Lager A / Zelte', Position: 'Palette 1', Events: 'DE,TNO', Hinweis: 'Auf Vollständigkeit prüfen', TrackingMode: 'bulk' },

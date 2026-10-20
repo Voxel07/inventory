@@ -24,8 +24,15 @@ export type AssetReturnOutcome = {
   operatingHours?: number;
   notes?: string;
 };
-/** Missing is the unresolved total after this command; other outcomes settle units now. */
-export type ReturnLineInput = { returned: number; consumed: number; missing: number; damaged: number; writtenOff: number; operatingHours?: number; notes?: string };
+/** Missing is the unresolved total after this command; other outcomes settle units now. Consumables are consumed at pickup. */
+export type ReturnLineInput = { returned: number; missing: number; damaged: number; writtenOff: number; operatingHours?: number; notes?: string };
+/** Unused consumables back to stock, per item in the item's steps; allowed from pickup on, also on completed orders. */
+export interface OrderRestockInput {
+  quantities: Record<string, number>;
+  idempotencyKey?: string;
+  locationId?: string;
+  notes?: string | null;
+}
 export interface OrderReturnInput {
   lines: Record<string, ReturnLineInput>;
   assets?: Record<string, AssetReturnOutcome>;

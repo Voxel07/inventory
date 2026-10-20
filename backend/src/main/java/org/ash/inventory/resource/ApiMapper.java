@@ -229,6 +229,8 @@ public class ApiMapper {
                 value.consumable(),
                 value.trackingMode.name(),
                 value.inventoryRole.name(),
+                value.unit,
+                value.quantityDecimals,
                 canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
                 canViewLocation(value.returnLocation) ? value.returnLocation.id.toString() : null,
                 value.active ? "available" : "retired",

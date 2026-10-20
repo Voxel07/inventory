@@ -2,7 +2,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canCreateInventory, canEditCatalog } from '../../utils/access';
 import { AccordionSummary, Button } from '../shared/ActionButtons';
-import { DialogForm, FormDialog, FormSection } from '../shared/FormDialog';
+import { DialogForm, FormSection } from '../shared/FormDialog';
 import { ImageAttachments, type ImageAttachmentState } from '../common/ImageAttachments';
 import { useState } from 'react';
 import {
@@ -22,12 +22,13 @@ import {
 import { TextField } from '../shared/DateTextField';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
-import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
 import { itemNameKey, useTakenItemNames } from '../../hooks/useItems';
-import { useUIStore } from '../../store/uiStore';
 import { type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useT } from '../../utils/naming';
 import { LocationPicker } from '../shared/LocationPicker';
+import { StorageStructureDialog } from '../storage/StorageStructureDialog';
+import { buildLocationTree, holdsStock, type LocationTreeNode } from '../../utils/locationHierarchy';
+import { formatQuantity, fromSteps, inputStep, toSteps } from '../../utils/stock';
 import { MaintenanceScheduleDialog } from './MaintenanceScheduleDialog';
 import { describeScheduleDraft, toScheduleInput, type ScheduleDraft } from './maintenanceScheduleDrafts';
 
@@ -73,6 +74,8 @@ export function ItemForm({
         hint: initialData?.hint ?? '',
         trackingMode: initialData?.trackingMode ?? 'bulk',
         inventoryRole: initialData?.inventoryRole ?? 'returnable',
+        unit: initialData?.unit ?? '',
+        quantityDecimals: initialData?.quantityDecimals ?? 0,
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
@@ -86,7 +89,7 @@ export function ItemForm({
     const [hasOpenedContainer, setHasOpenedContainer] = useState(false);
     const [numericInputs, setNumericInputs] = useState({
         amount: '',
-        minStock: String(initialData?.minStock ?? 0),
+        minStock: String(fromSteps(initialData, initialData?.minStock ?? 0)),
         value: String(initialData?.value ?? 0),
         containerSize: initialData?.containerSize == null ? '' : String(initialData.containerSize),
         containerRemainingCount: '',
@@ -99,11 +102,9 @@ export function ItemForm({
     const [addLocationOpen, setAddLocationOpen] = useState(false);
     const [schedules, setSchedules] = useState<ScheduleDraft[]>([]);
     const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-    const emptyLocation = { name: '', code: '', parentLocationId: null as string | null, description: '', privateResource: !canCreatePublic };
-    const [newLocData, setNewLocData] = useState(emptyLocation);
-
-    const createLoc = useCreateStorageLocation();
-    const showSnackbar = useUIStore((s) => s.showSnackbar);
+    // Locations saved here show at once, before the location list refetches.
+    const [createdLocations, setCreatedLocations] = useState<StorageLocation[]>([]);
+    const pickerLocations = [...storageLocations, ...createdLocations.filter((created) => !storageLocations.some((known) => known.id === created.id))];
     const hasStock = Boolean(initialData && ((initialData.stock?.totalOwned ?? 0) > 0));
     // Checked on every keystroke against the visible item names at the chosen location; keeping name and location is never a conflict.
     const { data: takenNames } = useTakenItemNames(formData.storageLocation || undefined);
@@ -132,19 +133,21 @@ export function ItemForm({
         return { storageLocation, returnLocation: followsStorage ? storageLocation : prev.returnLocation };
     }
 
-    function handleCreateLocSubmit() {
-        if (!newLocData.name.trim() || !newLocData.parentLocationId) return;
-        createLoc.mutate(newLocData, {
-            onSuccess: (newLoc) => {
-                setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newLoc.access?.privateResource), ...storageLocationChange(prev, newLoc.id) }));
-                setAddLocationOpen(false);
-                setNewLocData(emptyLocation);
-                showSnackbar(t('forms.itemForm.storageLocationCreated'), 'success');
-            },
-            onError: () => {
-                showSnackbar(t('forms.itemForm.couldNotCreateStorageLocation'), 'error');
+    /** Selects the first new section or storage place (deepest first, in tree order); stock never lies in a top-level location. */
+    function handleStructureSaved(saved: StorageLocation[]) {
+        setCreatedLocations(saved);
+        const known = new Set(pickerLocations.map((location) => location.id));
+        const firstNew = (nodes: LocationTreeNode[]): StorageLocation | undefined => {
+            for (const node of nodes) {
+                const deeper = firstNew(node.children);
+                if (deeper) return deeper;
+                if (!known.has(node.location.id) && holdsStock(node.location)) return node.location;
             }
-        });
+            return undefined;
+        };
+        const created = firstNew(buildLocationTree(saved));
+        if (!created) return;
+        setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(created.access?.privateResource), ...storageLocationChange(prev, created.id) }));
     }
 
     function handleSubmit() {
@@ -156,7 +159,7 @@ export function ItemForm({
             removeImages: images.removed,
             imageReplacements: images.replacements,
             amount: initialData ? undefined : openingUnits,
-            minStock: Number(numericInputs.minStock),
+            minStock: minStockSteps,
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
@@ -172,9 +175,13 @@ export function ItemForm({
 
     const boxSize = Number(numericInputs.containerSize);
     const openedUnits = isBulkPackage && hasOpenedContainer ? Number(numericInputs.containerRemainingCount) : 0;
-    const openingUnits = Number(numericInputs.amount) * (isBulkPackage ? boxSize : 1) + openedUnits;
-    const amountValid = !!initialData || (numericInputs.amount !== '' && Number.isInteger(Number(numericInputs.amount))
+    // Quantities are booked in whole steps of the item's unit (7.5 L with one decimal is 75).
+    const measure = { unit: formData.unit, quantityDecimals: formData.quantityDecimals ?? 0 };
+    const measured = (formData.quantityDecimals ?? 0) > 0;
+    const openingUnits = isBulkPackage ? Number(numericInputs.amount) * boxSize + openedUnits : toSteps(measure, numericInputs.amount);
+    const amountValid = !!initialData || (numericInputs.amount !== '' && (!isBulkPackage || Number.isInteger(Number(numericInputs.amount)))
         && Number(numericInputs.amount) >= 0 && Number.isSafeInteger(openingUnits) && openingUnits <= 2147483647);
+    const minStockSteps = toSteps(measure, numericInputs.minStock);
     const generatesAssetCodes = !initialData && formData.trackingMode === 'serialized';
     const startNumber = Number(numericInputs.assetStartNumber);
     const assetStartValid = !generatesAssetCodes || (numericInputs.assetStartNumber !== '' && Number.isInteger(startNumber) && startNumber >= 1);
@@ -190,8 +197,8 @@ export function ItemForm({
         || (numericInputs.containerSize !== '' && Number.isInteger(boxSize) && boxSize > 0 && boxSize <= 999999999);
     const openedContainerValid = !!initialData || !isBulkPackage || !hasOpenedContainer
         || (numericInputs.containerRemainingCount !== '' && Number.isInteger(openedUnits) && openedUnits > 0 && openedUnits < boxSize);
-    const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
-        && Number.isInteger(Number(numericInputs.minStock)) && numericInputs.value !== '' && Number.isFinite(Number(numericInputs.value)) && Number(numericInputs.value) >= 0;
+    const requiredNumbersValid = numericInputs.minStock !== '' && minStockSteps >= 0
+        && Number.isSafeInteger(minStockSteps) && numericInputs.value !== '' && Number.isFinite(Number(numericInputs.value)) && Number(numericInputs.value) >= 0;
     const isDisabled = isLoading || !nameKey || !!nameError || !formData.category.trim() || !amountValid || !containerSizeValid
         || !openedContainerValid || !requiredNumbersValid || !assetStartValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
@@ -286,7 +293,10 @@ export function ItemForm({
                                     inventoryRole: trackingMode === 'serialized' && prev.inventoryRole === 'consumable'
                                         ? 'returnable' : prev.inventoryRole,
                                 }));
-                                if (trackingMode === 'serialized') setIsBulkPackage(false);
+                                if (trackingMode === 'serialized') {
+                                    setIsBulkPackage(false);
+                                    setFormData((prev) => ({ ...prev, quantityDecimals: 0 }));
+                                }
                             }}
                         >
                             {trackingModes.map((mode) => (
@@ -317,7 +327,31 @@ export function ItemForm({
                             <MenuItem value="returnable">{t('enum.value.returnable')}</MenuItem>
                         </TextField>
                     </Stack>
-                    {formData.trackingMode !== 'serialized' && <Box>
+                    {formData.trackingMode !== 'serialized' && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <TextField
+                            fullWidth
+                            label={t('forms.itemForm.unit')}
+                            value={formData.unit ?? ''}
+                            onChange={handleChange('unit')}
+                            placeholder={t('forms.itemForm.unitPlaceholder')}
+                            helperText={t('forms.itemForm.unitHelp')}
+                            slotProps={{ htmlInput: { maxLength: 32 } }}
+                        />
+                        <TextField
+                            select
+                            fullWidth
+                            label={t('forms.itemForm.decimalPlaces')}
+                            value={formData.quantityDecimals ?? 0}
+                            disabled={hasStock || isBulkPackage}
+                            helperText={hasStock ? t('forms.itemForm.cannotChangeWhileStockExists') : t('forms.itemForm.decimalPlacesHelp')}
+                            onChange={(event) => setFormData((prev) => ({ ...prev, quantityDecimals: Number(event.target.value) }))}
+                        >
+                            {[0, 1, 2, 3].map((decimals) => <MenuItem key={decimals} value={decimals}>
+                                {decimals === 0 ? t('forms.itemForm.wholeUnits') : formatQuantity({ quantityDecimals: decimals }, 1)}
+                            </MenuItem>)}
+                        </TextField>
+                    </Stack>}
+                    {formData.trackingMode !== 'serialized' && !measured && <Box>
                         <FormControlLabel
                             control={(
                                 <Checkbox
@@ -367,7 +401,7 @@ export function ItemForm({
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                         {!initialData && (
                             <TextField
-                                label={isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : t('common.quantity')}
+                                label={isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : formData.unit ? `${t('common.quantity')} (${formData.unit})` : t('common.quantity')}
                                 type="number"
                                 value={numericInputs.amount}
                                 onChange={handleNumberChange('amount')}
@@ -377,7 +411,7 @@ export function ItemForm({
                                     ? t('forms.itemForm.createsOneAssetPerUnitEGSKU001')
                                     : formData.trackingMode === 'lot_tracked' ? t('forms.itemForm.openingStockBecomesTheFirstLot')
                                     : undefined}
-                                slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
+                                slotProps={{ htmlInput: { min: 0, step: isBulkPackage ? 1 : inputStep(measure), inputMode: measured ? 'decimal' : 'numeric' } }}
                             />
                         )}
                         {generatesAssetCodes && (<>
@@ -416,13 +450,13 @@ export function ItemForm({
                             />
                         )}
                         <TextField
-                            label={t('forms.itemForm.minimumStock')}
+                            label={formData.unit ? `${t('forms.itemForm.minimumStock')} (${formData.unit})` : t('forms.itemForm.minimumStock')}
                             type="number"
                             value={numericInputs.minStock}
                             onChange={handleNumberChange('minStock')}
                             required
                             fullWidth
-                            slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
+                            slotProps={{ htmlInput: { min: 0, step: inputStep(measure), inputMode: measured ? 'decimal' : 'numeric' } }}
                         />
                         <TextField
                             label={t('forms.itemForm.unitValue')}
@@ -457,7 +491,7 @@ export function ItemForm({
 
                 <FormSection title={t('enum.value.location')}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                        <LocationPicker locations={storageLocations} value={formData.storageLocation} label={t('common.storageLocation')}
+                        <LocationPicker locations={pickerLocations} value={formData.storageLocation} label={t('common.storageLocation')}
                             helperText={t('forms.itemForm.searchByCodeOrPath')}
                             onChange={(newValue) => setFormData((prev) => ({ ...prev, privateResource: initialData ? prev.privateResource : prev.privateResource || Boolean(newValue?.access?.privateResource), ...storageLocationChange(prev, newValue?.id ?? '') }))} />
                         {canCreateLocation && <Button variant="outlined" startIcon={<AddLocationAltOutlinedIcon />} onClick={() => setAddLocationOpen(true)}
@@ -472,7 +506,7 @@ export function ItemForm({
                         helperText={t('forms.itemForm.positionInLocationHelp')}
                         fullWidth
                     />
-                    <LocationPicker locations={storageLocations} value={formData.returnLocation} label={t('common.returnLocation')}
+                    <LocationPicker locations={pickerLocations} value={formData.returnLocation} label={t('common.returnLocation')}
                         helperText={t('forms.itemForm.whereTheItemGoesBackAfterUse')}
                         onChange={(value) => setFormData((prev) => ({ ...prev, returnLocation: value?.id ?? '' }))} />
                 </FormSection>
@@ -567,39 +601,8 @@ export function ItemForm({
                     setScheduleDialogOpen(false);
                 }} />
 
-            <FormDialog open={addLocationOpen} onClose={() => setAddLocationOpen(false)} maxWidth="xs">
-                <DialogForm title={t('forms.itemForm.addStorageLocation')} onSubmit={handleCreateLocSubmit} onCancel={() => setAddLocationOpen(false)}
-                    noValidate pending={createLoc.isPending} submitDisabled={!newLocData.name.trim() || !newLocData.parentLocationId} submitLabel={t('forms.itemForm.create')}>
-                    <LocationPicker locations={storageLocations} value={newLocData.parentLocationId} label={t('forms.itemForm.insideLocation')} stockOnly={false} required
-                        helperText={t('forms.itemForm.insideLocationHelp')}
-                        onChange={(parent) => setNewLocData((prev) => ({ ...prev, parentLocationId: parent?.id ?? null,
-                            privateResource: prev.privateResource || Boolean(parent?.access?.privateResource) }))} />
-                    <TextField
-                        label={t('profile.name')}
-                        value={newLocData.name}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, name: e.target.value }))}
-                        required
-                        fullWidth
-                        autoFocus
-                    />
-                    <TextField
-                        label={t('forms.itemForm.locationCode')}
-                        helperText={t('forms.itemForm.locationCodeHelp')}
-                        value={newLocData.code}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                        fullWidth
-                        slotProps={{ htmlInput: { maxLength: 32 } }}
-                    />
-                    <TextField
-                        label={t('common.description')}
-                        value={newLocData.description}
-                        onChange={(e) => setNewLocData((prev) => ({ ...prev, description: e.target.value }))}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                    />
-                </DialogForm>
-            </FormDialog>
+            {addLocationOpen && <StorageStructureDialog locations={pickerLocations} canCreatePublic={canCreatePublic}
+                onClose={() => setAddLocationOpen(false)} onSaved={(_rootId, saved) => handleStructureSaved(saved)} />}
         </>
     );
 }
