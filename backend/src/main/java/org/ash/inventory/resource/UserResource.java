@@ -50,8 +50,16 @@ public class UserResource {
 
     @Paged @GET @Path("/users")
     public List<ApiResponses.UserResponse> users(@jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
+            @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size,
+            @jakarta.ws.rs.QueryParam("search") String search, @jakarta.ws.rs.QueryParam("role") String role) {
+        return queries.users(search, role, page, size);
+    }
+
+    @Paged @GET @Path("/users/{id}/history")
+    public List<ApiResponses.UserAccessHistoryResponse> history(@jakarta.ws.rs.PathParam("id") java.util.UUID id,
+            @jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
             @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size) {
-        return queries.users(page, size);
+        return queries.userAccessHistory(id, page, size);
     }
 
     /** Inventory admin sets role and faction memberships; Authentik only grants access to the system. */

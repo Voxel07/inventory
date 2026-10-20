@@ -47,6 +47,8 @@ public class ApiQueryService {
     @jakarta.inject.Inject org.ash.inventory.orm.PurchasingOrm purchasing;
     @jakarta.inject.Inject EventMetricsService eventMetrics;
     @jakarta.inject.Inject InventoryAccessService accessPolicies;
+    @jakarta.inject.Inject org.ash.inventory.orm.OutboxOrm outbox;
+    @jakarta.inject.Inject com.fasterxml.jackson.databind.ObjectMapper json;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -388,10 +390,30 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.UserResponse> users(int page, int size) {
+    public List<ApiResponses.UserResponse> users(String search, String role, int page, int size) {
         actors.requireAdmin();
         var bounds = bounds(page, size);
-        return users.users(null, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        DomainEnums.UserRole filter = null;
+        if (role != null && !role.isBlank()) {
+            try { filter = DomainEnums.UserRole.valueOf(role); }
+            catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown user role"); }
+        }
+        return users.directory(search, filter, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+    }
+
+    @Transactional
+    public List<ApiResponses.UserAccessHistoryResponse> userAccessHistory(UUID id, int page, int size) {
+        actors.requireAdmin();
+        var bounds = bounds(page, size);
+        if (users.find(id) == null) throw ApiException.notFound("User not found");
+        return outbox.userAccessHistory(id, bounds.offset(), bounds.limit()).stream().map(event -> {
+            var changedBy = event.actorId == null ? null : users.find(event.actorId);
+            return new ApiResponses.UserAccessHistoryResponse(event.id, event.occurredAt,
+                    changedBy == null ? null : mapper.actor(changedBy),
+                    json.convertValue(event.payload.get("before"), ApiResponses.UserAccessState.class),
+                    json.convertValue(event.payload.get("after"), ApiResponses.UserAccessState.class),
+                    (String) event.payload.get("reason"));
+        }).toList();
     }
 
     @Transactional

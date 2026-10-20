@@ -20,6 +20,15 @@ public class OutboxOrm {
 
     public void persist(DomainEvent event) { entityManager.persist(event); }
 
+    public List<DomainEvent> userAccessHistory(UUID userId, int offset, int limit) {
+        return entityManager.createQuery("""
+                from DomainEvent event
+                where event.aggregateType = 'user' and event.aggregateId = :userId and event.eventType = 'user.changed'
+                order by event.occurredAt desc, event.id desc
+                """, DomainEvent.class)
+                .setParameter("userId", userId).setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
+
     public List<DomainEvent> claimable(Instant now, int limit) {
         return entityManager.createQuery("""
                 from DomainEvent event
@@ -69,11 +78,12 @@ public class OutboxOrm {
                         ((Number) row[1]).longValue(), (Instant) row[2])).toList();
     }
 
-    /** Delivered events are only needed for at-least-once dispatch; drop them after retention. */
+    /** Expire delivered notifications, retaining the user access audit history indefinitely. */
     public int deletePublishedBefore(Instant cutoff) {
         return entityManager.createQuery("""
                 delete from DomainEvent event
                 where event.status = :published and event.publishedAt < :cutoff
+                  and event.eventType <> 'user.changed'
                 """)
                 .setParameter("published", DomainEnums.OutboxStatus.published)
                 .setParameter("cutoff", cutoff)

@@ -27,3 +27,17 @@ export const ROLE_LADDER = ['tenant', 'read_only', 'faction_leader', 'ash', 'war
 export type UserRole = typeof ROLE_LADDER[number];
 
 export type AccessRole = UserRole;
+
+export interface UserAccessState {
+  roles: UserRole[];
+  factions: string[];
+}
+
+export interface UserAccessHistoryEntry {
+  id: string;
+  occurredAt: string;
+  changedBy: ActorSummary | null;
+  before: UserAccessState;
+  after: UserAccessState;
+  reason: string;
+}

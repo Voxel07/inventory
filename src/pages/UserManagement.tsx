@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { AccountLifecyclePanel } from '../components/operations/AccountLifecyclePanel';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
-import { Alert, Autocomplete, Box, Chip, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Button } from '../components/shared/ActionButtons';
+import { Alert, Autocomplete, Box, Chip, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Button, MenuItem } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
@@ -13,21 +14,12 @@ import { updateUserAccess } from '../services/userService';
 import { ROLE_LADDER } from '../types';
 import type { AccessRole, Faction, User } from '../types';
 import { useT } from '../utils/naming';
-import { factionKeyOf } from '../utils/access';
-import { ListPagination } from '../components/shared/ListPagination';
-import { useClientPagination } from '../hooks/useClientPagination';
-
-function useRoleLabels(): Record<AccessRole, string> {
-  const t = useT();
-  return {
-    admin: t('profile.roles.admin'),
-    warehouse_crew: t('profile.roles.warehouseCrew'),
-    ash: t('profile.roles.ash'),
-    faction_leader: t('profile.roles.factionLeader'),
-    read_only: t('profile.roles.readOnly'),
-    tenant: t('profile.roles.tenant'),
-  };
-}
+import { canManageUsers, factionKeyOf } from '../utils/access';
+import { ServerListPagination } from '../components/shared/ServerListPagination';
+import { UserRoleChips } from '../components/users/UserRoleChips';
+import { UserAccessHistory } from '../components/users/UserAccessHistory';
+import { useRoleLabels } from '../hooks/useRoleLabels';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 function useRoleDescriptions(): Record<AccessRole, string> {
   const t = useT();
@@ -73,7 +65,9 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
       <Autocomplete multiple options={options} value={memberships} getOptionLabel={factionLabel} disabled={save.isPending}
         onChange={(_, values) => setMemberships(values)}
         renderInput={(params) => <TextField {...params} label={t('pages.userManagement.factionsEditOrderLists')} />} />
-      <TextField required label={t('pages.userManagement.reasonForChange')} value={reason} disabled={save.isPending} onChange={(e) => setReason(e.target.value)} />
+      <TextField required label={t('pages.userManagement.reasonForChange')} value={reason} disabled={save.isPending}
+        slotProps={{ htmlInput: { maxLength: 1000 } }} helperText={t('pages.userManagement.reasonSavedInHistory')}
+        onChange={(e) => setReason(e.target.value)} />
       {save.error && <Alert severity="error">{save.error.message}</Alert>}
       <AccountLifecyclePanel user={user} />
     </Stack></DialogContent>
@@ -84,50 +78,97 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
   </Dialog>;
 }
 
-function UserRow({ user, factions, onEdit }: { user: User; factions: Faction[]; onEdit: () => void }) {
+function UserRow({ user, factions, onEdit, onHistory }: { user: User; factions: Faction[]; onEdit: () => void; onHistory: () => void }) {
   const t = useT();
-  const labels = useRoleLabels();
   const factionLabel = (key: string) => {
     const faction = factions.find((candidate) => factionKeyOf(candidate) === key);
     return faction ? `${faction.eventType} · ${faction.name}` : key;
   };
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 1, md: 2 } }}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(180px, 1fr) 210px minmax(260px, 2fr) auto' }, alignItems: 'center', gap: { xs: 0.75, md: 2 } }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{user.name || user.username || user.email}</Typography>
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{user.email}</Typography>
-        </Box>
-        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>{user.roles.map((role) =>
-          <Chip key={role} size="small" label={labels[role]} color={role === user.role ? 'primary' : 'default'} />)}</Stack>
-        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+    <TableRow hover>
+      <TableCell component="th" scope="row" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{user.name || user.username || user.email}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{user.email}</TableCell>
+      <TableCell><UserRoleChips roles={user.roles} /></TableCell>
+      <TableCell>
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, minWidth: 150 }}>
           {(user.faction ?? []).map((key) => <Chip key={key} size="small" variant="outlined" label={factionLabel(key)} />)}
         </Stack>
-        <Box><Button title={t('pages.userManagement.changeRoleAndFactions')} size="small" onClick={onEdit}>{t('common.edit')}</Button></Box>
-      </Box>
-    </Paper>
+      </TableCell>
+      <TableCell><Stack direction="row" spacing={0.5}>
+        <Button title={t('pages.userManagement.changeRoleAndFactions')} size="small" onClick={onEdit}>{t('common.edit')}</Button>
+        <Button title={t('pages.userManagement.accessHistory')} size="small" onClick={onHistory}>{t('common.history')}</Button>
+      </Stack></TableCell>
+    </TableRow>
   );
 }
 
 export function UserManagement() {
+  const { user } = useAuth();
+  return canManageUsers(user) ? <AdminUserManagement /> : null;
+}
+
+function AdminUserManagement() {
   const t = useT();
+  const labels = useRoleLabels();
   const { factions } = useFactionCatalog();
-  const { data: users = [], isLoading, isError, hasNextPage, isFetchingNextPage, refetch } = useUsers();
-  const { pageItems: pageUsers, page: currentPage, setPage, pageSize, onPageSizeChange } = useClientPagination(users);
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState<AccessRole | ''>('');
+  const term = useDebouncedValue(search.trim());
   const [editing, setEditing] = useState<User | null>(null);
+  const [history, setHistory] = useState<User | null>(null);
+  return <Box>
+    <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('nav.userManagement')}</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 3 } }}>
+      {t('pages.userManagement.theAuthentikGroupInventoryGrantsAccessToTheInventorySet')}
+    </Typography>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+      <TextField size="small" label={t('pages.userManagement.searchUsers')} value={search}
+        onChange={event => setSearch(event.target.value)} sx={{ flex: 1 }} />
+      <TextField select size="small" label={t('pages.userManagement.filterByRole')} value={role}
+        onChange={event => setRole(event.target.value as AccessRole | '')} sx={{ minWidth: 220 }}>
+        <MenuItem value="">{t('pages.userManagement.allRoles')}</MenuItem>
+        {[...ROLE_LADDER].reverse().map(value => <MenuItem key={value} value={value}>{labels[value]}</MenuItem>)}
+      </TextField>
+    </Stack>
+    <UserDirectory key={JSON.stringify([term, role])} search={term} role={role || undefined}
+      factions={factions} onEdit={setEditing} onHistory={setHistory} />
+    {editing && <AccessEditor key={`${editing.id}:${editing.revision ?? 0}`} user={editing} factions={factions} onClose={() => setEditing(null)} />}
+    {history && <UserAccessHistory key={history.id} user={history} factions={factions} onClose={() => setHistory(null)} />}
+    <InventoryAccessGroups />
+  </Box>;
+}
+
+function UserDirectory({ search, role, factions, onEdit, onHistory }: {
+  search: string; role?: AccessRole; factions: Faction[]; onEdit: (user: User) => void; onHistory: (user: User) => void;
+}) {
+  const t = useT();
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(20);
+  const result = useUsers(page, size, search, role);
+  const users = result.data?.rows ?? [];
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('nav.userManagement')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 3 } }}>
-        {t('pages.userManagement.theAuthentikGroupInventoryGrantsAccessToTheInventorySet')}
-      </Typography>
-      {isError && <Alert severity="error" sx={{ mb: 2 }}>{t('pages.userManagement.usersCouldNotBeLoadedCheckOIDCAndAPIPermissions')}</Alert>}
-      <Stack spacing={{ xs: 0.75, sm: 1.5 }}>
-        {isLoading ? <Paper sx={{ p: 3 }}>{t('pages.userManagement.loadingUsers')}</Paper> : pageUsers.map((user) => <UserRow key={user.id} user={user} factions={factions} onEdit={() => setEditing(user)} />)}
-      </Stack>
-      <ListPagination pageSize={pageSize} onPageSizeChange={onPageSizeChange} count={users.length} page={currentPage} onChange={setPage} loadingMore={!isError && (hasNextPage || isFetchingNextPage)} loadError={isError} onRetry={() => { void refetch(); }} />
-      {editing && <AccessEditor key={`${editing.id}:${editing.revision ?? 0}`} user={editing} factions={factions} onClose={() => setEditing(null)} />}
-      <InventoryAccessGroups />
+      {result.isError && <Alert severity="error" sx={{ mb: 2 }}
+        action={<Button onClick={() => { void result.refetch(); }}>{t('common.retryLoadingTheData')}</Button>}>
+        {t('pages.userManagement.usersCouldNotBeLoadedCheckOIDCAndAPIPermissions')}
+      </Alert>}
+      <TableContainer component={Paper} variant="outlined"><Table size="small" aria-label={t('nav.userManagement')}>
+        <TableHead><TableRow>
+          <TableCell>{t('profile.name')}</TableCell>
+          <TableCell>{t('pages.userManagement.email')}</TableCell>
+          <TableCell>{t('pages.userManagement.roles')}</TableCell>
+          <TableCell>{t('profile.assignedFactions')}</TableCell>
+          <TableCell>{t('common.actions')}</TableCell>
+        </TableRow></TableHead>
+        <TableBody>
+          {result.isPending && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.loadingUsers')}</TableCell></TableRow>}
+          {result.isSuccess && !users.length && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.noUsersFound')}</TableCell></TableRow>}
+          {!result.isError && users.map(user => <UserRow key={user.id} user={user} factions={factions}
+            onEdit={() => onEdit(user)} onHistory={() => onHistory(user)} />)}
+        </TableBody>
+      </Table></TableContainer>
+      <ServerListPagination page={page} size={size} rowCount={users.length} more={result.data?.more ?? false}
+        loading={result.isFetching} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(0); }} />
     </Box>
   );
 }

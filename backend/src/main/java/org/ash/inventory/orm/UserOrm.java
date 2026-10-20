@@ -61,6 +61,18 @@ public class UserOrm {
         return !entityManager.createQuery("select u.id from UserAccount u where u.active = true and u.role = :role", UUID.class)
                 .setParameter("role", org.ash.inventory.model.DomainEnums.UserRole.admin).setMaxResults(1).getResultList().isEmpty();
     }
+
+    /** Admin directory filters match independently assigned roles, not only the highest role. */
+    public List<UserAccount> directory(String search, DomainEnums.UserRole role, int offset, int limit) {
+        boolean searching = search != null && !search.isBlank();
+        var query = entityManager.createNativeQuery("select * from app_users where true"
+                + (searching ? " and (strpos(lower(name), :search) > 0 or strpos(lower(coalesce(email, '')), :search) > 0)" : "")
+                + (role != null ? " and jsonb_exists(roles, :role)" : "")
+                + " order by name, email, id", UserAccount.class);
+        if (searching) query.setParameter("search", search.trim().toLowerCase(java.util.Locale.ROOT));
+        if (role != null) query.setParameter("role", role.name());
+        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    }
     public long admins() {
         return entityManager.createQuery("select count(u) from UserAccount u where u.active = true and u.role = :role", Long.class)
                 .setParameter("role", org.ash.inventory.model.DomainEnums.UserRole.admin).getSingleResult();
