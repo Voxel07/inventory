@@ -23,7 +23,8 @@ import java.util.TreeSet;
  * Resolves the calling account. The identity provider decides who may use the inventory at all
  * (membership in the access group, default {@code inventory}); the role and faction memberships are
  * managed in the app by the inventory admin. Accounts are keyed by {@code (issuer, sub)}; new accounts
- * start as {@code read_only} unless listed as bootstrap admins. Name and e-mail are display data only.
+ * start as {@code read_only} unless their e-mail is listed as a bootstrap admin. Name and e-mail
+ * are never used as account keys.
  */
 @RequestScoped
 public class ActorService {
@@ -73,7 +74,6 @@ public class ActorService {
         String subject;
         String name;
         String email;
-        boolean emailVerified = false;
         // Only development headers set role/factions; real accounts keep the ones managed in the app.
         Set<DomainEnums.UserRole> headerRoles = null;
         Set<String> headerFactions = null;
@@ -88,7 +88,6 @@ public class ActorService {
             if (sessions != null && sessions.revoked(token)) throw new ApiException(401, "Session revoked");
             name = firstClaim(token, subject, "name", "preferred_username");
             email = firstClaim(token, null, "email");
-            emailVerified = Boolean.TRUE.equals(token.getClaim("email_verified"));
         } else if (identity != null && !identity.isAnonymous()) {
             throw new ApiException(401, "Unsupported identity");
         } else if (devAuthEnabled) {
@@ -107,7 +106,7 @@ public class ActorService {
 
         cached = users.findByIdentity(issuer, subject);
         if (cached != null && !cached.active) throw ApiException.forbidden("This inventory account is deactivated");
-        boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email, emailVerified);
+        boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email);
         if (cached == null) {
             cached = users.provision(issuer, subject, name, email,
                     headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only),
@@ -137,8 +136,8 @@ public class ActorService {
         return result;
     }
 
-    static boolean isBootstrapAdmin(Set<String> configured, String email, boolean verified) {
-        return verified && email != null && configured.contains(email.trim().toLowerCase(Locale.ROOT));
+    static boolean isBootstrapAdmin(Set<String> configured, String email) {
+        return email != null && configured.contains(email.trim().toLowerCase(Locale.ROOT));
     }
 
     /** Marks a private-inventory command; reference lookups inside it require edit rights. */

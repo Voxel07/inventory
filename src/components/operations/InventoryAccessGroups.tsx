@@ -5,7 +5,7 @@ import { Button } from '../shared/ActionButtons';
 import { deleteAccessGroup, getAccessGroups, getAccessPeople, saveAccessGroup } from '../../services/inventoryAccessService';
 import type { AccessGroup } from '../../types/inventoryAccess';
 import { useAuth } from '../../hooks/useAuth';
-import { canManageUsers } from '../../utils/access';
+import { canCreateInventory, canManageUsers } from '../../utils/access';
 import { useT } from '../../utils/naming';
 
 function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => void }) {
@@ -31,18 +31,20 @@ function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => voi
       control={<Checkbox checked={adminManaged} disabled={pending} onChange={(_, checked) => setHqManaged(checked)} />} />}
     <TextField required label={t('common.reason')} value={reason} disabled={pending} onChange={e => setReason(e.target.value)} />
     {error && <Alert severity="error">{error.message}</Alert>}
-    <Stack direction="row" spacing={1}><Button title={t('common.save')} disabled={pending || !name.trim() || !reason.trim() || !people.data} onClick={() => save.mutate()}>{t('common.save')}</Button>
+    <Stack direction="row" spacing={1}>{canCreateInventory(user) && <Button title={t('common.save')} disabled={pending || !name.trim() || !reason.trim() || !people.data} onClick={() => save.mutate()}>{t('common.save')}</Button>}
       {group && <Button title={t('operations.inventoryAccessGroups.deleteTheGroupAndAllOfItsShares')} color="error" disabled={pending || !reason.trim()} onClick={() => remove.mutate()}>{t('common.delete')}</Button>}
       <Button title={t('common.cancel')} disabled={pending} onClick={onDone}>{t('common.cancel')}</Button></Stack>
   </Stack>;
 }
 
 /**
- * Share groups: everyone (e.g. a tenant for the people allowed into their building) manages their
- * own groups; inventory admins see and manage all groups and create admin groups.
+ * Share groups: everyone who owns private inventory (e.g. a tenant for the people allowed into their
+ * building) manages their own groups; read-only accounts only see the groups they belong to.
+ * Inventory admins see and manage all groups and create admin groups.
  */
 export function InventoryAccessGroups() {
   const t = useT();
+  const { user } = useAuth();
   const groups = useQuery({ queryKey: ['access-groups'], queryFn: getAccessGroups });
   const [editing, setEditing] = useState<AccessGroup | 'new' | null>(null);
   return <Paper variant="outlined" sx={{ p: 2, mt: 3 }}><Typography variant="h6">{t('operations.inventoryAccessGroups.groupsForPrivateSharing')}</Typography>
@@ -52,7 +54,7 @@ export function InventoryAccessGroups() {
       {(groups.data ?? []).map(g => g.canManage
         ? <Button key={g.id} title={t('operations.inventoryAccessGroups.editGroup')} onClick={() => setEditing(g)}>{g.name} ({g.memberIds.length}){g.ownerName ? '' : ' · Admin'}</Button>
         : <Chip key={g.id} size="small" variant="outlined" label={`${g.name} · ${g.ownerName ?? 'Admin'}`} />)}
-      <Button title={t('operations.inventoryAccessGroups.createGroup')} onClick={() => setEditing('new')}>{t('operations.inventoryAccessGroups.addGroup')}</Button>
+      {canCreateInventory(user) && <Button title={t('operations.inventoryAccessGroups.createGroup')} onClick={() => setEditing('new')}>{t('operations.inventoryAccessGroups.addGroup')}</Button>}
     </Stack>{editing && <GroupEditor key={editing === 'new' ? 'new' : `${editing.id}:${editing.revision}`} group={editing === 'new' ? undefined : editing} onDone={() => setEditing(null)} />}
   </Paper>;
 }

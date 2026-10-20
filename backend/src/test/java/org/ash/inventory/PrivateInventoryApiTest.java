@@ -77,6 +77,9 @@ class PrivateInventoryApiTest {
         String readerId = person("reader"), item = item(), name = "Private team " + UUID.randomUUID();
         var groupBody = Map.of("name", name, "revision", 0, "memberIds", List.of(readerId), "reason", "Create sharing team", "adminManaged", true);
         owner().body(groupBody).post("/api/access/groups").then().statusCode(403);
+        // Read-only accounts own nothing to share: they join groups but never create them.
+        reader().body(Map.of("name", "Reader team " + UUID.randomUUID(), "revision", 0, "memberIds", List.of(), "reason", "Not allowed"))
+                .post("/api/access/groups").then().statusCode(403);
         String group = admin().body(groupBody).post("/api/access/groups").then().statusCode(200).body("ownerId", nullValue()).extract().path("id");
         reader().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Members cannot edit HQ groups")).patch("/api/access/groups/" + group).then().statusCode(403);
         owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);

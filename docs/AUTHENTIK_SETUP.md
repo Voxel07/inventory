@@ -34,7 +34,7 @@ Everything else — the assigned roles and the faction memberships — is set in
 
 **New users start as read only**. The inventory admin can assign one or more roles. Assign only `tenant` to someone who should see private inventory without company data; the highest assigned role determines access.
 
-**First admin.** Set `INVENTORY_BOOTSTRAP_ADMINS` to a comma-separated list of verified e-mail addresses. A listed account becomes inventory admin on its first sign-in, and is promoted again whenever no admin exists (recovery). The app never removes the last inventory admin. The access token must explicitly carry the Boolean claim `email_verified=true`; unverified/missing claims and usernames never grant bootstrap administration. Only active administrators count for recovery.
+**First admin.** Set `INVENTORY_BOOTSTRAP_ADMINS` to a comma-separated list of e-mail addresses, matched case-insensitively against the access token's `email` claim. A listed account becomes inventory admin on its first sign-in, and is promoted again whenever no admin exists (recovery). The app never removes the last inventory admin. A missing e-mail claim or a matching username alone never grants bootstrap administration. Only active administrators count for recovery.
 
 ### 3.2 Roles
 
@@ -43,7 +43,7 @@ Roles form a **ladder**: each role includes every right of the roles above it in
 | App role | Adds to the role above |
 |---|---|
 | Tenant (`tenant`) | Own private inventory only: private items, assemblies and storage locations (e.g. the rented building), own share groups, "offer for use" with request notifications. Never sees company data. |
-| Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only. Adds no items, assemblies or storage locations, not even private ones |
+| Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only. Adds no items, assemblies, storage locations (not even private ones) or sharing groups |
 | Faction leader (`faction_leader`) | Create and edit faction order lists for the user's own factions; return and report items in their own custody |
 | ASH crew (`ash`) | General (non-faction) orders and item takeout, including pickup of prepared faction and general orders. Preparation, returns and closing remain with the warehouse |
 | Warehouse crew (`warehouse_crew`) | All catalog work, all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs, reports), preparing and handing out orders (pickup, returns, close), damage reports, custody overview, history; order lists for every faction |

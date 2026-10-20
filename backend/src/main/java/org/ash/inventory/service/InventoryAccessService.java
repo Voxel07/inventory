@@ -205,9 +205,13 @@ public class InventoryAccessService {
         var actor = actors.current();
         return orm.groups().stream().filter(g -> canUse(g, actor)).map(g -> group(g, actor)).toList();
     }
-    /** Any user may create share groups (e.g. a tenant for the people allowed into their building). */
+    /**
+     * Every account that owns private inventory may create share groups (e.g. a tenant for the people
+     * allowed into their building). Read-only accounts own nothing to share and only join groups.
+     */
     public Group saveGroup(UUID id, GroupInput input) {
         var actor = actors.current();
+        if (!ActorService.createsInventory(actor)) throw ApiException.forbidden("Read-only accounts cannot manage sharing groups");
         boolean admin = actor.role == DomainEnums.UserRole.admin;
         if (Boolean.TRUE.equals(input.adminManaged()) && !admin) throw ApiException.forbidden("Only the inventory admin manages admin groups");
         if (id != null) orm.lockGroupPolicies(id);

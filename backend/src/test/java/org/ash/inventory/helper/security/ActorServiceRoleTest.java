@@ -72,12 +72,11 @@ class ActorServiceRoleTest {
     }
 
     @Test
-    void bootstrapElevationRequiresAnExplicitlyVerifiedEmail() {
+    void bootstrapElevationRequiresAMatchingEmail() {
         var configured = Set.of("ada@example.org", "ada");
-        assertTrue(ActorService.isBootstrapAdmin(configured, " Ada@Example.org ", true));
-        assertFalse(ActorService.isBootstrapAdmin(configured, "ada@example.org", false));
-        assertFalse(ActorService.isBootstrapAdmin(configured, null, true));
-        assertFalse(ActorService.isBootstrapAdmin(configured, "other@example.org", true));
+        assertTrue(ActorService.isBootstrapAdmin(configured, " Ada@Example.org "));
+        assertFalse(ActorService.isBootstrapAdmin(configured, null));
+        assertFalse(ActorService.isBootstrapAdmin(configured, "other@example.org"));
     }
 
     @Test

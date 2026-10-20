@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
 import { useT } from '../utils/naming';
 
-/** Share groups for everyone, e.g. a tenant's group of people allowed into their rented building. */
+/** Share groups, e.g. a tenant's group of people allowed into their rented building. Read-only accounts only see theirs. */
 export function SharingGroups() {
   const t = useT();
   return <Box>
