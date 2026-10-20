@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
-import { itemApi, getItemAssets, getItemCategories, createItemAsset, recodeItemAssets, writeOffItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
+import { itemApi, getItemAssets, getItemCategories, getItemNames, createItemAsset, recodeItemAssets, writeOffItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
 import { useCompleteList, usePagedList } from './usePagedList';
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, AssetRecodeInput, RuntimeEntry, RuntimeInput } from '../types';
 
@@ -92,4 +92,23 @@ export function useDeleteItemAsset(itemId: string | undefined) {
 /** Categories of the items visible to the caller, read without the catalog. */
 export function useItemCategories() {
   return useQuery({ queryKey: ['items', 'categories'], queryFn: getItemCategories, networkMode: 'offlineFirst', staleTime: 60_000 });
+}
+
+/** Normalized form two item names are compared in: trimmed, single-spaced, case-insensitive. */
+export function itemNameKey(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+// A stable selector, so the set is built once per fetched list instead of on every render.
+const toNameKeys = (names: string[]) => new Set(names.map(itemNameKey));
+
+/**
+ * Names of the visible items at one storage location as a set of {@link itemNameKey}s, so a lookup per keystroke
+ * stays O(1). Names only need to be unique per location.
+ */
+export function useTakenItemNames(storageLocation?: string) {
+  return useQuery({
+    queryKey: ['items', 'names', storageLocation ?? null], queryFn: () => getItemNames(storageLocation),
+    networkMode: 'offlineFirst', staleTime: 60_000, select: toNameKeys,
+  });
 }

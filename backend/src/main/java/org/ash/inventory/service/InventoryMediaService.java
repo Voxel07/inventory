@@ -30,6 +30,8 @@ public class InventoryMediaService {
     /** Abandoned staged uploads older than the cutoff (no actor context; used by the purge job). */
     public List<String> abandonedStaged(java.time.Instant cutoff, int limit) { return orm.stagedKeysBefore(cutoff, limit); }
     public void forgetStaged(String key) { orm.deleteStagedRecord(key); }
+    /** Drops the registry row of an object that is deleted with the current transaction. */
+    public void forget(String key) { orm.deleteRecord(key); }
     public void requireStaged(String key) {
         var value = object(key);
         orm.lock(value); orm.refresh(value);

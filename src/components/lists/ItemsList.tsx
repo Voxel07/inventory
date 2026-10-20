@@ -130,7 +130,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                 stock: stock.remaining,
                 totalStock: stock.totalStock,
                 damaged: stock.damaged,
-                availability: stock.remaining <= 0 ? 'none' : !locationStock && stock.remaining <= (item.minStock ?? 5) ? 'low' : 'ok',
+                availability: stock.remaining <= 0 ? 'none' : !locationStock && stock.remaining <= (item.minStock ?? 0) ? 'low' : 'ok',
                 location: location ? [locationLabel(location), item.positionDetails].filter(Boolean).join(' · ') : item.storageLocation || '—',
                 events: item.eventTypes?.join(', ') || '—',
             };

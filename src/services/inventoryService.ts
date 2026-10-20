@@ -3,7 +3,7 @@ import { apiPage, apiRequest, ApiError } from './apiClient';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import { containsPrivateInventory } from './privateInventoryCache';
 import { loadAllPages, type Page } from './apiPagination';
-import { stageImage } from './stagedImageService';
+import { consumeStagedImages, stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 import { assertAuthSession, type AuthSessionContext } from './authManager';
 
@@ -28,7 +28,9 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
     transformPayload: payload,
     customCreate: async (data: ItemFormData, basePath: string, context) => {
       const images = await uploadItemImages(data.imageFiles, context);
-      return apiRequest<Item>(basePath, { method: 'POST', body: { ...payload(data), images }, session: context });
+      const created = await apiRequest<Item>(basePath, { method: 'POST', body: { ...payload(data), images }, session: context });
+      consumeStagedImages(data.imageFiles ?? []);
+      return created;
     },
     customUpdate: async (id: string, data: Partial<ItemFormData>, basePath: string, context) => {
       const current = await itemApi.getById(id);
@@ -42,7 +44,9 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
       }
       images.push(...uploaded);
       // Stock is never edited through the item; `amount` only seeds stock on creation.
-      return apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), amount: undefined, images }, session: context });
+      const updated = await apiRequest<Item>(`${basePath}/${id}`, { method: 'PATCH', body: { ...payload(data), amount: undefined, images }, session: context });
+      consumeStagedImages([...data.imageFiles ?? [], ...Object.values(data.imageReplacements ?? {})]);
+      return updated;
     },
   },
 );
@@ -87,6 +91,11 @@ export function getInventorySummary(): Promise<InventorySummary> {
 
 export function getItemCategories(): Promise<string[]> {
   return apiRequest<string[]>('/api/item-categories');
+}
+
+/** Names of the visible items at one storage location; without one, the items that have no location. */
+export function getItemNames(storageLocation?: string): Promise<string[]> {
+  return apiRequest<string[]>('/api/item-names', { query: { storageLocation } });
 }
 
 /**

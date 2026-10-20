@@ -13,6 +13,7 @@ import org.ash.inventory.service.DomainEventService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -1069,7 +1070,7 @@ class InventoryApiTest {
     @Test
     void generalReservationsProtectSourcesAndMissingRemainsInCustody() {
         String location = TestLocations.section(() -> request(), Map.of("name", "Reserved source"));
-        String item = request().body(Map.of("sku", "GENERAL-BULK-NEW", "name", "Reserved bulk", "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
+        String item = request().body(Map.of("sku", "GENERAL-BULK-NEW", "name", "Reserved bulk " + UUID.randomUUID(), "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String event = request().body(Map.of("eventType", "DE", "startDate", "2039-02-01", "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
         String order = request().body(Map.of("name", "Reserved", "purpose", "Test reservation", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 3))).post("/api/orders/general").then().statusCode(200).extract().path("id");
         request().get("/api/orders/general/" + order).then().statusCode(200).body("kind", equalTo("general"));

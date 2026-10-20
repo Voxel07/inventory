@@ -24,7 +24,7 @@ class PrivateInventoryApiTest {
                 .getString("find { it.name == 'privacy-" + name + "' }.id");
     }
     private Map<String, Object> itemInput() {
-        return new HashMap<>(Map.of("sku", "PRIV-" + UUID.randomUUID(), "name", "Private radio", "category", "Secret-" + UUID.randomUUID(), "amount", 2, "minStock", 0, "value", 0));
+        return new HashMap<>(Map.of("sku", "PRIV-" + UUID.randomUUID(), "name", "Private radio " + UUID.randomUUID(), "category", "Secret-" + UUID.randomUUID(), "amount", 2, "minStock", 0, "value", 0));
     }
     /** Item edits never carry stock; the opening amount is create-only. */
     private Map<String, Object> editInput() {

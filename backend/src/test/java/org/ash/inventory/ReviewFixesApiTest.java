@@ -22,7 +22,7 @@ class ReviewFixesApiTest {
     private static RequestSpecification admin() { return actor("review-admin", "admin"); }
 
     private static String item(Map<String, Object> extra) {
-        var body = new HashMap<String, Object>(Map.of("sku", "REV-" + UUID.randomUUID(), "name", "Review item",
+        var body = new HashMap<String, Object>(Map.of("sku", "REV-" + UUID.randomUUID(), "name", "Review item " + UUID.randomUUID(),
                 "category", "Review", "value", 0));
         body.putAll(extra);
         return admin().body(body).post("/api/items").then().statusCode(200).extract().path("id");

@@ -128,6 +128,18 @@ public class CatalogOrm extends EntityOrm {
         return visible(entityManager.createQuery("select i.id from Item i where i.active = true" + visibility(), UUID.class)).getResultList();
     }
 
+    /** Names of the visible active items at one storage location ({@code null}: items without a location). */
+    public List<String> itemNames(UUID locationId) {
+        var query = visible(entityManager.createQuery("select distinct i.name from Item i where i.active = true"
+                + atLocation(locationId) + visibility() + " order by i.name", String.class));
+        if (locationId != null) query.setParameter("location", locationId);
+        return query.getResultList();
+    }
+
+    private static String atLocation(UUID locationId) {
+        return locationId == null ? " and i.storageLocation is null" : " and i.storageLocation.id = :location";
+    }
+
     public List<String> categories() {
         return visible(entityManager.createQuery("select distinct i.category from Item i where i.active = true"
                 + " and i.category is not null" + visibility() + " order by i.category", String.class)).getResultList();
@@ -369,6 +381,19 @@ public class CatalogOrm extends EntityOrm {
         return entityManager.createQuery("from AssetInstance a where lower(a.assetCode) = :code and a.active = true", AssetInstance.class)
                 .setParameter("code", code.trim().toLowerCase(Locale.ROOT))
                 .getResultStream().findFirst().orElse(null);
+    }
+
+    /**
+     * Whether another active item visible to the actor has this name at the same storage location; names compare
+     * case-insensitively. Hidden items never count, so the check cannot reveal them.
+     */
+    public boolean itemNameTaken(String name, UUID locationId, UUID exceptId) {
+        var query = visible(entityManager.createQuery("select i.id from Item i where i.active = true and lower(i.name) = :name"
+                + atLocation(locationId) + (exceptId == null ? "" : " and i.id <> :id") + visibility(), UUID.class))
+                .setParameter("name", name.toLowerCase(Locale.ROOT));
+        if (locationId != null) query.setParameter("location", locationId);
+        if (exceptId != null) query.setParameter("id", exceptId);
+        return !query.setMaxResults(1).getResultList().isEmpty();
     }
 
     public boolean skuExists(String sku) {

@@ -17,6 +17,15 @@ export interface ImageAttachmentState {
   replacements: Record<string, File>;
 }
 
+// Stable React keys for new files, so removing one does not remount the previews after it.
+const fileKeys = new WeakMap<File, number>();
+let nextFileKey = 0;
+function fileKey(file: File): number {
+  let key = fileKeys.get(file);
+  if (key === undefined) { key = nextFileKey++; fileKeys.set(file, key); }
+  return key;
+}
+
 function FilePreview({ file, alt }: { file: File; alt: string }) {
   const preview = useObjectUrl(file);
   return <MediaImage src={preview} alt={alt} sx={{ width: '100%', height: 100, objectFit: 'contain', display: 'block' }} />;
@@ -151,7 +160,7 @@ export function ImageAttachments({ existing = [], value, onChange, maxImages = 8
           </Box>
         ))}
         {value.files.map((file, index) => (
-          <Box key={index} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
+          <Box key={fileKey(file)} sx={{ width: 180, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
             <FilePreview file={file} alt={`${t('common.imageAttachments.newImage')} ${index + 1}`} />
             <ImageControls label={`${t('common.imageAttachments.new')} ${index + 1}`} disabled={busy} onEdit={() => setEditing({ file, index })} onRemove={() => removeNew(file)} />
           </Box>

@@ -7,10 +7,10 @@ import type { Option } from '../../types/operationForm';
 import { LoadMore } from './LoadMore';
 
 /** Search and continuation are server-side; retain the selected label across searches. */
-export function PagedAutocomplete({ value, selectedLabel, onChange, label, queryKey, getPage, required, disabled, size, helperText }: {
+export function PagedAutocomplete({ value, selectedLabel, onChange, label, queryKey, getPage, required, disabled, size, helperText, hideLabelWhenSelected = false }: {
   value?: string | null; selectedLabel?: string; onChange: (value: string) => void; label: string;
   queryKey: readonly unknown[]; getPage: (search: string, page: number, size: number) => Promise<Page<Option>>;
-  required?: boolean; disabled?: boolean; size?: 'small' | 'medium'; helperText?: string;
+  required?: boolean; disabled?: boolean; size?: 'small' | 'medium'; helperText?: string; hideLabelWhenSelected?: boolean;
 }) {
   const [input, setInput] = useState('');
   const [chosen, setChosen] = useState<Option | null>(null);
@@ -25,7 +25,9 @@ export function PagedAutocomplete({ value, selectedLabel, onChange, label, query
       isOptionEqualToValue={(a, b) => a.value === b.value}
       onInputChange={(_, next, reason) => { if (reason === 'input' || reason === 'clear') setInput(next); }}
       onChange={(_, option) => { setChosen(option); setInput(''); onChange(option?.value ?? ''); }}
-      renderInput={params => <TextField {...params} label={label} required={required} error={list.isError} helperText={list.error?.message ?? helperText} />} />
+      renderInput={params => <TextField {...params} label={hideLabelWhenSelected && current ? undefined : label}
+        slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, 'aria-label': label } }}
+        required={required} error={list.isError} helperText={list.error?.message ?? helperText} />} />
     <LoadMore list={list} />
   </Box>;
 }

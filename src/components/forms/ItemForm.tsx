@@ -23,6 +23,7 @@ import { TextField } from '../shared/DateTextField';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import { useCreateStorageLocation } from '../../hooks/useStorageLocations';
+import { itemNameKey, useTakenItemNames } from '../../hooks/useItems';
 import { useUIStore } from '../../store/uiStore';
 import { type ItemFormData, type Item, type StorageLocation } from '../../types';
 import { useT } from '../../utils/naming';
@@ -36,7 +37,6 @@ interface Props {
     initialData?: Item;
     storageLocations?: StorageLocation[];
     categories?: string[];
-    existingNames?: string[];
     onSubmit: (data: ItemFormData) => void;
     isLoading?: boolean;
 }
@@ -47,7 +47,6 @@ export function ItemForm({
     initialData,
     storageLocations = [],
     categories = [],
-    existingNames = [],
     onSubmit,
     isLoading,
 }: Props) {
@@ -62,7 +61,7 @@ export function ItemForm({
         name: initialData?.name ?? '',
         description: initialData?.description ?? '',
         amount: undefined,
-        minStock: initialData?.minStock ?? 5,
+        minStock: initialData?.minStock ?? 0,
         value: initialData?.value ?? 0,
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
@@ -77,9 +76,6 @@ export function ItemForm({
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
-        containerCount: initialData?.containerCount ?? undefined,
-        containersOpened: initialData?.containersOpened ?? undefined,
-        containerRemainingPercent: initialData?.containerRemainingPercent ?? undefined,
         currentOperatingHours: initialData?.currentOperatingHours,
         tracksRuntime: initialData?.tracksRuntime ?? false,
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
@@ -87,20 +83,18 @@ export function ItemForm({
         bestBeforeDate: initialData?.bestBeforeDate ?? '',
     });
     const [isBulkPackage, setIsBulkPackage] = useState((initialData?.containerSize ?? 0) > 0);
+    const [hasOpenedContainer, setHasOpenedContainer] = useState(false);
     const [numericInputs, setNumericInputs] = useState({
         amount: '',
-        minStock: String(initialData?.minStock ?? 5),
+        minStock: String(initialData?.minStock ?? 0),
         value: String(initialData?.value ?? 0),
         containerSize: initialData?.containerSize == null ? '' : String(initialData.containerSize),
-        containerCount: initialData?.containerCount == null ? '' : String(initialData.containerCount),
-        containersOpened: initialData?.containersOpened == null ? '' : String(initialData.containersOpened),
-        containerRemainingPercent: initialData?.containerRemainingPercent == null ? '' : String(initialData.containerRemainingPercent),
+        containerRemainingCount: '',
         currentOperatingHours: initialData?.currentOperatingHours == null ? '' : String(initialData.currentOperatingHours),
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km == null ? '' : String(initialData.fuelConsumptionLitersPer100Km),
         assetStartNumber: '1',
     });
     const [assetCodePrefix, setAssetCodePrefix] = useState('');
-    const [nameError, setNameError] = useState('');
     const [images, setImages] = useState<ImageAttachmentState>({ files: [], removed: [], replacements: {} });
     const [addLocationOpen, setAddLocationOpen] = useState(false);
     const [schedules, setSchedules] = useState<ScheduleDraft[]>([]);
@@ -111,15 +105,17 @@ export function ItemForm({
     const createLoc = useCreateStorageLocation();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const hasStock = Boolean(initialData && ((initialData.stock?.totalOwned ?? 0) > 0));
+    // Checked on every keystroke against the visible item names at the chosen location; keeping name and location is never a conflict.
+    const { data: takenNames } = useTakenItemNames(formData.storageLocation || undefined);
+    const nameKey = itemNameKey(formData.name);
+    const unchanged = Boolean(initialData) && nameKey === itemNameKey(initialData?.name ?? '')
+        && (formData.storageLocation || '') === (initialData?.storageLocation || '');
+    const nameError = nameKey && !unchanged && takenNames?.has(nameKey)
+        ? t('forms.itemForm.anItemWithThisNameAlreadyExists') : '';
 
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
             const value = e.target.value;
-            if (field === 'name') {
-                const trimmed = (value as string).trim().toLowerCase();
-                const isDuplicate = existingNames.some((n) => n.toLowerCase() === trimmed);
-                setNameError(isDuplicate ? t('forms.itemForm.anItemWithThisNameAlreadyExists') : '');
-            }
             setFormData((prev) => ({ ...prev, [field]: value }));
         };
     }
@@ -152,22 +148,17 @@ export function ItemForm({
     }
 
     function handleSubmit() {
-        if (nameError) return;
+        if (isDisabled) return;
         const parseOptional = (value: string) => value === '' ? undefined : Number(value);
         const submitData: ItemFormData = {
             ...formData,
             imageFiles: images.files,
             removeImages: images.removed,
             imageReplacements: images.replacements,
-            amount: parseOptional(numericInputs.amount),
+            amount: initialData ? undefined : openingUnits,
             minStock: Number(numericInputs.minStock),
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
-            containerCount: isBulkPackage
-                ? (initialData ? initialData.containerCount : parseOptional(numericInputs.amount))
-                : undefined,
-            containersOpened: isBulkPackage ? parseOptional(numericInputs.containersOpened) : undefined,
-            containerRemainingPercent: isBulkPackage ? parseOptional(numericInputs.containerRemainingPercent) : undefined,
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
             ...(offersSchedules && schedules.length ? { maintenanceSchedules: schedules.map(toScheduleInput) } : {}),
@@ -179,7 +170,11 @@ export function ItemForm({
         onSubmit(submitData);
     }
 
-    const amountValid = !!initialData || (numericInputs.amount !== '' && Number(numericInputs.amount) >= 0);
+    const boxSize = Number(numericInputs.containerSize);
+    const openedUnits = isBulkPackage && hasOpenedContainer ? Number(numericInputs.containerRemainingCount) : 0;
+    const openingUnits = Number(numericInputs.amount) * (isBulkPackage ? boxSize : 1) + openedUnits;
+    const amountValid = !!initialData || (numericInputs.amount !== '' && Number.isInteger(Number(numericInputs.amount))
+        && Number(numericInputs.amount) >= 0 && Number.isSafeInteger(openingUnits) && openingUnits <= 2147483647);
     const generatesAssetCodes = !initialData && formData.trackingMode === 'serialized';
     const startNumber = Number(numericInputs.assetStartNumber);
     const assetStartValid = !generatesAssetCodes || (numericInputs.assetStartNumber !== '' && Number.isInteger(startNumber) && startNumber >= 1);
@@ -192,11 +187,13 @@ export function ItemForm({
         return count === 1 ? code(startNumber) : `${code(startNumber)} … ${code(startNumber + count - 1)}`;
     })();
     const containerSizeValid = !isBulkPackage
-        || (numericInputs.containerSize !== '' && Number(numericInputs.containerSize) > 0);
+        || (numericInputs.containerSize !== '' && Number.isInteger(boxSize) && boxSize > 0 && boxSize <= 999999999);
+    const openedContainerValid = !!initialData || !isBulkPackage || !hasOpenedContainer
+        || (numericInputs.containerRemainingCount !== '' && Number.isInteger(openedUnits) && openedUnits > 0 && openedUnits < boxSize);
     const requiredNumbersValid = numericInputs.minStock !== '' && Number(numericInputs.minStock) >= 0
-        && numericInputs.value !== '' && Number(numericInputs.value) >= 0;
-    const isDisabled = isLoading || !formData.name || !!nameError || !amountValid || !containerSizeValid
-        || !requiredNumbersValid || !assetStartValid;
+        && Number.isInteger(Number(numericInputs.minStock)) && numericInputs.value !== '' && Number.isFinite(Number(numericInputs.value)) && Number(numericInputs.value) >= 0;
+    const isDisabled = isLoading || !nameKey || !!nameError || !formData.category.trim() || !amountValid || !containerSizeValid
+        || !openedContainerValid || !requiredNumbersValid || !assetStartValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
@@ -234,13 +231,12 @@ export function ItemForm({
                             options={categories}
                             value={formData.category}
                             onInputChange={(_e, newValue) => setFormData((prev) => ({ ...prev, category: newValue }))}
-                            renderInput={(params) => <TextField {...params} label={t('common.category')} fullWidth />}
+                            renderInput={(params) => <TextField {...params} label={t('common.category')} required fullWidth />}
                         />
                         <TextField
                             label={t('forms.itemForm.subcategory')}
                             value={formData.subcategory ?? ''}
                             onChange={handleChange('subcategory')}
-                            helperText={t('forms.itemForm.optional')}
                             fullWidth
                         />
                     </Stack>
@@ -276,6 +272,7 @@ export function ItemForm({
                             select
                             fullWidth
                             label={t('forms.itemForm.trackingMode')}
+                            required
                             value={formData.trackingMode ?? 'bulk'}
                             disabled={hasStock}
                             helperText={hasStock
@@ -304,6 +301,7 @@ export function ItemForm({
                             select
                             fullWidth
                             label={t('forms.itemForm.inventoryRole')}
+                            required
                             value={formData.inventoryRole ?? 'returnable'}
                             onChange={(event) => {
                                 const inventoryRole = event.target.value as ItemFormData['inventoryRole'];
@@ -331,9 +329,7 @@ export function ItemForm({
                                             setNumericInputs((prev) => ({
                                                 ...prev,
                                                 containerSize: '',
-                                                containerCount: '',
-                                                containersOpened: '',
-                                                containerRemainingPercent: '',
+                                                containerRemainingCount: '',
                                             }));
                                         }
                                     }}
@@ -371,7 +367,7 @@ export function ItemForm({
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                         {!initialData && (
                             <TextField
-                                label={isBulkPackage ? t('forms.itemForm.numberOfBoxes') : t('common.quantity')}
+                                label={isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : t('common.quantity')}
                                 type="number"
                                 value={numericInputs.amount}
                                 onChange={handleNumberChange('amount')}
@@ -380,8 +376,8 @@ export function ItemForm({
                                 helperText={formData.trackingMode === 'serialized'
                                     ? t('forms.itemForm.createsOneAssetPerUnitEGSKU001')
                                     : formData.trackingMode === 'lot_tracked' ? t('forms.itemForm.openingStockBecomesTheFirstLot')
-                                    : isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : undefined}
-                                slotProps={{ htmlInput: { min: 0, inputMode: 'numeric' } }}
+                                    : undefined}
+                                slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
                             />
                         )}
                         {generatesAssetCodes && (<>
@@ -416,7 +412,7 @@ export function ItemForm({
                                 onChange={handleNumberChange('containerSize')}
                                 required
                                 fullWidth
-                                slotProps={{ htmlInput: { min: 1, inputMode: 'numeric' } }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
                             />
                         )}
                         <TextField
@@ -433,10 +429,30 @@ export function ItemForm({
                             type="number"
                             value={numericInputs.value}
                             onChange={handleNumberChange('value')}
+                            required
                             fullWidth
                             slotProps={{ htmlInput: { min: 0, step: 0.01, inputMode: 'decimal' } }}
                         />
                     </Box>
+                    {isBulkPackage && !initialData && <>
+                        <FormControlLabel
+                            control={<Checkbox checked={hasOpenedContainer} onChange={(_, checked) => setHasOpenedContainer(checked)} />}
+                            label={t('forms.itemForm.addOpenedBox')}
+                        />
+                        {hasOpenedContainer && <TextField
+                            label={t('forms.itemForm.itemsRemainingInOpenedBox')}
+                            type="number"
+                            value={numericInputs.containerRemainingCount}
+                            onChange={handleNumberChange('containerRemainingCount')}
+                            required
+                            fullWidth
+                            error={!openedContainerValid && numericInputs.containerRemainingCount !== ''}
+                            slotProps={{ htmlInput: { min: 1, max: boxSize > 0 ? boxSize - 1 : undefined, step: 1, inputMode: 'numeric' } }}
+                        />}
+                        <Typography variant="body2" color="text.secondary">
+                            {t('forms.itemForm.totalIndividualItems', { count: Number.isFinite(openingUnits) ? openingUnits : 0 })}
+                        </Typography>
+                    </>}
                 </FormSection>
 
                 <FormSection title={t('enum.value.location')}>
@@ -576,7 +592,6 @@ export function ItemForm({
                     />
                     <TextField
                         label={t('common.description')}
-                        helperText={t('forms.itemForm.optional')}
                         value={newLocData.description}
                         onChange={(e) => setNewLocData((prev) => ({ ...prev, description: e.target.value }))}
                         fullWidth

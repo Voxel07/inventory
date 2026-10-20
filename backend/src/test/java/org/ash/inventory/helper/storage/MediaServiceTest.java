@@ -57,6 +57,31 @@ class MediaServiceTest {
     }
 
     @Test
+    void rejectedS3CredentialsReportAnUpstreamConfigurationError() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] error = "<Error><Code>AccessDenied</Code><Message>Forbidden: No such key: test-key</Message></Error>"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/xml");
+            exchange.sendResponseHeaders(403, error.length);
+            exchange.getResponseBody().write(error);
+            exchange.close();
+        });
+        server.start();
+        try {
+            var media = service("s3", "http://127.0.0.1:" + server.getAddress().getPort());
+            var error = assertThrows(ApiException.class,
+                    () -> media.store("image.webp", "image/webp", new byte[] {1, 2, 3}));
+            assertEquals(502, error.status);
+            assertTrue(error.getMessage().contains("credentials and bucket permissions"));
+            assertFalse(error.getMessage().contains("test-key"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void privateS3ReadsUseSignedRequestsAndReturnImageBytes() throws Exception {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         var authorization = new AtomicReference<String>();

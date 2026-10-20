@@ -19,7 +19,7 @@ export function ItemResponsiblePerson({ itemId, canEdit }: { itemId: string; can
   return <Stack spacing={1}>
     <Typography variant="subtitle2">{t('items.itemResponsiblePerson.responsibleForOrders')}</Typography>
     {canEdit ? <Stack direction="row" spacing={1}>
-      <PagedAutocomplete size="small" label={t('common.responsiblePerson')} disabled={query.isLoading || save.isPending}
+      <PagedAutocomplete size="small" label={t('common.responsiblePerson')} hideLabelWhenSelected disabled={query.isLoading || save.isPending}
         value={draft ?? query.data?.responsiblePersonId ?? ''} selectedLabel={query.data?.responsiblePersonName}
         queryKey={['users', 'assignable']} getPage={personOptions} onChange={setDraft} />
       <Button disabled={draft === null || save.isPending} sx={{ flexShrink: 0 }} onClick={() => { if (draft !== null) save.mutate(draft); }}>{t('common.save')}</Button>

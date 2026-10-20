@@ -24,7 +24,7 @@ class MaintenanceStockApiTest {
     private RequestSpecification admin() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "maintenance-stock-admin").header("X-Actor-Role", "admin"); }
     private String location() { return TestLocations.section(() -> admin(), Map.of("name", "Stock " + UUID.randomUUID())); }
     private String item(String location, boolean serialized, int amount) {
-        return admin().body(Map.of("sku", "STOCK-" + UUID.randomUUID(), "name", "Stock policy test", "category", "Stock policy",
+        return admin().body(Map.of("sku", "STOCK-" + UUID.randomUUID(), "name", "Stock policy test " + UUID.randomUUID(), "category", "Stock policy",
                 "amount", amount, "minStock", 0, "trackingMode", serialized ? "serialized" : "bulk", "storageLocation", location))
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }

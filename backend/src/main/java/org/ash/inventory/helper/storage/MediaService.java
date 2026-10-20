@@ -205,6 +205,18 @@ public class MediaService {
         return new StoredDocument(destination, inspected.contentType(), inspected.contentLength(), inspected.checksum());
     }
 
+    /** An upload whose registry row is not committed would never be purged; remove its object instead. */
+    public void deleteUnlessCommitted(String key) {
+        transactions.registerInterposedSynchronization(new Synchronization() {
+            public void beforeCompletion() {}
+            public void afterCompletion(int status) {
+                if (status == Status.STATUS_COMMITTED) return;
+                try { delete(key); }
+                catch (RuntimeException exception) { LOG.warn("Could not delete uncommitted upload", exception); }
+            }
+        });
+    }
+
     public void deleteStaged(String reference) {
         String key = mediaReference(reference);
         if (!STAGED_UPLOAD.matcher(key).matches()) throw ApiException.badRequest("Only staged uploads can be deleted");
@@ -213,6 +225,7 @@ public class MediaService {
 
     public void deleteAfterCommit(String reference) {
         String key = mediaReference(reference);
+        permissions.forget(key);
         transactions.registerInterposedSynchronization(new Synchronization() {
             public void beforeCompletion() {}
             public void afterCompletion(int status) {
@@ -282,6 +295,11 @@ public class MediaService {
             catch (IOException exception) {
                 activity.failure(exception);
                 throw new ApiException(500, "Could not " + operation + " media");
+            } catch (S3Exception exception) {
+                activity.failure(exception);
+                if (exception.statusCode() == 401 || exception.statusCode() == 403)
+                    throw new ApiException(502, "Object storage access denied. Ask an administrator to check storage credentials and bucket permissions");
+                throw new ApiException(502, "Object storage is unavailable");
             } catch (SdkException exception) {
                 activity.failure(exception);
                 throw new ApiException(502, "Object storage is unavailable");

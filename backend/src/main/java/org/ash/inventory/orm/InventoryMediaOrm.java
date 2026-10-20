@@ -20,6 +20,11 @@ public class InventoryMediaOrm extends EntityOrm {
                 .setParameter("cutoff", cutoff).setMaxResults(limit).getResultList();
     }
 
+    public int deleteRecord(String key) {
+        return entityManager.createQuery("delete from InventoryMediaObject m where m.objectKey = :key")
+                .setParameter("key", key).executeUpdate();
+    }
+
     public int deleteStagedRecord(String key) {
         return entityManager.createQuery("delete from InventoryMediaObject m where m.objectKey = :key and m.resourceType is null")
                 .setParameter("key", key).executeUpdate();

@@ -39,7 +39,7 @@ class ArchitectureApiCoverageTest {
         return TestLocations.section(() -> admin(), Map.of("name", "Architecture shelf " + UUID.randomUUID()));
     }
     private String item(String location, int amount, String mode) {
-        return admin().body(Map.of("name", "Architecture equipment", "sku", "ARC-" + UUID.randomUUID(),
+        return admin().body(Map.of("name", "Architecture equipment " + UUID.randomUUID(), "sku", "ARC-" + UUID.randomUUID(),
                 "category", "Architecture", "storageLocation", location, "amount", amount, "trackingMode", mode))
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }

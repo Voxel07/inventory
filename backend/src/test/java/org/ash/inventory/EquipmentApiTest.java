@@ -14,7 +14,7 @@ class EquipmentApiTest {
     private RequestSpecification admin() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "f19-admin").header("X-Actor-Role", "admin"); }
     private RequestSpecification reader() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "f19-reader").header("X-Actor-Role", "read_only"); }
     private String item(boolean serialized) {
-        return admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "F19 equipment", "category", "F19", "amount", 3, "minStock", 0, "value", 0, "trackingMode", serialized ? "serialized" : "bulk"))
+        return admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "F19 equipment " + UUID.randomUUID(), "category", "F19", "amount", 3, "minStock", 0, "value", 0, "trackingMode", serialized ? "serialized" : "bulk"))
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }
     private String event(String item, LocalDate start, int quantity) {

@@ -66,6 +66,11 @@ public class CatalogService {
         return orm.categories();
     }
 
+    public List<String> getVisibleItemNames(UUID locationId) {
+        actorService.current();
+        return orm.itemNames(locationId);
+    }
+
     public Item getVisibleItem(UUID id) {
         var actor = actorService.current();
         var item = orm.find(Item.class, id);
@@ -206,6 +211,7 @@ public class CatalogService {
             item.availabilityPolicy = Item.AvailabilityPolicy.unavailable;
         } else actorService.requireWarehouse();
         apply(item, input);
+        requireUniqueName(item);
         orm.persist(item);
         inheritance.refreshItem(item);
         bookMeterReading(item, input, "Opening meter reading");
@@ -283,7 +289,11 @@ public class CatalogService {
             }
         }
         String previousCategory = item.category;
+        String previousName = item.name;
+        var previousLocation = item.storageLocation;
         apply(item, input);
+        // Keeping name and location never conflicts, so items that predate the rule stay editable.
+        if (!item.name.equalsIgnoreCase(previousName) || item.storageLocation != previousLocation) requireUniqueName(item);
         inheritance.refreshItem(item);
         if (!java.util.Objects.equals(previousCategory, item.category)) categoryDefaults.apply(item);
         bookMeterReading(item, input, "Meter reading corrected");
@@ -316,7 +326,8 @@ public class CatalogService {
     private void apply(Item item, ApiModels.ItemInput input) {
         if (input.privateResource() != null && input.privateResource() != (item.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
-        item.name = input.name().trim();
+        // Single-spaced, so the duplicate check compares the same form the client does.
+        item.name = input.name().trim().replaceAll("\\s+", " ");
         item.sku = resolveSku(item, input.sku());
         item.description = input.description();
         item.category = input.category().trim();
@@ -341,9 +352,8 @@ public class CatalogService {
         item.positionDetails = input.positionDetails();
         item.hint = input.hint();
         item.containerSize = input.containerSize();
-        item.containerCount = input.containerCount();
-        item.containersOpened = input.containersOpened();
-        item.containerRemainingPercent = input.containerRemainingPercent();
+        if (item.containerSize != null && item.trackingMode == DomainEnums.TrackingMode.serialized)
+            throw ApiException.badRequest("Serialized items cannot be stored in bulk boxes");
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();
         item.batteryReplacementDue = input.batteryReplacementDue();
         item.bestBeforeDate = input.bestBeforeDate();
@@ -691,6 +701,12 @@ public class CatalogService {
         if (faction != null) return faction;
         if (!actorService.atLeast(DomainEnums.UserRole.admin)) throw ApiException.notFound("Faction not found");
         return createFaction(new ApiModels.FactionInput(eventType, name.trim(), slug(name), true));
+    }
+
+    /** Item names are unique per storage location among the active items the actor can see; retired items free their name. */
+    private void requireUniqueName(Item item) {
+        if (orm.itemNameTaken(item.name, item.storageLocation == null ? null : item.storageLocation.id, item.id))
+            throw ApiException.conflict("An item named " + item.name + " already exists at this storage location");
     }
 
     private void persistImages(Item item, List<String> images) {

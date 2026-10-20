@@ -23,7 +23,7 @@ class AuditFixesApiTest {
     }
 
     private static String serializedItem(int assets, Map<String, Object> extra) {
-        var body = new HashMap<String, Object>(Map.of("sku", "AUD-" + UUID.randomUUID(), "name", "Audit item",
+        var body = new HashMap<String, Object>(Map.of("sku", "AUD-" + UUID.randomUUID(), "name", "Audit item " + UUID.randomUUID(),
                 "category", "Audit", "value", 0, "amount", assets, "trackingMode", "serialized"));
         body.putAll(extra);
         return admin().body(body).post("/api/items").then().statusCode(200).extract().path("id");

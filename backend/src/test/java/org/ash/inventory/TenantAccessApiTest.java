@@ -23,7 +23,7 @@ class TenantAccessApiTest {
     private RequestSpecification admin() { return actor("admin", "admin"); }
 
     private String publicItem() {
-        return admin().body(Map.of("sku", "TENANT-PUB-" + UUID.randomUUID(), "name", "Company tent", "category", "Tents",
+        return admin().body(Map.of("sku", "TENANT-PUB-" + UUID.randomUUID(), "name", "Company tent " + UUID.randomUUID(), "category", "Tents",
                         "amount", 1, "value", 0, "privateResource", false))
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }

@@ -47,6 +47,7 @@ public class MediaResource {
             if (contentType == null) throw new ApiException(415, "Only WebP, PNG and JPEG images and PDF documents can be uploaded");
             permissions.requireUploadQuota();
             var stored = media.store(MediaTypes.fileName(upload.fileName(), contentType), contentType, upload.uploadedFile());
+            media.deleteUnlessCommitted(stored.key());
             permissions.register(stored.key());
             return new ApiResponses.MediaResponse(stored.key(), stored.url());
         });

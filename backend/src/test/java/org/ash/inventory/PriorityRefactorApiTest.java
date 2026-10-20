@@ -32,7 +32,7 @@ class PriorityRefactorApiTest {
         return TestLocations.section(() -> admin(), Map.of("name", "Priority " + UUID.randomUUID()));
     }
     private String item(String location, int amount) {
-        return admin().body(Map.of("sku", "PRIORITY-" + UUID.randomUUID(), "name", "Priority asset",
+        return admin().body(Map.of("sku", "PRIORITY-" + UUID.randomUUID(), "name", "Priority asset " + UUID.randomUUID(),
                 "category", "Priority", "trackingMode", "serialized", "amount", amount,
                 "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
     }
@@ -223,7 +223,7 @@ class PriorityRefactorApiTest {
     }
 
     @Test void bulkCountCannotRemoveStockReservedByGeneralOrders() {
-        String item = admin().body(Map.of("sku", "BULK-" + UUID.randomUUID(), "name", "Reserved bulk",
+        String item = admin().body(Map.of("sku", "BULK-" + UUID.randomUUID(), "name", "Reserved bulk " + UUID.randomUUID(),
                 "category", "Priority", "amount", 3, "storageLocation", location()))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String event = admin().body(Map.of("eventType", "DE", "startDate", "2039-09-11", "endDate", "2039-09-12"))

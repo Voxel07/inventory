@@ -66,6 +66,10 @@ public class CatalogResource {
     @GET @Path("/item-categories") @Transactional
     public List<String> itemCategories() { return service.getVisibleCategories(); }
 
+    /** Names of the visible active items at one storage location (none: items without one), for the duplicate-name check. */
+    @GET @Path("/item-names") @Transactional
+    public List<String> itemNames(@QueryParam("storageLocation") UUID storageLocation) { return service.getVisibleItemNames(storageLocation); }
+
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
     @GET @Path("/items/by-sku/{sku:.+}")

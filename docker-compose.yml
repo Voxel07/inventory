@@ -84,6 +84,9 @@ services:
         condition: service_healthy
     volumes:
       - inventory-media:/data/media
+    # Without a restart policy a crashed API stays down and the reverse proxy answers every request
+    # (CORS preflights included) itself, without CORS headers.
+    restart: unless-stopped
 
   inventory-app:
     build:

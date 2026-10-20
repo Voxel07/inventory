@@ -70,14 +70,8 @@ public class Item extends BaseEntity {
     @Column(name = "position_details")
     public String positionDetails;
     public String hint;
-    @Column(name = "container_size")
+    @Column(name = "container_size", precision = 9, scale = 0)
     public BigDecimal containerSize;
-    @Column(name = "container_count")
-    public Integer containerCount;
-    @Column(name = "containers_opened")
-    public Integer containersOpened;
-    @Column(name = "container_remaining_pct")
-    public Integer containerRemainingPercent;
     @Column(name = "current_operating_hours", nullable = false)
     public BigDecimal currentOperatingHours = BigDecimal.ZERO;
     /** The warehouse records the hours run (per unit, per event) when it checks a return. */

@@ -57,7 +57,7 @@ export function parseItemsFromCsv(
         data: {
           name: '',
           category: '',
-          minStock: 5,
+          minStock: 0,
           value: 0,
           storageLocation: '',
         },
@@ -71,7 +71,7 @@ export function parseItemsFromCsv(
 
     const category = getField(raw, CATEGORY_ALIASES) || 'Allgemein';
     const amountStr = getField(raw, AMOUNT_ALIASES);
-    const minStock = Math.max(0, Math.round(parseNumber(getField(raw, MIN_STOCK_ALIASES), 5)));
+    const minStock = Math.max(0, Math.round(parseNumber(getField(raw, MIN_STOCK_ALIASES), 0)));
     const value = Math.max(0, parseNumber(getField(raw, VALUE_ALIASES), 0));
     const subcategory = getField(raw, SUBCATEGORY_ALIASES);
     const supplier = getField(raw, SUPPLIER_ALIASES);
@@ -143,7 +143,9 @@ export function parseItemsFromCsv(
     const data: ItemFormData = {
       name,
       category,
-      amount,
+      amount: containerCountStr && containerSizeStr
+        ? Math.round(parseNumber(containerCountStr, 0)) * parseNumber(containerSizeStr, 0)
+        : amount,
       minStock,
       value,
       storageLocation: storageLocationId,
@@ -155,7 +157,6 @@ export function parseItemsFromCsv(
       inventoryRole: isConsumable ? 'consumable' : 'returnable',
       eventTypes,
       containerSize: containerSizeStr ? parseNumber(containerSizeStr, 0) : undefined,
-      containerCount: containerCountStr ? Math.round(parseNumber(containerCountStr, 0)) : undefined,
       currentOperatingHours: currentOperatingHoursStr ? parseNumber(currentOperatingHoursStr, 0) : undefined,
       // A meter column implies runtime tracking unless the row says otherwise.
       tracksRuntime: getField(raw, TRACKS_RUNTIME_ALIASES) ? parseBoolean(getField(raw, TRACKS_RUNTIME_ALIASES)) : Boolean(currentOperatingHoursStr),

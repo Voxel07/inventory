@@ -480,7 +480,7 @@ export function FactionOrderForm({
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}</Typography>
                     <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {available}</Typography>
                     {/* Always reserve the line so the tile does not grow when the item is added. */}
-                    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main'}>
+                    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 0) ? 'warning.main' : 'success.main'}>
                       {t('forms.factionOrderForm.afterOrder')}: {projected}
                     </Typography>
                     <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -513,7 +513,7 @@ export function FactionOrderForm({
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                           {item.category} · {t('enum.itemStatus.available')}: {available}
                           {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
-                            <Box component="span" sx={{ fontWeight: 700, color: projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 5) ? 'warning.main' : 'success.main' }}>
+                            <Box component="span" sx={{ fontWeight: 700, color: projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 0) ? 'warning.main' : 'success.main' }}>
                               {' · '}{t('forms.factionOrderForm.afterOrder')}: {projected}
                             </Box>
                           )}

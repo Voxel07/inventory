@@ -139,7 +139,7 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           </TableCell>
                           <TableCell>{[row.data.category, row.data.subcategory].filter(Boolean).join(' · ') || '—'}</TableCell>
                           <TableCell align="right">{row.data.amount ?? 0}</TableCell>
-                          <TableCell align="right">{row.data.minStock ?? 5}</TableCell>
+                          <TableCell align="right">{row.data.minStock ?? 0}</TableCell>
                           <TableCell align="right">{formatMoney(row.data.value ?? 0)}</TableCell>
                           <TableCell>{row.storageLocationName || '—'}</TableCell>
                         </TableRow>

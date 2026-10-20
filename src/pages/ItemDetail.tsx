@@ -225,7 +225,7 @@ export function ItemDetail() {
     const totalValue = (item.value ?? 0) * physicalTotal;
     const ownershipLabels = { organization: t('enum.value.organization'), private_owner: t('pages.itemDetail.private'), external: t('enum.value.external') };
     const policyLabels = { available: t('enum.itemStatus.available'), commitment_required: t('enum.value.commitment_required'), unavailable: t('enum.value.unavailable') };
-    const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 5) ? 'low' : 'ok';
+    const availability = remaining <= 0 ? 'none' : remaining <= (item.minStock ?? 0) ? 'low' : 'ok';
     const availabilityColor = { none: 'error.main', low: 'warning.main', ok: 'success.main' }[availability];
     const location = item.expand?.storageLocation;
     const profile = equipment.data;
@@ -356,14 +356,13 @@ export function ItemDetail() {
                         <Metric label={t('pages.itemDetail.inTransit')}>{inTransit}</Metric>
                         <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{damaged}</Metric>
                         <Metric label={t('enum.value.ordered')}>{item.stock?.ordered ?? 0}</Metric>
-                        <Metric label={t('pages.itemDetail.minimumStock')}>{item.minStock ?? 5}</Metric>
+                        <Metric label={t('pages.itemDetail.minimumStock')}>{item.minStock ?? 0}</Metric>
                         <Metric label={t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.totalValue')}>{formatMoney(totalValue)}</Metric>
                         {(item.containerSize ?? 0) > 0 && <>
                             <Metric label={t('pages.itemDetail.unitsPerContainer')}>{item.containerSize}</Metric>
                             <Metric label={t('pages.itemDetail.containers')}>{item.containerCount ?? 0}</Metric>
-                            <Metric label={t('pages.itemDetail.opened')}>{item.containersOpened ?? 0}</Metric>
-                            <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.containerRemainingPercentRemaining', { containerRemainingPercent: String(item.containerRemainingPercent ?? 100) })}</Metric>
+                            <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.itemsRemainingInOpenedBox', { count: item.containerRemainingCount ?? 0 })}</Metric>
                         </>}
                     </MetricList>
                     <ItemStockLocations key={item.id} item={item} />

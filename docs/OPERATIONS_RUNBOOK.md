@@ -1,5 +1,11 @@
 # Operations runbook
 
+## Image storage access errors
+
+An S3 `403` during `MediaResource.upload` / `putObject` is an image-storage failure. Check the API container's `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY` and `S3_SECRET_KEY` against the intended storage server and its bucket permissions. Garage's `No such key` response during an upload means the configured access key is not recognized by that server. Correct the deployment configuration and recreate the API container so it loads the updated environment; retry the upload. Never paste secret keys into logs or support messages.
+
+For a failed checkout, obtain the error for `POST /api/transactions` and its trace ID separately; an image-upload stack trace does not identify that failure.
+
 ## Backups and restoration
 
 `scripts/backup-inventory.sh` stops the single Compose API writer, takes a PostgreSQL custom-format dump and copies `/data/media` (or a configured rclone bucket prefix), then resumes the API. It hashes every file, encrypts the bundle with age and optionally copies it to a separate rclone destination. A lock prevents overlapping runs; failed snapshots never receive a completed archive name. A failure resumes the API and retains the private staging directory for diagnosis.

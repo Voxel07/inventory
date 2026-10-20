@@ -13,7 +13,7 @@ class RemainingP1ApiTest {
     private RequestSpecification admin() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "remaining-p1-admin").header("X-Actor-Role", "admin"); }
     private RequestSpecification reader() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "remaining-p1-reader").header("X-Actor-Role", "read_only"); }
     private String item() {
-        return admin().body(Map.of("sku", "P1-" + UUID.randomUUID(), "name", "P1 report item", "category", "P1", "amount", 3, "value", 0))
+        return admin().body(Map.of("sku", "P1-" + UUID.randomUUID(), "name", "P1 report item " + UUID.randomUUID(), "category", "P1", "amount", 3, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }
     private Map<String, Object> action(String key, String item, int amount) {

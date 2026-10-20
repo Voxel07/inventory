@@ -22,7 +22,7 @@ public final class ApiModels {
             String sku, @NotBlank String name, String description, @NotBlank String category, String subcategory, String supplier,
             List<String> eventTypes, @Min(0) Integer amount, @Min(0) Integer minStock,
             @Min(0) BigDecimal value, UUID storageLocation, String positionDetails, String hint,
-            BigDecimal containerSize, Integer containerCount, Integer containersOpened, Integer containerRemainingPercent,
+            @jakarta.validation.constraints.DecimalMin("1") @jakarta.validation.constraints.Digits(integer = 9, fraction = 0) BigDecimal containerSize,
             @jakarta.validation.constraints.DecimalMin("0") BigDecimal currentOperatingHours,
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,

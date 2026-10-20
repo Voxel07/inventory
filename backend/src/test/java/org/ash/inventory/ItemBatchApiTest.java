@@ -11,6 +11,7 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.matchesPattern;
 
@@ -85,6 +86,39 @@ class ItemBatchApiTest {
     void batchRejectsMoreThanOneHundredEntries() {
         var entries = java.util.stream.IntStream.range(0, 101).mapToObj(i -> Map.of("item", item("Too many " + i, "bulk", 0))).toList();
         request().body(Map.of("items", entries)).post("/api/items/batch").then().statusCode(400);
+    }
+
+    @Test
+    void itemNamesAreUniquePerStorageLocationIgnoringCaseAndSpacing() {
+        String tag = UUID.randomUUID().toString().substring(0, 8);
+        String shelf = TestLocations.section(ItemBatchApiTest::request, Map.of("name", "Name shelf " + tag));
+        String other = TestLocations.section(ItemBatchApiTest::request, Map.of("name", "Name other " + tag));
+        String first = request().body(item("Unique tent " + tag, shelf)).post("/api/items").then().statusCode(200).extract().path("id");
+        request().body(item("  unique   TENT " + tag + " ", shelf)).post("/api/items").then().statusCode(409);
+        // Another location may hold an item of the same name.
+        String elsewhere = request().body(item("Unique tent " + tag, other)).post("/api/items").then().statusCode(200).extract().path("id");
+        request().queryParam("storageLocation", shelf).get("/api/item-names").then().statusCode(200).body("", hasItem("Unique tent " + tag));
+        request().queryParam("storageLocation", other).get("/api/item-names").then().statusCode(200).body("", hasSize(1));
+        String second = request().body(item("Unique stove " + tag, shelf)).post("/api/items").then().statusCode(200).extract().path("id");
+        request().body(edit("Unique Tent " + tag, shelf)).patch("/api/items/" + second).then().statusCode(409);
+        // Moving into a location that already holds the name conflicts as well.
+        request().body(edit("Unique tent " + tag, shelf)).patch("/api/items/" + elsewhere).then().statusCode(409);
+        // Keeping (or re-casing) an item's own name at its location is never a conflict.
+        request().body(edit("Unique Tent " + tag, shelf)).patch("/api/items/" + first).then().statusCode(200).body("name", equalTo("Unique Tent " + tag));
+        request().delete("/api/items/" + first).then().statusCode(204);
+        request().body(edit("Unique Tent " + tag, shelf)).patch("/api/items/" + second).then().statusCode(200);
+    }
+
+    private static Map<String, Object> item(String name, String location) {
+        var input = new java.util.HashMap<>(item(name, "bulk", 1));
+        input.put("storageLocation", location);
+        return input;
+    }
+
+    private static Map<String, Object> edit(String name, String location) {
+        var input = new java.util.HashMap<>(item(name, location));
+        input.remove("amount");
+        return input;
     }
 
     private static Map<String, Object> item(String name, String trackingMode, int amount) {

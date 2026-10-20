@@ -34,9 +34,18 @@ export function stageImage(file: File, context = captureAuthSession()): Promise<
         await deleteMedia(key, context);
       }
       return key;
+    }, (error: unknown) => {
+      // A failed upload is not cached: the next stage call (e.g. on submit) tries again.
+      if (stagedImages.get(file) === staged) stagedImages.delete(file);
+      throw error;
     });
   stagedImages.set(file, staged);
   return staged.promise;
+}
+
+/** The record now owns these uploads; unmounting the form must not delete them as abandoned. */
+export function consumeStagedImages(files: Iterable<File>): void {
+  for (const file of files) stagedImages.delete(file);
 }
 
 /** Delete an abandoned staged upload, including one that is still being prepared. */

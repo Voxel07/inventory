@@ -105,8 +105,7 @@ export interface Item {
   inventoryRole?: 'consumable' | 'returnable';
   containerSize?: number;
   containerCount?: number;
-  containersOpened?: number;
-  containerRemainingPercent?: number;
+  containerRemainingCount?: number;
   nextMaintenanceDue?: string;
   currentOperatingHours?: number;
   /** The warehouse records the hours run per unit and event when it checks a return. */
@@ -150,9 +149,6 @@ export interface ItemFormData {
   imageReplacements?: Record<string, File>;
   removeImages?: string[];
   containerSize?: number;
-  containerCount?: number;
-  containersOpened?: number;
-  containerRemainingPercent?: number;
   currentOperatingHours?: number;
   tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;

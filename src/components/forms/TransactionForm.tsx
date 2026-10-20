@@ -73,11 +73,13 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             faction: initialData?.faction ?? '',
             orderId: initialData?.orderId,
             lotId: initialData?.lotId,
+            locationId: initialData?.locationId,
         };
     };
     const [formData, setFormData] = useState<TransactionFormData>(initialForm);
     const [usage, setUsage] = useState<Usage>(initialUsage);
     const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
+    const [quantityUnit, setQuantityUnit] = useState<'items' | 'boxes'>('items');
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
     const canCheckout = canTakeOut(user) && (!selectedItem?.access?.privateResource || selectedItem.access.canEdit || selectedItem.access.publicUse);
@@ -98,13 +100,10 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const [custodyKey, setCustodyKey] = useState('');
     const custodySource = custodySources.find((row) => row.key === custodyKey);
     const returnLimit = custodySource ? returnable(custodySource) : 0;
-    const quantity = Number(quantityInput);
-    const quantityLimit = isCheckout
-        ? checkoutAvailable
-        : formData.transactionType === 'checkin'
-            ? returnLimit
-            : undefined;
-    const quantityInvalid = quantityInput === '' || quantity < 1
+    const hasBoxes = !isSerialized && (selectedItem?.containerSize ?? 0) > 0;
+    const quantity = Number(quantityInput) * (hasBoxes && quantityUnit === 'boxes' ? selectedItem!.containerSize! : 1);
+    const quantityLimit = isCheckout ? checkoutAvailable : isCheckin ? returnLimit : undefined;
+    const quantityInvalid = quantityInput === '' || !Number.isInteger(Number(quantityInput)) || quantity < 1 || !Number.isSafeInteger(quantity)
         || (quantityLimit !== undefined && quantity > quantityLimit);
     const checkoutContextMissing = eventUse && (!formData.eventOccurrenceId || !formData.faction);
     const selectableAssets = itemAssets.filter((asset) => {
@@ -138,7 +137,10 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             orderId: row?.orderId,
             assetInstanceId: row?.assetInstanceId,
         }));
-        if (row) setQuantityInput(String(Math.min(Number(quantityInput) || 1, returnable(row))));
+        if (row) {
+            setQuantityUnit('items');
+            setQuantityInput(String(Math.min(quantity || 1, returnable(row))));
+        }
     }
 
     function selectOccurrence(occurrenceId: string) {
@@ -186,7 +188,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         const general = isCheckout && usage === 'general';
         onSubmit({
             ...formData,
-            quantityChanged: isSerialized ? 1 : Number(quantityInput),
+            quantityChanged: isSerialized ? 1 : quantity,
             ...(general ? { eventOccurrenceId: undefined, eventType: undefined, faction: undefined } : {}),
         });
     }
@@ -349,6 +351,17 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         ))}
                     </TextField>
                 )}
+                {hasBoxes && <TextField
+                    select
+                    label={t('forms.transactionForm.quantityUnit')}
+                    value={quantityUnit}
+                    onChange={(event) => { setQuantityUnit(event.target.value as 'items' | 'boxes'); setQuantityInput('1'); }}
+                    required
+                    fullWidth
+                >
+                    <MenuItem value="items">{t('forms.transactionForm.individualItems')}</MenuItem>
+                    <MenuItem value="boxes">{t('forms.transactionForm.wholeBoxes', { count: selectedItem!.containerSize! })}</MenuItem>
+                </TextField>}
                 {!isSerialized && <TextField
                     label={t('common.quantity')}
                     type="number"
@@ -356,11 +369,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     onChange={(e) => setQuantityInput(e.target.value)}
                     required
                     fullWidth
-                    helperText={quantityLimit !== undefined
-                        ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: quantityLimit })
-                        : undefined}
+                    helperText={hasBoxes
+                        ? t('forms.transactionForm.individualItemQuantity', { count: Number.isFinite(quantity) ? quantity : 0 })
+                        : quantityLimit !== undefined ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit }) : undefined}
                     error={quantityInvalid && quantityInput !== ''}
-                    slotProps={{ htmlInput: { min: 1, ...(quantityLimit !== undefined ? { max: quantityLimit } : {}) } }}
+                    slotProps={{ htmlInput: { min: 1, step: 1, ...(quantityLimit !== undefined ? { max: hasBoxes && quantityUnit === 'boxes' ? Math.floor(quantityLimit / selectedItem!.containerSize!) : quantityLimit } : {}) } }}
                 />}
                 {isSerialized && (
                     <Alert severity="info">
@@ -398,6 +411,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             setFormData(initialForm());
                             setUsage(initialUsage);
                             setQuantityInput(String(initialData?.quantityChanged ?? 1));
+                            setQuantityUnit('items');
                         }}
                         disabled={isLoading}
                         sx={{ minHeight: 48 }}
