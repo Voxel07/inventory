@@ -17,7 +17,37 @@ import { ItemResponsiblePerson } from './ItemResponsiblePerson';
 
 /** `showSummary` repeats owner, keeper and stock facts; hide it where the page already shows them. */
 /** `highlightAssetId` marks the commitments that name this unit (asset detail page). */
-export function EquipmentOwnership({ item, canEdit, embedded = false, showSummary = true, highlightAssetId }: { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean; highlightAssetId?: string }) {
+type Props = { item: Item; canEdit: boolean; embedded?: boolean; showSummary?: boolean; highlightAssetId?: string };
+
+export function EquipmentOwnership(props: Props) {
+  return props.item.access?.privateResource ? <PrivateOwnership {...props} /> : <EquipmentLending {...props} />;
+}
+
+function PrivateOwnership({ item, canEdit, embedded = false, showSummary = true }: Props) {
+  const t = useT();
+  const profile = useEquipmentProfile(item.id);
+  const [editing, setEditing] = useState<EquipmentProfile | null>(null);
+  return <Box component={embedded ? 'div' : Paper} sx={embedded ? {} : { p: { xs: 2, sm: 3 }, my: 2 }}>
+    <Stack spacing={1}>
+      {!embedded && <Typography variant="h6">{t('items.equipmentOwnership.ownershipKeeper')}</Typography>}
+      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit} />
+      {profile.error && <Alert severity="error">{profile.error.message}</Alert>}
+      {showSummary && <>
+        <Typography variant="body2">{t('items.inventorySharing.owner')}: {item.access?.ownerName}</Typography>
+        <Typography variant="body2">{t('items.equipmentOwnership.keeperContact')}: {[profile.data?.keeperName, profile.data?.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography>
+      </>}
+      {canEdit && profile.data && <Button sx={{ alignSelf: 'flex-start' }} onClick={() => setEditing(profile.data!)}>{t('items.equipmentOwnership.editKeeper')}</Button>}
+    </Stack>
+    {editing && <OperationForm title={t('items.equipmentOwnership.ownershipKeeper')} onClose={() => setEditing(null)}
+      initial={{ keeperName: editing.keeperName ?? '', keeperContact: editing.keeperContact ?? '' }} fields={[
+        { key: 'keeperName', label: t('items.equipmentOwnership.keeper') },
+        { key: 'keeperContact', label: t('items.equipmentOwnership.pickupContact') },
+        { key: 'reason', label: t('common.reason'), required: true },
+      ]} onSave={values => equipmentApi.update(item.id, equipmentProfileInput({ ...values, ownershipType: 'private_owner', availabilityPolicy: 'available', revision: editing.revision }))} />}
+  </Box>;
+}
+
+function EquipmentLending({ item, canEdit, embedded = false, showSummary = true, highlightAssetId }: Props) {
   const t = useT();
   const profile = useEquipmentProfile(item.id);
   const { data: events = [] } = useEventReports();

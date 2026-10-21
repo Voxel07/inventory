@@ -179,7 +179,9 @@ class EquipmentApiTest {
     @Test void catalogScopeAlsoProtectsEquipmentDetailsAndAvailability() {
         String item = admin().body(Map.of("sku", "F19-" + UUID.randomUUID(), "name", "Scoped private stock", "category", "F19", "amount", 1, "privateResource", true))
                 .post("/api/items").then().statusCode(200).extract().path("id");
-        makePrivate(item);
+        admin().get(path(item)).then().statusCode(200)
+                .body("ownershipType", equalTo("private_owner")).body("availabilityPolicy", equalTo("available")).body("commitments", empty());
+        admin().body(profile(0)).put(path(item)).then().statusCode(400);
         reader().get(path(item)).then().statusCode(404);
         reader().get("/api/equipment-availability").then().statusCode(200).body("containsKey('" + item + "')", equalTo(false));
     }

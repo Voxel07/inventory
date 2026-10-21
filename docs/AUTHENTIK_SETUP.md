@@ -42,14 +42,14 @@ Roles form a **ladder**: each role includes every right of the roles above it in
 
 | App role | Adds to the role above |
 |---|---|
-| Tenant (`tenant`) | Own private inventory only: private items, assemblies and storage locations (e.g. the rented building), own share groups, "offer for use" with request notifications. Never sees company data. |
+| Tenant (`tenant`) | Own private inventory only: private items, assemblies and storage locations (e.g. the rented building), own share groups, public availability with request notifications. Never sees company data. |
 | Read only (`read_only`) | Company catalog (items, assemblies, public locations), participants and event timing, all faction and general orders — read only. Adds no items, assemblies, storage locations (not even private ones) or sharing groups |
 | Faction leader (`faction_leader`) | Create and edit faction order lists for the user's own factions; return and report items in their own custody |
 | ASH crew (`ash`) | General (non-faction) orders and item takeout, including pickup of prepared faction and general orders. Preparation, returns and closing remain with the warehouse |
 | Warehouse crew (`warehouse_crew`) | All catalog work, all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs, reports), preparing and handing out orders (pickup, returns, close), damage reports, custody overview, history; order lists for every faction |
 | Inventory admin (`admin`) | Everything: user roles and factions, events, participants and timing, procurement planning, write-offs, count approval, audit and recovery, ownership transfer, every private resource |
 
-Every role from faction leader up also has the tenant's private-inventory rights: they can add private items, assemblies and storage locations, share them and offer them for use. Read-only members add nothing; they only use what is shared with them.
+Every role from faction leader up also has the tenant's private-inventory rights: they can add private items, assemblies and storage locations, share them and make them publicly available. Read-only members add nothing; they only use what is shared with them.
 
 **Factions.** On the same Users page the admin assigns factions (event type and faction, stored as `EVENT:slug`). Every organization member *reads* all factions' order lists; faction leaders and ASH crew only *create and change* lists of the factions assigned to them. Warehouse crew and the inventory admin change every list.
 
@@ -58,7 +58,7 @@ Every role from faction leader up also has the tenant's private-inventory rights
 
 | Capability | Tenant | Read only | Faction leader | ASH crew | Warehouse crew | Inventory admin |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| Add own private items, locations, assemblies; offer for use | ✓ | | ✓ | ✓ | ✓ | ✓ |
+| Add own private items, locations, assemblies; public availability | ✓ | | ✓ | ✓ | ✓ | ✓ |
 | Share groups; use resources shared with them | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | See company items, assemblies and public locations | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | See participants and event timing | | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -76,15 +76,17 @@ Every role from faction leader up also has the tenant's private-inventory rights
 | Write-offs, count approval, users, audit, recovery | | | | | | ✓ |
 | Every private resource, ownership transfer | | | | | | ✓ |
 
-Private resources are never visible through a role alone (except to the inventory admin): they need ownership, a share, a share of the storage location they are kept in, or an offer for use (§3.4).
+Private resources are never visible through a role alone (except to the inventory admin): they need ownership, a share, a share of the storage location they are kept in, or public availability (§3.4).
 
 ### 3.4 Company and private equipment
 
 - **Company equipment** has no private policy. It is visible to every organization member (read only and up) and managed by the warehouse crew.
-- **Private equipment** belongs to a user account. Only the owner, the inventory admin and people or groups it is shared with see it. Sharing is done on the item, assembly or location (**Access & sharing**) and is audited with a reason.
-- **Sharing groups** (`/sharing`, and on the Users page for admins) are owned by the user who creates them; only the owner and the inventory admin see their members and change them. Groups created by the inventory admin as *admin groups* can be used by everyone. Share groups are app data, separate from the Authentik groups above.
+- **Private equipment** belongs to a user account. Only the owner, the inventory admin and people or groups it is shared with see it. Sharing is done on the item, assembly or location (**Access & sharing**). Changes are revision-checked and audited; managing sharing requires no reason.
+- **Sharing groups** (`/sharing`, and on the Users page for admins) are owned by the user who creates them; members, the owner and the inventory admin see the member names directly in the group list. Only the owner and inventory admin change membership. Groups created by the inventory admin as *admin groups* can be used by everyone. Share groups are app data, separate from the Authentik groups above.
 - **Location sharing is inherited.** A share on a private storage location also applies to its private sub-locations and to every private item whose home location is inside it. The location owner can view and edit what others store there, but cannot change those items' sharing. Sub-locations of a private location must be private.
-- **Offer for use.** The owner of a private item can switch on *Offer for use*. The item becomes visible read-only to every organization member (not to tenants) and can be put on faction and general orders; its availability becomes *commitment required*, so it is only handed out against the owner's commitment. The owner receives an in-app notification (`item_requested`) when it is on a submitted order or a pickup/damage request, once per order or request.
+- **Public availability.** While creating a privately owned item, or later through Edit item or Manage sharing, the owner can make it publicly available. Organization members (not unrelated tenants) can see it read-only and put it on faction and general orders. Usable stock, reservations, damage and maintenance determine availability; private items have no commitment workflow. Ownership and edit permissions stay with the owner and authorized editors. The owner receives an in-app notification (`item_requested`) when it is on a submitted order or a pickup/damage request, once per order or request.
+
+The creator is automatically responsible for a new item. Editors can change this later to an account or free-text name. Without warehouse access, account choices are restricted server-side to the editor and people in sharing groups they own or belong to. Assigning responsibility does not grant item access. Free-text contacts receive no in-app notifications.
 
 ### 3.5 Scenarios
 
@@ -95,7 +97,7 @@ Private resources are never visible through a role alone (except to the inventor
 | ASH crew needs a stage kit | ASH crew | Creates and submits a general order; the warehouse prepares it. ASH crew may pick it up or check out items directly. |
 | Leader of two factions | Faction leader, factions DE · KGG and LS · Red | Edits both factions' lists; reads every other list. |
 | Building tenant who stores own equipment | Tenant (explicitly assigned) | Creates a private location for the building, adds items, creates a share group "Hall crew" and shares the building with it; the group sees everything stored there. Sees nothing of the company inventory. |
-| Tenant lends a generator for an event | Tenant | Offers the generator for use and records a commitment for the event dates; faction leaders order it; the tenant gets a notice per order. Warehouse staff need a share of the building (or the item is brought in) to collect it. |
+| Tenant lends a generator for an event | Tenant | Makes the generator publicly available when adding it or later; faction leaders order it; the tenant gets a notice per order. Warehouse staff need a share of the building (or the item is brought in) to collect it. |
 | Read-only participant | Read only | Reads catalog, orders, participants and timing; cannot add items, assemblies or storage locations. |
 
 ### 3.6 Changes take effect

@@ -61,7 +61,7 @@ export function InventoryAccessGroups() {
   const term = search.trim().toLocaleLowerCase();
   const filtered = (groups.data ?? []).filter(group =>
     (type === 'all' || (type === 'admin' ? !group.ownerId : Boolean(group.ownerId)))
-    && (!term || [group.name, group.ownerName ?? t('operations.inventoryAccessGroups.inventoryAdmins')]
+    && (!term || [group.name, group.ownerName ?? t('operations.inventoryAccessGroups.inventoryAdmins'), ...group.members.map(member => member.name)]
       .some(value => value.toLocaleLowerCase().includes(term))));
   const pagination = useClientPagination(filtered);
   return <Paper variant="outlined" sx={{ p: 2, mt: 3 }}><Typography variant="h6">{t('operations.inventoryAccessGroups.groupsForPrivateSharing')}</Typography>
@@ -84,7 +84,7 @@ export function InventoryAccessGroups() {
         <TableCell>{t('operations.inventoryAccessGroups.groupName')}</TableCell>
         <TableCell>{t('operations.inventoryAccessGroups.owner')}</TableCell>
         <TableCell>{t('operations.inventoryAccessGroups.groupType')}</TableCell>
-        <TableCell align="right">{t('operations.inventoryAccessGroups.members')}</TableCell>
+        <TableCell>{t('operations.inventoryAccessGroups.members')}</TableCell>
         <TableCell>{t('common.actions')}</TableCell>
       </TableRow></TableHead>
       <TableBody>
@@ -98,7 +98,9 @@ export function InventoryAccessGroups() {
           <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small"
             label={group.ownerId ? t('operations.inventoryAccessGroups.personal') : t('operations.inventoryAccessGroups.adminManaged')}
             sx={{ bgcolor: group.ownerId ? '#1d4ed8' : '#c2410c', color: '#fff' }} /></TableCell>
-          <TableCell align="right">{group.canManage ? group.memberIds.length
+          <TableCell>{group.canManage || group.memberIds.includes(user?.id ?? '') ? <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+            {group.members.length ? group.members.map(member => <Chip key={member.id} size="small" variant="outlined" label={member.name} />) : '—'}
+          </Stack>
             : <Tooltip title={t('operations.inventoryAccessGroups.membersVisibleToManagers')}><span aria-label={t('operations.inventoryAccessGroups.membersVisibleToManagers')}>—</span></Tooltip>}</TableCell>
           <TableCell>{group.canManage
             ? <Button size="small" title={t('operations.inventoryAccessGroups.editGroup')} onClick={() => setEditing(group)}>{t('common.edit')}</Button>

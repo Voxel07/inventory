@@ -334,7 +334,9 @@ export function ItemDetail() {
                         <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
                             <Typography variant="h5" component="h1" sx={{ overflowWrap: 'anywhere', mr: 0.25 }}>{item.name}</Typography>
                             <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
-                            {profile && <Chip size="small" variant="outlined" sx={tinyChip} color={profile.availabilityPolicy === 'available' ? 'default' : 'warning'} label={`${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
+                            {profile && <Chip size="small" variant="outlined" sx={tinyChip} label={item.access?.privateResource
+                                ? item.access.publicUse ? t('items.inventorySharing.publiclyAvailable') : t('items.inventorySharing.private')
+                                : `${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
                         </Stack>
                     </Box>
                     <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
@@ -389,46 +391,50 @@ export function ItemDetail() {
                 <ItemDamageReports item={item} />
 
             <Box sx={{ display: 'grid', gap: 1.5, alignItems: 'start', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' } }}>
-                <DetailPanel title={t('common.overview')}>
-                    <FieldGrid>
-                        <Field label={t('common.category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
-                        <Field label={t('common.storageLocation')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location ? locationLabel(location) : item.storageLocation}</Link> : '—'}</Field>
-                        <Field label={t('forms.itemForm.positionInLocation')}>{item.positionDetails || '—'}</Field>
-                        <Field label={t('common.returnLocation')}>{locationLabel(item.expand?.returnLocation ?? (!item.returnLocation || item.returnLocation === item.storageLocation ? location : undefined)) || '—'}</Field>
-                        <Field label={t('pages.itemDetail.ownerProvider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
-                        <Field label={t('pages.itemDetail.keeperContact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
-                        <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{item.stock?.totalOwned ?? 0}</Field>
-                        <Field label={t('pages.itemDetail.trackingMode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
-                        {item.tracksRuntime && <Field label={t('enum.value.operating_hours')}>{t('forms.itemForm.recordOperatingHoursOnReturn')}</Field>}
-                        {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
-                        <Field label={t('common.visibility')}>{item.access?.privateResource ? t('pages.itemDetail.private') : t('enum.value.organization')}</Field>
-                        <Field label={t('pages.itemDetail.created')}>{formatDate(item.created)}</Field>
-                        {isVehicle && <Field label={t('pages.itemDetail.fuelConsumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
-                        {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
-                        {/* Serialized units carry their own meters (see each unit's runtime log). */}
-                        {isGenerator && item.trackingMode !== 'serialized' && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
-                        {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
-                        {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
-                        <Field label={t('pages.itemDetail.itemID')}><span className="mono">{item.id}</span></Field>
-                        <Field wide label={t('pages.itemDetail.approvedEventUse')}>
-                            <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-                                {item.eventTypes?.length
-                                    ? item.eventTypes.map(event => <Chip key={event} size="small" variant="outlined" sx={tinyChip} label={event === 'LS' ? 'LightSim' : event} />)
-                                    : <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>— {t('pages.itemDetail.none')}</Box>}
-                                <Tooltip arrow enterTouchDelay={0} title={t('pages.itemDetail.eventAssignmentsDescribeIntendedUseAvailabilityAndRequiredCommitmentsAre')}>
-                                    <IconButton size="small" sx={{ p: 0.25 }} aria-label={t('pages.itemDetail.aboutEventUse')}><InfoOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
-                                </Tooltip>
-                            </Stack>
-                        </Field>
-                        {item.description && <Field wide label={t('common.description')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{item.description}</Box></Field>}
-                    </FieldGrid>
-                </DetailPanel>
+                <Stack spacing={1.5}>
+                    <DetailPanel title={t('common.overview')}>
+                        <FieldGrid>
+                            <Field label={t('common.category')}>{[item.category, item.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
+                            <Field label={t('common.storageLocation')}>{item.storageLocation ? <Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(item.storageLocation)}`} underline="hover">{location ? locationLabel(location) : item.storageLocation}</Link> : '—'}</Field>
+                            <Field label={t('forms.itemForm.positionInLocation')}>{item.positionDetails || '—'}</Field>
+                            <Field label={t('common.returnLocation')}>{locationLabel(item.expand?.returnLocation ?? (!item.returnLocation || item.returnLocation === item.storageLocation ? location : undefined)) || '—'}</Field>
+                            <Field label={t('pages.itemDetail.ownerProvider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
+                            <Field label={t('pages.itemDetail.keeperContact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
+                            <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{item.stock?.totalOwned ?? 0}</Field>
+                            <Field label={t('pages.itemDetail.trackingMode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
+                            {item.tracksRuntime && <Field label={t('enum.value.operating_hours')}>{t('forms.itemForm.recordOperatingHoursOnReturn')}</Field>}
+                            {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
+                            <Field label={t('common.visibility')}>{item.access?.privateResource
+                                ? item.access.publicUse ? t('items.inventorySharing.publiclyAvailable') : t('pages.itemDetail.private')
+                                : t('enum.value.organization')}</Field>
+                            <Field label={t('pages.itemDetail.created')}>{formatDate(item.created)}</Field>
+                            {isVehicle && <Field label={t('pages.itemDetail.fuelConsumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
+                            {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
+                            {/* Serialized units carry their own meters (see each unit's runtime log). */}
+                            {isGenerator && item.trackingMode !== 'serialized' && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
+                            {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
+                            {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
+                            <Field label={t('pages.itemDetail.itemID')}><span className="mono">{item.id}</span></Field>
+                            <Field wide label={t('pages.itemDetail.approvedEventUse')}>
+                                <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                                    {item.eventTypes?.length
+                                        ? item.eventTypes.map(event => <Chip key={event} size="small" variant="outlined" sx={tinyChip} label={event === 'LS' ? 'LightSim' : event} />)
+                                        : <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>— {t('pages.itemDetail.none')}</Box>}
+                                    <Tooltip arrow enterTouchDelay={0} title={t('pages.itemDetail.eventUseHelp')}>
+                                        <IconButton size="small" sx={{ p: 0.25 }} aria-label={t('pages.itemDetail.aboutEventUse')}><InfoOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
+                                    </Tooltip>
+                                </Stack>
+                            </Field>
+                            {item.description && <Field wide label={t('common.description')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{item.description}</Box></Field>}
+                        </FieldGrid>
+                    </DetailPanel>
+                    <InventorySharing kind="items" id={item.id} access={item.access} />
+                </Stack>
 
                 <Stack spacing={1.5}>
                     <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}>
                         <EquipmentOwnership item={item} canEdit={canEdit} embedded showSummary={false} />
                     </DetailPanel>
-                    <InventorySharing kind="items" id={item.id} access={item.access} />
                 </Stack>
             </Box>
 

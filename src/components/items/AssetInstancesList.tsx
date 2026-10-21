@@ -512,7 +512,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             {/* Dialog: Assign codes to existing units */}
             <Dialog open={recodeOpen} onClose={() => setRecodeOpen(false)} maxWidth="xs" fullWidth>
                 <DialogTitle>{t('items.assetInstancesList.assignAssetCodes')}</DialogTitle>
-                <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <DialogContent sx={{ pt: '24px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                         {selectedAssets.length
                             ? t('items.assetInstancesList.renamesTheCountSelectedUnits', { unitCount: String(batchTargets.length) })
@@ -569,7 +569,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
             {/* Dialog: Edit Asset */}
             <Dialog open={!!editAsset} onClose={() => setEditAsset(null)} maxWidth="xs" fullWidth>
                 <DialogTitle>{t('items.assetInstancesList.editAsset')}: {editAsset?.assetCode}</DialogTitle>
-                <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <DialogContent sx={{ pt: '24px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <AssetEditFields value={editInput} tracksRuntime={Boolean(item.tracksRuntime)} onChange={updateEdit} />
                 </DialogContent>
                 <DialogActions>

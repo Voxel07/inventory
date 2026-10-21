@@ -25,6 +25,8 @@ public class Item extends BaseEntity {
     public InventoryAccessPolicy accessPolicy;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "responsible_person_id")
     public UserAccount responsiblePerson;
+    @Column(name = "responsible_person_name", length = 255)
+    public String responsiblePersonName;
     public enum Ownership { organization, private_owner, external }
     public enum AvailabilityPolicy { available, commitment_required, unavailable }
     @Enumerated(EnumType.STRING) @Column(name = "ownership_type", nullable = false)

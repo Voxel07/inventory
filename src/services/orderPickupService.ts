@@ -1,6 +1,7 @@
 import { apiRequest } from './apiClient';
 import { orderPath } from './orderCommands';
 import type { OrderKind } from '../types/orderCommands';
+import type { AccessPerson } from '../types/inventoryAccess';
 
 export type { OrderKind } from '../types/orderCommands';
 export type PickupAssignment = { responsiblePersonId: string | null; groupName: string; pickupLocationId: string | null };
@@ -14,5 +15,6 @@ export const orderPickupApi = {
   save: (kind: OrderKind, id: string, assignments: Record<string, PickupAssignment>): Promise<PickupPlan> => apiRequest(path(kind, id), { method: 'PATCH', body: { assignments } }),
   notify: (kind: OrderKind, id: string): Promise<number> => apiRequest(`${path(kind, id)}/notify`, { method: 'POST' }),
   responsibility: (id: string): Promise<ItemResponsibility> => apiRequest(`/api/items/${id}/responsibility`),
-  setResponsibility: (id: string, responsiblePersonId: string | null): Promise<ItemResponsibility> => apiRequest(`/api/items/${id}/responsibility`, { method: 'PATCH', body: { responsiblePersonId } }),
+  responsibilityPeople: (id: string): Promise<AccessPerson[]> => apiRequest(`/api/items/${id}/responsibility/people`),
+  setResponsibility: (id: string, responsiblePersonId: string | null, responsiblePersonName?: string | null): Promise<ItemResponsibility> => apiRequest(`/api/items/${id}/responsibility`, { method: 'PATCH', body: { responsiblePersonId, responsiblePersonName } }),
 };

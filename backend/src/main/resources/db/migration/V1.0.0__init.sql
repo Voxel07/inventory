@@ -489,7 +489,7 @@ create table items (
     event_tags jsonb not null,
     primary key (id),
     constraint equipment_owner_policy check (
-    ownership_type = 'organization' or (owner_name is not null and availability_policy <> 'available'))
+    ownership_type = 'organization' or owner_name is not null)
 );
 
 create table maintenance_records (
@@ -1124,6 +1124,7 @@ alter table items add column access_policy_id uuid unique references inventory_a
 alter table storage_locations add column access_policy_id uuid unique references inventory_access_policies(id);
 alter table assemblies add column access_policy_id uuid unique references inventory_access_policies(id);
 alter table items add column responsible_person_id uuid references app_users(id);
+alter table items add column responsible_person_name varchar(255);
 create index ix_items_responsible_person on items (responsible_person_id);
 alter table orders add column pickup_assignments jsonb not null default '{}';
 create table inventory_media_objects (

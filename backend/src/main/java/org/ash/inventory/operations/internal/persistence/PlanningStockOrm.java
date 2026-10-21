@@ -40,7 +40,7 @@ public class PlanningStockOrm {
     }
 
     private static final String SNAPSHOT_SQL = """
-            with scope as (select id, inventory_role, availability_policy from items where id in (:itemIds)),
+            with scope as (select id, inventory_role, availability_policy, access_policy_id from items where id in (:itemIds)),
             ledger as (
                 select t.item_id, t.asset_instance_id, t.type, t.quantity, t.custody_write_off, t.created_at
                 from stock_transactions t join scope s on s.id = t.item_id
@@ -86,7 +86,7 @@ public class PlanningStockOrm {
                     "c.available_from", "c.available_until", "c.created_at",
                     "c.asset_ids", "l.collected_assets", "l.returned_assets", null, null,
                     "l.provider_location_id", "l.id",
-                    "equipment_commitments c join scope s on s.id = c.item_id left join loan_arrangements l on l.commitment_id = c.id where c.cancelled = false"));
+                    "equipment_commitments c join scope s on s.id = c.item_id left join loan_arrangements l on l.commitment_id = c.id where c.cancelled = false and s.access_policy_id is null"));
 
     /**
      * One snapshot row, mapped once from the shared UNION ALL columns. The meaning of the generic columns depends on

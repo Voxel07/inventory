@@ -61,6 +61,7 @@ const inbox: InboxAction[] = [{ key: 'receipt:preview', kind: 'receipt', title: 
 const transfers: Transfer[] = [{ id: 'transfer-demo', transferNumber: 'TR-002', status: 'in_transit', sourceLocationId: 'location-a', destinationLocationId: 'location-b',
   lines: [{ id: 'transfer-line', itemId: 'item-1', itemName: 'Radio', requestedQuantity: 4, pickedQuantity: 4, receivedQuantity: 0, discrepancyQuantity: 0 }] }];
 const privateAccess: InventoryAccess = { privateResource: true, ownerId: 'preview', ownerName: 'Preview user', revision: 0, canEdit: true, canManage: true, grants: [],
+  audience: [{ kind: 'owner', principalId: 'preview', name: 'Preview user', canEdit: true }],
   sources: [{ kind: 'owner', principalId: 'preview', name: 'Preview user', canEdit: true }] };
 items.push({ ...items[0], id: 'private-1', name: 'My private light', access: privateAccess, eventTypes: ['TNO'] });
 items.push({ ...items[1], id: 'rental-1', name: 'My checked-out rental', eventTypes: ['LS'] });
@@ -105,7 +106,7 @@ const report: OperationalReport = { name: 'stock', definition: 'Fixture operatio
 const equipment = (itemId: string): EquipmentProfile => {
   const own = itemId === 'private-1';
   return { itemId, ownershipType: own ? 'private_owner' : 'organization', ownerName: own ? 'Preview user' : 'Warehouse team', keeperName: 'Radio keeper',
-    keeperContact: 'radio@example.test', availabilityPolicy: own ? 'commitment_required' : 'available', commitments: [], revision: 0 };
+    keeperContact: 'radio@example.test', availabilityPolicy: 'available', commitments: [], revision: 0 };
 };
 
 type CountSubmit = { lines: { lineId: string; quantity: number }[] };
@@ -121,6 +122,8 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/item-categories') return [...new Set(items.map((item) => item.category))].sort();
   if (path.startsWith('/api/items/')) {
     const id = path.split('/')[3];
+    if (path.endsWith('/responsibility/people')) return [{ id: 'preview', name: 'Preview user' }];
+    if (path.endsWith('/responsibility')) return { responsiblePersonId: 'preview', responsiblePersonName: 'Preview user' };
     if (path.endsWith('/assets')) return assets.filter((row) => row.itemId === id);
     if (path.endsWith('/equipment')) return equipment(id);
     return items.find((item) => item.id === id);

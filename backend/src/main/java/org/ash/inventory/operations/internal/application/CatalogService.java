@@ -218,6 +218,7 @@ public class CatalogService {
         actorService.requireInventoryCreation();
         if (Boolean.FALSE.equals(input.privateResource())) actorService.requireWarehouse();
         var item = new Item();
+        item.responsiblePerson = actorService.current();
         boolean privateItem = Boolean.TRUE.equals(input.privateResource()) || !canManageInventory(actorService.current());
         if (input.storageLocation() != null) {
             var location = orm.require(StorageLocation.class, input.storageLocation(), "Location");
@@ -226,7 +227,6 @@ public class CatalogService {
         if (privateItem) {
             item.accessPolicy = accessPolicies.create();
             item.ownershipType = Item.Ownership.private_owner; item.ownerName = actorService.current().name;
-            item.availabilityPolicy = Item.AvailabilityPolicy.unavailable;
         } else actorService.requireWarehouse();
         apply(item, input);
         requireUniqueName(item);
@@ -310,7 +310,11 @@ public class CatalogService {
         String previousCategory = item.category;
         String previousName = item.name;
         var previousLocation = item.storageLocation;
+        boolean previousPublicUse = item.accessPolicy != null && item.accessPolicy.publicUse;
         apply(item, input);
+        if (item.accessPolicy != null && previousPublicUse != item.accessPolicy.publicUse)
+            events.record("access.changed", "items", item.id, actorService.current().id, null,
+                    Map.of("beforePublicUse", previousPublicUse, "publicUse", item.accessPolicy.publicUse));
         // Keeping name and location never conflicts, so items that predate the rule stay editable.
         if (!item.name.equalsIgnoreCase(previousName) || item.storageLocation != previousLocation) requireUniqueName(item);
         inheritance.refreshItem(item);
@@ -345,6 +349,17 @@ public class CatalogService {
     private void apply(Item item, ApiModels.ItemInput input) {
         if (input.privateResource() != null && input.privateResource() != (item.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through catalog edits");
+        if (input.publicUse() != null) {
+            if (item.accessPolicy == null) {
+                if (input.publicUse()) throw ApiException.badRequest("Public availability applies to privately owned items");
+            } else if (item.accessPolicy.publicUse != input.publicUse()) {
+                if (!item.accessPolicy.owner.id.equals(actorService.current().id)
+                        && actorService.current().role != DomainEnums.UserRole.admin)
+                    throw ApiException.forbidden("Only the owner or inventory admin may change public availability");
+                item.accessPolicy.publicUse = input.publicUse();
+                item.accessPolicy.revision++;
+            }
+        }
         // Single-spaced, so the duplicate check compares the same form the client does.
         item.name = input.name().trim().replaceAll("\\s+", " ");
         item.sku = resolveSku(item, input.sku());

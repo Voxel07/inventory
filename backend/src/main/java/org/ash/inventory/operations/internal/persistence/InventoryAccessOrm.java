@@ -5,10 +5,8 @@ import org.ash.inventory.operations.internal.model.InventoryAccessGrant;
 import org.ash.inventory.operations.internal.model.InventoryAccessGroup;
 import org.ash.inventory.operations.internal.model.InventoryAccessLink;
 import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
-import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.platform.api.BusinessTime;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.TypedQuery;
@@ -88,7 +86,8 @@ public class InventoryAccessOrm extends EntityOrm {
         return entityManager.createQuery("""
                 select g.policy.id, u.id, grp.id, grp.name, g.canEdit,
                     case when exists (select m.id from InventoryAccessGroup members join members.members m
-                        where members = grp and m.id = :actor) then true else false end
+                        where members = grp and m.id = :actor) then true else false end,
+                    coalesce(u.name, grp.name)
                 from InventoryAccessGrant g left join g.user u left join g.group grp where g.policy.id in :ids
                 """, Object[].class).setParameter("ids", ids).setParameter("actor", actor).getResultList();
     }
@@ -152,10 +151,6 @@ public class InventoryAccessOrm extends EntityOrm {
                 .setParameter("location", location).setMaxResults(1).getResultList().isEmpty()
                 || !entityManager.createQuery("select a.id from AssetInstance a where a.currentLocation = :location and a.active = true", UUID.class)
                 .setParameter("location", location).setMaxResults(1).getResultList().isEmpty();
-    }
-    public boolean currentCommitments(Item item) {
-        return !entityManager.createQuery("select c.id from EquipmentCommitment c where c.item = :item and c.cancelled = false and c.availableUntil >= :today", UUID.class)
-                .setParameter("item", item).setParameter("today", BusinessTime.today()).setMaxResults(1).getResultList().isEmpty();
     }
     public List<UserAccount> people() {
         return entityManager.createQuery("from UserAccount where active = true order by name, id", UserAccount.class).getResultList();

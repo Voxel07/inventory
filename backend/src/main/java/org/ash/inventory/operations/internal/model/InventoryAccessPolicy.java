@@ -10,6 +10,6 @@ public class InventoryAccessPolicy extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_user_id", nullable = false) public UserAccount owner;
     @Column(nullable = false) public long revision;
-    /** Items only: the owner offers it for use; organization members may view and request it. */
+    /** Items only: public availability for organization orders, independent of ownership and edit rights. */
     @Column(name = "public_use", nullable = false) public boolean publicUse;
 }

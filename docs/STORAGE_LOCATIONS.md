@@ -32,7 +32,7 @@ Garage - Matze (private)         same model for tenants and members
 
 ## Flow
 
-1. **New storage location** (one button) opens the structure dialog. Type a name: a known location loads its existing structure; an unknown name creates a new one.
+1. **New storage location** opens the structure dialog, including from the new-item form. Select an existing location to extend it, or click the dedicated **Create new location** button to enter a new name immediately. Typing a new name in the picker also offers creation.
 2. Add sections, then storage places inside them, one by one or with **Generate** (e.g. `Regal` 1–4, each with `Fach` 1–8). Sections may stay empty.
 3. **Save** sends everything in one request: `PUT /api/storage-locations/structure` (MCP: `save_storage_structure`). Nodes with an id are renamed in place, nodes without one are created, and nodes that are left out stay untouched.
 4. The list shows **Grouped** (tree per location) or **Flat** (all nodes, paged, optionally limited to one location). The detail panel offers **Edit structure** / **Add storage places**, **Print labels** (QR sheet for every active section and place below, `/storage-locations/:id/labels`), edit (rename, move, map) and deactivate.

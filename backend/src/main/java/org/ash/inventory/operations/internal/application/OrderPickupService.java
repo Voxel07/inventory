@@ -28,7 +28,7 @@ public class OrderPickupService {
     @Inject DomainEventService events;
 
     public record Input(@Size(max = 2000) Map<String, PickupAssignment> assignments) {}
-    public record ResponsibilityInput(UUID responsiblePersonId) {}
+    public record ResponsibilityInput(UUID responsiblePersonId, @Size(max = 255) String responsiblePersonName) {}
     public record Responsibility(UUID responsiblePersonId, String responsiblePersonName) {}
     public record Line(UUID itemId, String name, int ordered, int prepared) {}
     public record Group(String key, String name, UUID responsiblePersonId, String responsiblePersonName,
@@ -42,22 +42,35 @@ public class OrderPickupService {
     @Transactional
     public Responsibility responsibility(UUID itemId) {
         var item = orm.require(Item.class, itemId, "Item"); actors.requireItemAccess(item);
-        return person(item.responsiblePerson);
+        return responsibilityOf(item);
     }
 
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public Responsibility setResponsibility(UUID itemId, ResponsibilityInput input) {
         var item = orm.requireLocked(Item.class, itemId, "Item"); actors.requireItemEdit(item);
+        if (input.responsiblePersonId() != null && input.responsiblePersonName() != null && !input.responsiblePersonName().isBlank())
+            throw ApiException.badRequest("Select a person or enter a name, not both");
+        if (input.responsiblePersonId() != null && orm.responsibilityPeople(actors.current()).stream()
+                .noneMatch(u -> u.id.equals(input.responsiblePersonId())))
+            throw ApiException.badRequest("Choose yourself or someone in your sharing groups");
         var recipient = input.responsiblePersonId() == null ? null : orm.require(UserAccount.class, input.responsiblePersonId(), "Responsible person");
-        if (recipient != null && !actors.canViewItem(item, recipient)) throw ApiException.badRequest("Responsible person needs access to this item");
         item.responsiblePerson = recipient;
+        item.responsiblePersonName = recipient != null || input.responsiblePersonName() == null || input.responsiblePersonName().isBlank()
+                ? null : input.responsiblePersonName().trim();
         events.record("item.responsibility_changed", "item", item.id, actors.current().id, null, Map.of());
-        return person(item.responsiblePerson);
+        return responsibilityOf(item);
     }
 
-    private Responsibility person(UserAccount user) {
-        return new Responsibility(user == null ? null : user.id, user == null ? null : user.name);
+    @Transactional
+    public List<InventoryAccessService.Person> responsibilityPeople(UUID itemId) {
+        var item = orm.require(Item.class, itemId, "Item"); actors.requireItemEdit(item);
+        return orm.responsibilityPeople(actors.current()).stream().map(u -> new InventoryAccessService.Person(u.id, u.name)).toList();
+    }
+
+    private Responsibility responsibilityOf(Item item) {
+        var user = item.responsiblePerson;
+        return new Responsibility(user == null ? null : user.id, user == null ? item.responsiblePersonName : user.name);
     }
 
     @Transactional
@@ -172,9 +185,10 @@ public class OrderPickupService {
             var name = a == null ? item.category : a.groupName();
             var location = a == null ? data.defaultPickup : a.pickupLocationId() == null ? null : orm.pickupLocation(a.pickupLocationId());
             if (location != null && !actors.canViewLocation(location)) location = null;
-            var key = (user == null ? "unassigned" : user.id) + ":" + name + ":" + (location == null ? "" : location.id);
+            var responsibleName = user != null ? user.name : a == null ? item.responsiblePersonName : null;
+            var key = (user == null ? "name:" + Objects.toString(responsibleName, "") : user.id) + ":" + name + ":" + (location == null ? "" : location.id);
             grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(new Line(item.id, item.name, data.ordered.getOrDefault(item.id, 0), data.prepared.getOrDefault(item.id, 0)));
-            details.put(key, new Group(key, name, user == null ? null : user.id, user == null ? null : user.name,
+            details.put(key, new Group(key, name, user == null ? null : user.id, responsibleName,
                     location == null ? null : location.id, location == null ? null : location.name, List.of()));
         }
         return details.values().stream().map(g -> new Group(g.key, g.name, g.responsiblePersonId, g.responsiblePersonName,

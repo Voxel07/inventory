@@ -23,7 +23,8 @@ public class EquipmentPolicy {
     @Inject MaintenanceEvaluationService maintenance;
     @Inject CheckoutEligibility eligibility;
     public static boolean freelyAvailable(Item item) {
-        return item.accessPolicy == null && item.ownershipType == Item.Ownership.organization
+        // Privacy is enforced by resource access. Account-owned inventory has no commitment gate.
+        return item.accessPolicy != null || item.ownershipType == Item.Ownership.organization
                 && item.availabilityPolicy == Item.AvailabilityPolicy.available;
     }
 
@@ -135,11 +136,13 @@ public class EquipmentPolicy {
     private List<String> eligibleAssets(EquipmentCommitment c) { var l = loan(c); return l == null ? c.assetIds : l.collectedAssets.stream().filter(id -> !l.returnedAssets.contains(id)).toList(); }
 
     public EquipmentCommitment matching(Item item, EventOccurrence event) {
+        if (item.accessPolicy != null) return null;
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) return null;
         return matching(item, event, commitments(item));
     }
 
     public EquipmentCommitment matching(Item item, EventOccurrence event, List<EquipmentCommitment> commitments) {
+        if (item.accessPolicy != null) return null;
         LocalDate from = event == null ? BusinessTime.today() : event.startDate;
         LocalDate until = event == null ? from : event.endDate;
         return commitments.stream().filter(c -> !c.cancelled && (c.event == null || (event != null && c.event.id.equals(event.id)))

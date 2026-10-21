@@ -85,7 +85,9 @@ public class AccountLifecycleService {
         }
         if (resource == null) throw ApiException.notFound("Owned resource not found");
         var view = access.get(resource.kind(), resource.id());
-        access.update(resource.kind(), resource.id(), new InventoryAccessService.Input(view.revision(), view.grants(), successor, reason, null));
+        access.update(resource.kind(), resource.id(), new InventoryAccessService.Input(view.revision(), view.grants(), successor, null));
+        events.record("access.owner_transferred", resource.kind(), resource.id(), actors.current().id, null,
+                Map.of("oldOwner", owner, "owner", successor, "reason", reason));
     }
 
     private List<Resource> owned(UUID owner, int limit) {

@@ -15,5 +15,6 @@ import java.util.UUID;
 public class ItemResponsibilityResource {
     @Inject OrderPickupService service;
     @GET public OrderPickupService.Responsibility get(@PathParam("id") UUID id) { return service.responsibility(id); }
+    @GET @Path("people") public java.util.List<org.ash.inventory.operations.internal.application.InventoryAccessService.Person> people(@PathParam("id") UUID id) { return service.responsibilityPeople(id); }
     @PATCH public OrderPickupService.Responsibility save(@PathParam("id") UUID id, @NotNull @Valid OrderPickupService.ResponsibilityInput input) { return service.setResponsibility(id, input); }
 }

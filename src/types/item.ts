@@ -133,6 +133,7 @@ export type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_servi
 
 export interface ItemFormData {
   privateResource?: boolean;
+  publicUse?: boolean;
   name: string;
   description?: string;
   amount?: number;

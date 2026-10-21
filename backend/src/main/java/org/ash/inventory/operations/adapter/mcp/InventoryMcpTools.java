@@ -71,9 +71,9 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Create an item using the REST ItemInput contract. Manager access required; initial stock uses the canonical ledger and asset/position rules.")
+    @Tool(description = "Create an item using the REST ItemInput contract. Warehouse staff may create organization items; other inventory creators add privately owned items. The creator becomes responsible. Initial stock uses canonical ledger and asset/position rules.")
     public ApiResponses.ItemResponse create_item(
-            @ToolArg(description = "ItemInput: name/category required; value is decimal currency, locations are UUIDs; optional amount initializes stock; serialized items name those units assetCodePrefix + assetStartNumber (default SKU- and 1, zero-padded to 3 digits); optional maintenanceSchedules[] create item-wide plans (date plans need nextDueAt, operating_hours/usage_count plans need nextDueValue; operating_hours requires tracksRuntime)", required = true) ApiModels.ItemInput input) {
+            @ToolArg(description = "ItemInput: name/category required; privateResource selects private ownership; publicUse makes a privately owned item available for faction/general orders without commitments. Value is decimal currency, locations are UUIDs; optional amount initializes stock; serialized items use assetCodePrefix + assetStartNumber (default SKU- and 1, zero-padded to 3 digits); optional maintenanceSchedules[] create item-wide plans (date plans need nextDueAt, operating_hours/usage_count plans need nextDueValue; operating_hours requires tracksRuntime)", required = true) ApiModels.ItemInput input) {
         return call("create_item", () -> service.createItem(input));
     }
 
@@ -102,7 +102,7 @@ public class InventoryMcpTools {
     }
 
     @Blocking
-    @Tool(description = "Replace item metadata using the REST ItemInput contract. Manager access required; name/category and current visibility assignments must be supplied. Omit amount: stock changes require a stock command.")
+    @Tool(description = "Replace item metadata using the REST ItemInput contract. Requires warehouse access for organization items or edit rights for private items. Name/category are required; private ownership stays unchanged. Owner/admin may change publicUse. Omit amount: stock changes require a stock command.")
     public ApiResponses.ItemResponse update_item(
             @ToolArg(description = "Item UUID", required = true) UUID itemId,
             @ToolArg(description = "Complete ItemInput metadata, with REST update semantics", required = true) ApiModels.ItemInput input) {

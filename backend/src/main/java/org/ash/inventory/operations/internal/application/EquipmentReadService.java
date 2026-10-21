@@ -45,7 +45,7 @@ public class EquipmentReadService {
             itemUses.merge((UUID) row[0], count, Long::sum);
             if (row[1] != null) assetUses.put((UUID) row[1], count);
         }
-        var restrictedIds = items.stream().filter(i -> i.availabilityPolicy == Item.AvailabilityPolicy.commitment_required).map(i -> i.id).toList();
+        var restrictedIds = items.stream().filter(i -> i.accessPolicy == null && i.availabilityPolicy == Item.AvailabilityPolicy.commitment_required).map(i -> i.id).toList();
         var commitments = equipment.commitments(restrictedIds);
         var byItem = commitments.stream().collect(Collectors.groupingBy(c -> c.item.id));
         var loans = new HashMap<UUID, LoanArrangement>();

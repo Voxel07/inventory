@@ -32,7 +32,7 @@ class PrivateInventoryApiTest {
         var input = itemInput(); input.remove("amount"); return input;
     }
     private String item() { return owner().body(itemInput()).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true)).extract().path("id"); }
-    private Map<String, Object> shares(int revision, List<?> grants) { return Map.of("revision", revision, "grants", grants, "reason", "Regression sharing change"); }
+    private Map<String, Object> shares(int revision, List<?> grants) { return Map.of("revision", revision, "grants", grants); }
     private String policy(String kind, String id) { return "/api/access/" + kind + "/" + id; }
 
     @Test void privateDefaultsHideCatalogHistoryAndCategoriesFromOutsidersAndWarehouseStaff() {
@@ -68,6 +68,8 @@ class PrivateInventoryApiTest {
         owner().body(shares(0, List.of())).put(policy("items", item)).then().statusCode(409);
         owner().body(shares(1, List.of(Map.of("userId", readerId, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
         reader().body(editInput()).patch("/api/items/" + item).then().statusCode(200);
+        var publicEdit = editInput(); publicEdit.put("publicUse", true);
+        reader().body(publicEdit).patch("/api/items/" + item).then().statusCode(403);
         reader().body(shares(2, List.of())).put(policy("items", item)).then().statusCode(403);
         owner().body(shares(2, List.of())).put(policy("items", item)).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(404);
@@ -85,7 +87,9 @@ class PrivateInventoryApiTest {
         reader().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Members cannot edit HQ groups")).patch("/api/access/groups/" + group).then().statusCode(403);
         owner().body(shares(0, List.of(Map.of("groupId", group, "canEdit", true)))).put(policy("items", item)).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(200).body("access.canEdit", equalTo(true)).body("access.sources.kind", hasItem("group"));
-        reader().get("/api/access/groups").then().statusCode(200).body("find { it.id == '" + group + "' }.memberIds", empty());
+        reader().get("/api/access/groups").then().statusCode(200)
+                .body("find { it.id == '" + group + "' }.memberIds", hasItem(readerId))
+                .body("find { it.id == '" + group + "' }.members.name", hasItem("privacy-reader"));
         admin().body(Map.of("name", name, "revision", 0, "memberIds", List.of(), "reason", "Stale edit")).patch("/api/access/groups/" + group).then().statusCode(409);
         admin().body(Map.of("name", name, "revision", 1, "memberIds", List.of(), "reason", "Remove membership")).patch("/api/access/groups/" + group).then().statusCode(200);
         reader().get("/api/items/" + item).then().statusCode(404);
@@ -215,17 +219,28 @@ class PrivateInventoryApiTest {
         admin().body(Map.of("name", "Public room", "privateResource", false, "parentLocationId", hall)).post("/api/storage-locations").then().statusCode(400);
     }
 
-    @Test void itemsOfferedForUseAreVisibleToOrganizationMembersAndNotifyTheOwnerOnce() {
-        String item = tenant("lender").body(itemInput()).post("/api/items").then().statusCode(200).extract().path("id");
+    @Test void publiclyAvailablePrivateItemsUseNormalStockForOrdersAndNotifyTheOwnerOnce() {
+        var input = itemInput(); input.put("publicUse", true);
+        String location = TestLocations.section(() -> tenant("lender"), Map.of("name", "Private lender shelf " + UUID.randomUUID()));
+        input.put("storageLocation", location);
+        String item = tenant("lender").body(input).post("/api/items").then().statusCode(200)
+                .body("access.publicUse", equalTo(true)).body("stock.available", equalTo(2)).extract().path("id");
+        tenant("lender").get("/api/items/" + item + "/responsibility").then().statusCode(200)
+                .body("responsiblePersonName", equalTo("privacy-lender"));
+        var edit = editInput(); edit.put("storageLocation", location); edit.put("publicUse", false);
+        tenant("lender").body(edit).patch("/api/items/" + item).then().statusCode(200).body("access.publicUse", equalTo(false));
         actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(404);
-        tenant("lender").body(Map.of("revision", 0, "grants", List.of(), "reason", "Available for events", "publicUse", true))
+        tenant("lender").body(Map.of("revision", 2, "grants", List.of(), "publicUse", true))
                 .put(policy("items", item)).then().statusCode(200).body("publicUse", equalTo(true));
         actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(200)
                 .body("access.canEdit", equalTo(false)).body("access.sources.kind", hasItem("public_use"));
         actor("borrower", "faction_leader").body(editInput()).patch("/api/items/" + item).then().statusCode(404);
         tenant("other-tenant").get("/api/items/" + item).then().statusCode(404);
+        tenant("lender").get("/api/items/" + item + "/equipment").then().statusCode(200)
+                .body("availabilityPolicy", equalTo("available")).body("commitments", empty());
 
-        admin().body(Map.of("eventType", "DE", "startDate", "2043-06-01")).post("/api/events").then().statusCode(200);
+        String event = admin().body(Map.of("eventType", "DE", "startDate", "2043-06-01")).post("/api/events")
+                .then().statusCode(200).extract().path("id");
         admin().body(Map.of("eventType", "DE", "name", "Offer test")).post("/api/factions").then().statusCode(200);
         var leader = actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test");
         String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", "2043-06-01",
@@ -234,10 +249,35 @@ class PrivateInventoryApiTest {
         for (String target : List.of("submitted", "draft", "submitted"))
             actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test").body(Map.of("idempotencyKey", UUID.randomUUID()))
                     .post("/api/orders/faction/" + order + "/transitions/" + target).then().statusCode(200);
+        admin().body(Map.of("preparedQuantities", Map.of(item, 1))).post("/api/orders/faction/" + order + "/prepare")
+                .then().statusCode(200);
+        actor("general-borrower", "ash").body(Map.of("name", "Private equipment", "purpose", "Event use", "eventOccurrenceId", event,
+                "requestedQuantities", Map.of(item, 1))).post("/api/orders/general").then().statusCode(200);
         tenant("lender").get("/api/notifications").then().statusCode(200)
                 .body("findAll { it.type == 'item_requested' }.size()", equalTo(1))
                 .body("find { it.type == 'item_requested' }.payload.itemId", equalTo(item))
                 .body("find { it.type == 'item_requested' }.payload.path", equalTo("/items/" + item))
                 .body("find { it.type == 'item_requested' }.factionOrderId", nullValue());
+    }
+
+    @Test void privateItemResponsibilityUsesSelfSharingGroupPeersOrFreeText() {
+        String suffix = UUID.randomUUID().toString(), peer = person("peer-" + suffix), otherPeer = person("other-peer-" + suffix), stranger = person("stranger-" + suffix);
+        String id = item(), ownerId = owner().get("/api/auth/me").then().statusCode(200).extract().path("id");
+        String group = owner().body(Map.of("name", "Responsibility " + suffix, "revision", 0, "memberIds", List.of(peer, otherPeer), "reason", "Assignment team"))
+                .post("/api/access/groups").then().statusCode(200).extract().path("id");
+        actor("peer-" + suffix, "read_only").get("/api/access/groups").then().statusCode(200)
+                .body("find { it.id == '" + group + "' }.members.id", hasItems(peer, otherPeer));
+        owner().get("/api/items/" + id + "/responsibility/people").then().statusCode(200)
+                .body("id", hasItems(ownerId, peer)).body("id", not(hasItem(stranger)));
+        owner().body(Map.of("responsiblePersonId", peer)).patch("/api/items/" + id + "/responsibility").then().statusCode(200);
+        owner().body(Map.of("responsiblePersonId", stranger)).patch("/api/items/" + id + "/responsibility").then().statusCode(400);
+        owner().body(Map.of("responsiblePersonName", "External contact")).patch("/api/items/" + id + "/responsibility").then().statusCode(200)
+                .body("responsiblePersonId", nullValue()).body("responsiblePersonName", equalTo("External contact"));
+        owner().body(Map.of("responsiblePersonId", peer, "responsiblePersonName", "Ambiguous contact"))
+                .patch("/api/items/" + id + "/responsibility").then().statusCode(400);
+        owner().body(Map.of("name", "Responsibility " + suffix, "revision", 1, "memberIds", List.of(), "reason", "Remove peer"))
+                .patch("/api/access/groups/" + group).then().statusCode(200);
+        owner().body(Map.of("responsiblePersonId", peer)).patch("/api/items/" + id + "/responsibility").then().statusCode(400);
+        admin().body(Map.of("responsiblePersonId", stranger)).patch("/api/items/" + id + "/responsibility").then().statusCode(200);
     }
 }

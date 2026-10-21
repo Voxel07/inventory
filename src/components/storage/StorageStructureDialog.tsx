@@ -199,6 +199,9 @@ export function StorageStructureDialog({ onClose, locations, rootId, focusId, ca
       onSubmit={submit} onCancel={onClose} noValidate pending={save.isPending} submitDisabled={!chosen || invalid}
       submitLabel={newCount > 0 ? t('pages.storageLocations.saveWithNew', { count: newCount }) : t('common.save')}>
       {!chosen ? <Stack spacing={1}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => choose(null, '')}>
+          {t('pages.storageLocations.createNewLocation')}
+        </Button>
         <Autocomplete<RootOption, false, false, false> autoHighlight openOnFocus options={roots} value={null}
           getOptionLabel={(option) => 'create' in option ? option.create : option.name}
           isOptionEqualToValue={(option, value) => ('create' in option ? option.create : option.id) === ('create' in value ? value.create : value.id)}
@@ -224,7 +227,7 @@ export function StorageStructureDialog({ onClose, locations, rootId, focusId, ca
             placeholder={t('pages.storageLocations.locationExample')} helperText={t('pages.storageLocations.locationNameHelp')} />} />
       </Stack> : <Stack spacing={2}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'flex-start' } }}>
-          <TextField required fullWidth label={t('pages.storageLocations.locationName')} value={name} onChange={(event) => setName(event.target.value)}
+          <TextField required fullWidth autoFocus={!root} label={t('pages.storageLocations.locationName')} value={name} onChange={(event) => setName(event.target.value)}
             helperText={root ? t('pages.storageLocations.existingLocation') : t('pages.storageLocations.newLocationWillBeCreated')} />
           {showCodes && <TextField label={t('forms.itemForm.locationCode')} value={code} sx={{ width: { sm: 140 } }}
             slotProps={{ htmlInput: { maxLength: 32, className: 'mono' } }} onChange={(event) => setCode(event.target.value.toUpperCase())} />}

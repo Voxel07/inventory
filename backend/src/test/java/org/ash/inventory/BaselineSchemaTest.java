@@ -21,6 +21,7 @@ class BaselineSchemaTest {
             return Map.of("quarkus.hibernate-orm.schema-management.strategy", "validate",
                     "quarkus.hibernate-orm.database.default-schema", "inventory_baseline_test",
                     "quarkus.flyway.schemas", "inventory_baseline_test",
+                    "quarkus.scheduler.enabled", "false",
                     "quarkus.flyway.migrate-at-start", "true",
                     "quarkus.flyway.clean-at-start", "true", "quarkus.flyway.clean-disabled", "false");
         }

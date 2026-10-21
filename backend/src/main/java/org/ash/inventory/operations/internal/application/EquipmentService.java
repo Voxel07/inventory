@@ -74,9 +74,15 @@ public class EquipmentService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public Profile update(UUID itemId, ProfileInput input) {
         var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
-        if (item.accessPolicy != null && (input.availabilityPolicy() == Item.AvailabilityPolicy.available
-                || item.accessPolicy.publicUse && input.availabilityPolicy() != Item.AvailabilityPolicy.commitment_required))
-            throw ApiException.badRequest("Private equipment cannot be freely available; offered equipment requires owner commitments");
+        if (item.accessPolicy != null) {
+            if (input.ownershipType() != Item.Ownership.private_owner || input.availabilityPolicy() != Item.AvailabilityPolicy.available)
+                throw ApiException.badRequest("Privately owned items use public/private sharing, without commitments");
+            var before = view(item);
+            item.keeperName = clean(input.keeperName()); item.keeperContact = clean(input.keeperContact());
+            item.equipmentRevision++;
+            audit(item, "profile_changed", Map.of("reason", input.reason(), "before", before, "after", view(item)));
+            return view(item);
+        }
         if (input.ownershipType() != Item.Ownership.organization &&
                 (blank(input.ownerName()) || input.availabilityPolicy() == Item.AvailabilityPolicy.available))
             throw ApiException.badRequest("Private/external equipment needs an owner and an explicit commitment or unavailable policy");
@@ -99,6 +105,7 @@ public class EquipmentService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public Profile commit(UUID itemId, CommitmentInput input) {
         var item = item(itemId, true); actors.requireItemEdit(item); revision(item, input.revision());
+        if (item.accessPolicy != null) throw ApiException.badRequest("Privately owned items do not use commitments");
         if (item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required)
             throw ApiException.conflict("Select commitment required before recording an offer");
         if (input.availableUntil().isBefore(input.availableFrom()) || input.availableUntil().isBefore(BusinessTime.today()))
@@ -169,7 +176,9 @@ public class EquipmentService {
         actors.requireItemAccess(item); return item;
     }
     private void revision(Item item, Long expected) { if (expected == null || expected != item.equipmentRevision) throw ApiException.conflict("Equipment agreement changed; reload before saving"); }
-    private Profile view(Item item) { return new Profile(item.id, item.ownershipType, item.ownerName, item.keeperName, item.keeperContact, item.availabilityPolicy, item.equipmentRevision, policy.commitments(item).stream().map(this::commitmentView).toList()); }
+    private Profile view(Item item) { return new Profile(item.id, item.ownershipType, item.ownerName, item.keeperName, item.keeperContact,
+            item.accessPolicy == null ? item.availabilityPolicy : Item.AvailabilityPolicy.available, item.equipmentRevision,
+            item.accessPolicy == null ? policy.commitments(item).stream().map(this::commitmentView).toList() : List.of()); }
     private CommitmentView commitmentView(EquipmentCommitment c) { return new CommitmentView(c.id, c.event == null ? null : c.event.id, c.event == null ? null : c.event.name, c.quantity, c.assetIds, c.availableFrom, c.availableUntil, c.pickupDetails, c.returnDue, c.returnDetails, c.notes, c.cancelled ? "cancelled" : c.availableUntil.isBefore(BusinessTime.today()) ? "expired" : c.availableFrom.isAfter(BusinessTime.today()) ? "scheduled" : "active", c.cancellationReason, c.recordedBy.name); }
     private void audit(Item item, String action, Map<String, Object> detail) { events.record("equipment." + action, "item", item.id, actors.current().id, null, detail); }
     private static LocalDate end(EquipmentCommitment c) { return c.returnDue == null ? c.availableUntil : c.returnDue; }

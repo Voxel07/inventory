@@ -29,24 +29,24 @@ public class InventoryAccessService {
     @Inject InventoryAccess access;
     @Inject DomainEventService events;
     @Inject org.ash.inventory.operations.internal.persistence.CatalogOrm catalogFacts;
-    public record Grant(UUID userId, UUID groupId, boolean canEdit) {}
-    /** {@code publicUse}: items only, null keeps the current offer. */
+    public record Grant(UUID userId, UUID groupId, boolean canEdit, String name) {}
+    /** {@code publicUse}: items only, null keeps current public availability. */
     public record Input(@NotNull Long revision, @NotNull List<Grant> grants, UUID ownerId,
-                        @NotBlank @Size(max=1000) String reason, Boolean publicUse) {}
+                        Boolean publicUse) {}
     /**
      * {@code inherited}: shares that reach this resource through the private locations it is stored in;
      * listed for managers only, like {@code grants}.
      */
     public record View(boolean privateResource, UUID ownerId, String ownerName, long revision,
                        boolean canEdit, boolean canManage, boolean publicUse, List<Grant> grants,
-                       List<Inherited> inherited, List<Source> sources) {}
+                       List<Inherited> inherited, List<Source> sources, List<Source> audience) {}
     /** kind: owner, admin, person, group, location (inherited) or public_use. */
     public record Source(String kind, UUID principalId, String name, boolean canEdit) {}
     /** kind: owner (of the location), person or group. */
     public record Inherited(UUID locationId, String locationName, String kind, UUID principalId, String name, boolean canEdit) {}
     public record Person(UUID id, String name) {}
-    /** {@code ownerId} null: managed by the inventory admin. Members are listed for managers only. */
-    public record Group(UUID id, String name, long revision, List<UUID> memberIds, UUID ownerId, String ownerName, boolean canManage) {}
+    /** {@code ownerId} null: managed by the inventory admin. Members are listed for managers and group members. */
+    public record Group(UUID id, String name, long revision, List<UUID> memberIds, List<Person> members, UUID ownerId, String ownerName, boolean canManage) {}
     /** {@code adminManaged}: admin only, creates a shared admin group without a personal owner. */
     public record GroupInput(@NotBlank @Size(max=255) String name, @NotNull @Size(max=200) List<UUID> memberIds,
                              @NotNull Long revision, @NotBlank @Size(max=1000) String reason, Boolean adminManaged) {}
@@ -66,7 +66,7 @@ public class InventoryAccessService {
         if (result == null) throw ApiException.notFound("Resource not found");
         return result;
     }
-    private View publicView() { return new View(false, null, null, 0, false, false, false, List.of(), List.of(), List.of()); }
+    private View publicView() { return new View(false, null, null, 0, false, false, false, List.of(), List.of(), List.of(), List.of()); }
     /** Mirrors {@link InventoryAccess#allows} and {@link InventoryAccessOrm#visible} for a batch of policies. */
     public Map<UUID, View> views(Collection<UUID> ids) {
         var actor = actors.current();
@@ -84,7 +84,7 @@ public class InventoryAccessService {
             if (actor.role == DomainEnums.UserRole.admin) sources.add(new Source("admin", actor.id, actor.name, true));
             for (var g : byPolicy.getOrDefault(id, List.of())) {
                 boolean canEdit = (Boolean) g[4];
-                grants.add(new Grant((UUID) g[1], (UUID) g[2], canEdit));
+                grants.add(new Grant((UUID) g[1], (UUID) g[2], canEdit, (String) g[6]));
                 if (actor.id.equals(g[1])) { sources.add(new Source("person", actor.id, actor.name, canEdit)); visible = true; edit |= canEdit; }
                 if (g[2] != null && (Boolean) g[5]) { sources.add(new Source("group", (UUID) g[2], (String) g[3], canEdit)); visible = true; edit |= canEdit; }
             }
@@ -106,8 +106,14 @@ public class InventoryAccessService {
             if (publicUse && !visible && ActorService.seesOrganization(actor)) {
                 sources.add(new Source("public_use", owner, (String) row[2], false)); visible = true;
             }
+            // A named access list without exposing the names/IDs of private storage locations.
+            var audience = new ArrayList<Source>();
+            audience.add(new Source("owner", owner, (String) row[2], true));
+            grants.forEach(g -> audience.add(new Source(g.userId() == null ? "group" : "person",
+                    g.userId() == null ? g.groupId() : g.userId(), g.name(), g.canEdit())));
+            inherited.forEach(g -> audience.add(new Source(g.kind().equals("group") ? "group" : "person", g.principalId(), g.name(), g.canEdit())));
             if (visible) result.put(id, new View(true, owner, (String) row[2], ((Number) row[3]).longValue(), edit, manage, publicUse,
-                    manage ? List.copyOf(grants) : List.of(), manage ? List.copyOf(inherited) : List.of(), List.copyOf(sources)));
+                    manage ? List.copyOf(grants) : List.of(), manage ? List.copyOf(inherited) : List.of(), List.copyOf(sources), List.copyOf(audience)));
         }
         return result;
     }
@@ -172,8 +178,8 @@ public class InventoryAccessService {
             actors.requireAdmin();
             if (item != null) {
                 var stock = stockReads.physicalStock(item);
-                if (stock.checkedOut() > 0 || stock.reserved() > 0 || stock.inTransit() > 0 || orm.currentCommitments(item))
-                    throw ApiException.conflict("Resolve custody, reservations, transfers and commitments before transferring ownership");
+                if (stock.checkedOut() > 0 || stock.reserved() > 0 || stock.inTransit() > 0)
+                    throw ApiException.conflict("Resolve custody, reservations and transfers before transferring ownership");
             } else if (kind.equals("storage-locations") && orm.locationOccupied(orm.findLocked(StorageLocation.class, id)))
                 throw ApiException.conflict("Empty the location before transferring ownership");
             policy.owner = person(input.ownerId());
@@ -196,15 +202,10 @@ public class InventoryAccessService {
         if (input.publicUse() != null && input.publicUse() != policy.publicUse) {
             if (item == null) throw ApiException.badRequest("Only items can be offered for use");
             policy.publicUse = input.publicUse();
-            // Offered items are requested through owner commitments, never handed out freely.
-            if (policy.publicUse && item.availabilityPolicy != Item.AvailabilityPolicy.commitment_required) {
-                item.availabilityPolicy = Item.AvailabilityPolicy.commitment_required;
-                item.equipmentRevision++;
-            }
         }
         orm.deleteGrants(policy); values.forEach(orm::persist); policy.revision++; orm.flush();
         var after = view(policy);
-        events.record("access.changed", kind, id, actors.current().id, null, Map.of("before", before, "after", after, "reason", input.reason()));
+        events.record("access.changed", kind, id, actors.current().id, null, Map.of("before", before, "after", after));
         return after;
     }
     public List<Person> people() { actors.current(); return orm.people().stream().map(u -> new Person(u.id, u.name)).toList(); }
@@ -268,10 +269,12 @@ public class InventoryAccessService {
     }
     private static Group group(InventoryAccessGroup g, UserAccount actor) {
         boolean manage = canManage(g, actor);
-        return new Group(g.id, g.name, g.revision, manage ? g.members.stream().map(u -> u.id).sorted().toList() : List.of(),
+        boolean showMembers = manage || g.members.stream().anyMatch(u -> u.id.equals(actor.id));
+        var members = showMembers ? g.members.stream().sorted(Comparator.comparing(u -> u.name, String.CASE_INSENSITIVE_ORDER))
+                .map(u -> new Person(u.id, u.name)).toList() : List.<Person>of();
+        return new Group(g.id, g.name, g.revision, members.stream().map(Person::id).toList(), members,
                 g.owner == null ? null : g.owner.id, g.owner == null ? null : g.owner.name, manage);
     }
-    private Grant grant(InventoryAccessGrant g) { return new Grant(g.user == null ? null : g.user.id, g.group == null ? null : g.group.id, g.canEdit); }
     private UserAccount person(UUID id) { var u = id == null ? null : orm.find(UserAccount.class, id); if (u == null || !u.active) throw ApiException.badRequest("Active person not found"); return u; }
     private InventoryAccessPolicy lockedPolicy(String kind, UUID id) {
         // Commands lock policies before stock/catalog rows; sharing uses the same order.

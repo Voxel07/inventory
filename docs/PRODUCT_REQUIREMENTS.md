@@ -10,7 +10,7 @@ Quality goals, in order:
 
 1. **Stock correctness:** atomic, idempotent changes validated against current state under locks.
 2. **Traceability:** actor, server time, source, delta and command evidence for movements/transitions.
-3. **Privacy:** private resources available only to their account owner, the inventory admin, explicit grantees (directly, through a group or through the storage location they are kept in) and, read-only, organization members when the owner offers them for use.
+3. **Privacy:** private resources available only to their account owner, the inventory admin, explicit grantees (directly, through a group or through the storage location they are kept in) and, read-only, organization members when the owner makes them publicly available.
 4. **Field resilience:** previously cached reads and supported queued commands, with the server authoritative.
 5. **Simplicity:** one model per concept and explicit contracts; disposable development data.
 
@@ -28,7 +28,7 @@ Roles form a ladder, listed from least to most privileged; each role includes th
 | ASH crew (`ash`) | Crew members who create general orders, take out items and pick up prepared orders |
 | Warehouse crew (`warehouse_crew`) | Company catalog and storage, preparation, handing out and taking back (pickup, returns, damage reports, custody overview), all operations (stock, counts, transfers, loans, receiving, purchasing, maintenance, repairs), history and reports |
 | Inventory admin (`admin`) | Everything: events, participants and timing, procurement planning, write-off, count variance approval, users, recovery, all private resources |
-| Equipment owner / member | A user responsibility, not an additional role: private resources, consent, requests, returns and reminders |
+| Equipment owner / member | A user responsibility, not an additional role: private resources, public availability, sharing, requests, returns and reminders |
 | MCP client | Authorized tool/resource interaction under the user's same business policies; not available to tenants |
 
 Every account can own private resources and share them. Roles do not bypass private resource access except the inventory admin. The identity provider controls who may use the system; only the inventory admin assigns roles and factions in the app.
@@ -93,7 +93,7 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ORD-05 | Opt-in comparison with the previous event-year order | Implemented | `OrderTraceability`, `factionOrderHistory.ts` |
 | ORD-06 | Resolve SKU/QR, asset code and order code with targeted queries; returns show the quantity out and can link the originating order | Implemented | `codeResolver.ts`, `TransactionForm` |
 | ORD-07 | Camera and manual code scanning; scanning never changes stock | Implemented | `CameraScanner`, `useBarcodeScanner`; nginx allows `camera=(self)` |
-| ORD-08 | Group ordered/prepared items by responsible person; separate pickup points per group and recipient-scoped in-app notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components of faction orders |
+| ORD-08 | Default item responsibility to its creator; editable account or free-text contact, with self/sharing-group scope without warehouse access; group orders by responsibility, with pickup points and recipient-scoped notices | Implemented | `OrderPickupService`, `OrderPickupGroups`, `ItemResponsiblePerson`; applies to faction and general orders, including assembly components of faction orders |
 | RET-01 | Expected return location per item; the returner can attach a placement photo | Implemented | `Item.returnLocation`, `ReturnSubmissionForm` |
 | RET-02 | A submitted return isn't stock until a warehouse worker accepts it; pending/history view with accept/reject | Implemented | `ReturnSubmissionService`, `ReturnedItems` |
 | AUD-01 | Append-only order and stock history: actor, UTC time, action, from/to, delta, note, idempotency key | Implemented | `OrderHistory`, `StockTransaction` |
@@ -118,8 +118,8 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
 | OWN-01 | Private ownership references a user account, independent of owner name, keeper, location and custodian | Implemented | `InventoryAccessPolicy.owner` |
-| OWN-02 | Users create and maintain their own private items, locations and assemblies without warehouse rights | Implemented | `CatalogService`, `PrivateInventoryCommandInterceptor` |
-| OWN-03 | Lending: owner consent windows, loan agreement before transfer, collection/return evidence, extensions, rental cost | Implemented | `EquipmentService`, `LoanService`, `LoansPanel`, `EquipmentOwnership` |
+| OWN-02 | Users create and maintain their own private items, locations and assemblies without warehouse rights; private items offer public availability during creation and later editing, with no commitments | Implemented | `CatalogService`, `PrivateInventoryCommandInterceptor` |
+| OWN-03 | External-provider lending: consent windows, loan agreement before transfer, collection/return evidence, extensions, rental cost; separate from account-owned private items | Implemented | `EquipmentService`, `LoanService`, `LoansPanel`, `EquipmentOwnership` |
 | MBR-01 | Member self-service: own custody, keeper assignments, requests, return submissions | Implemented | `MemberService`, `Contributor` |
 | MBR-02 | Recipient-scoped inbox, scheduled reminders and external delivery | Implemented; gateway acceptance pending | Typed-ID task authorization, generic daily notices/reminders, persisted retry/lease gateway delivery; [contracts](WORKFLOW_CONTRACTS.md) |
 | OPS-01 | Eight report snapshots with filters, freshness flag and CSV/PDF export | Implemented | `OperationalReportService`, `ReportsPanel`, `reportPdf`; both exports read one generation-checked snapshot; freshness from sharded, commit-ordered revision counters |
@@ -135,14 +135,14 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 | SEC-01 | Authentik OIDC; the account is bound to the provider's stable subject; logout ends server-side token use | Partial | Quarkus OIDC (`principal-claim=sub`), `ActorService` (`issuer`+`sub`), `oidcClient.ts` (revocation), cross-tab logout, SSE ends at `exp`. A revoked access token stays valid until `exp` unless `OIDC_REQUIRE_INTROSPECTION` is on [ACC-01](IMPLEMENTATION_PLAN.md) |
 | SEC-02 | One Authentik group (`inventory`) grants access; role ladder and factions are managed in the app by the inventory admin (audited, revision-checked, last admin kept); new users start as read only | Implemented | `ActorService.hasAccess`, bootstrap admins, `UserService.updateAccess` (`PATCH /api/users/{id}`), `UserManagement` |
 | SEC-03 | New private resources default to owner + `admin`; other staff need an explicit grant. Tenants see no company resources and reach no organization API | Implemented | `InventoryAccess`, ORM visibility predicate (`:accessPublic`), `TenantScopeFilter` |
-| SEC-04 | Owner/admin grant and revoke view access for multiple people and groups; every user manages own share groups; shares of a private location apply to its private sub-locations and the items stored there | Implemented | `InventoryAccessService`, `InventoryAccessInheritance` (`inventory_access_links`), `InventorySharing`, `InventoryAccessGroups`, `/sharing` |
+| SEC-04 | Owner/admin manage person/group shares without a reason; a consolidated named access list sits below Overview. Group members see their peers directly in the Sharing/Users group list; only owners/admins change membership. Location shares still apply to private descendants and stored items | Implemented | `InventoryAccessService`, `InventoryAccessInheritance` (`inventory_access_links`), `InventorySharing`, `InventoryAccessGroups`, `/sharing` |
 | SEC-05 | View, edit, share-management and stock-operation rights are separate; viewers can't escalate | Implemented | `InventoryAccess`, `PrivateInventoryCommandInterceptor` |
 | SEC-06 | One policy across REST, MCP, nested records, search, stock, reports, media and realtime | Implemented; load/device acceptance pending | SQL list predicates before paging and targeted response/media redaction; SSE carries no resource IDs |
 | SEC-07 | Audited permission/owner changes with revision check; access rechecked on every operation | Implemented | `InventoryAccessService`, `access.changed` events |
 | SEC-08 | Caches are scoped to the access context and dropped after permission changes; offline limits documented | Implemented | `no-store` private responses, session `QueryClient`, `privateInventoryCache.ts`; `access.changed` resets only queries holding private data |
 | SEC-09 | Uploads are type- and size-restricted, bound to their resource, and staged uploads expire | Implemented | `MediaTypes` (sniffed WebP/PNG/JPEG/PDF), 10 MB, per-user pending quota, `StagedMediaPurge` (24 h), `InventoryMediaService` binding |
 | SEC-10 | Dev authentication can't be enabled in production | Implemented | `ProductionAuthGuard`; production builds offer dev login only with explicit `DEV_LOGIN=true` |
-| SEC-11 | Owners offer private items for use: organization members view and order them read-only (against owner commitments); the owner is notified once per order or request | Implemented | `InventoryAccessPolicy.publicUse`, `@PrivateInventoryCommand(usage = true)`, `ItemRequestNotifier` (`item_requested`) |
+| SEC-11 | Owners make private items publicly available during creation or later: organization members view and order them read-only, using normal stock availability without commitments; the owner is notified once per order or request | Implemented | `InventoryAccessPolicy.publicUse`, `@PrivateInventoryCommand(usage = true)`, `ItemRequestNotifier` (`item_requested`) |
 | API-01 | Explicit DTOs; entities are never serialized | Implemented | `ApiResponses`, `ApiMapper` |
 | API-02 | Each frontend contract exposes only supported operations | Implemented | Capability interfaces in `resourceFactory.ts`. Target: generated client [PLAN-04](IMPLEMENTATION_PLAN.md) |
 | API-03 | Supported lists are paged/filtered/sorted on the server | Implemented | `@Paged`, `X-Has-More`, SQL-paged events and reports; complete reference/worklist/child reads and bounded opt-in downloads are explicit exceptions in [performance acceptance](PERFORMANCE_ACCEPTANCE.md) |
@@ -205,7 +205,7 @@ Domain terms with their German UI label (where the UI has one) and the identifie
 | Grantee | Freigabe-Empfänger | `inventory_access_grants` | User or access group given view or edit access to a private resource. |
 | ASH crew | ASH-Crew | `ash` role | Crew member who requests equipment through general orders; the warehouse prepares and hands it out. |
 | Tenant | Mieter | `tenant` role | Person who rents storage (e.g. a building) and only manages their own private equipment there. |
-| Offer for use | Zur Nutzung angeboten | `InventoryAccessPolicy.publicUse` | A private item its owner lets organization members see and request; handing it out still needs the owner's commitment. |
+| Publicly available | Öffentlich verfügbar | `InventoryAccessPolicy.publicUse` | A privately owned item available to organization members for faction/general orders, without commitments. Ownership and edit rights remain private. |
 | Faction | Fraktion | `factions`, `EVENT:slug` | A team within an event type. Faction leaders order for their factions. |
 
 ### Equipment and stock
@@ -235,7 +235,7 @@ Domain terms with their German UI label (where the UI has one) and the identifie
 | Return submission | Rückgabemeldung | Member reports a return; stock changes only after warehouse acceptance. |
 | Reconciliation | Rückgabeabgleich | Accounting of returned, consumed, damaged, missing and written-off units against handed-over units. |
 | Write-off | Abschreibung | Permanent reduction of owned stock (inventory admin only). |
-| Commitment | Zusage | Owner's consent to lend private equipment for a time window. |
+| Commitment | Zusage | External-provider consent for a lending window; not used for account-owned private items. |
 | Loan / rental | Leihe / Miete | Agreement for lending a commitment, with collection and return evidence. |
 | Blind count | Blindzählung | Stock count without showing expected quantities. |
 | Sync issue | Sync-Problem | Offline command the server rejected; corrected with a new linked command. |

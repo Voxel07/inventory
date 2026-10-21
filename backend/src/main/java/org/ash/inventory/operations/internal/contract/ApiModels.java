@@ -27,7 +27,7 @@ public final class ApiModels {
             List<String> images,
             DomainEnums.TrackingMode trackingMode, DomainEnums.InventoryRole inventoryRole,
             UUID returnLocation, BigDecimal fuelConsumptionLitersPer100Km,
-            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean tracksRuntime,
+            LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean publicUse, Boolean tracksRuntime,
             @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber,
             @Size(max = 20) List<@NotNull @Valid ItemScheduleInput> maintenanceSchedules,
             @Size(max = 32) String unit, @Min(0) @jakarta.validation.constraints.Max(3) Integer quantityDecimals) {}

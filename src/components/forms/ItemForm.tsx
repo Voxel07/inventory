@@ -59,6 +59,7 @@ export function ItemForm({
     const [formData, setFormData] = useState<ItemFormData>({
         // Staff add to the shared catalog by default; members can only create private items.
         privateResource: initialData ? Boolean(initialData.access?.privateResource) : !canCreatePublic,
+        publicUse: Boolean(initialData?.access?.publicUse),
         name: initialData?.name ?? '',
         description: initialData?.description ?? '',
         amount: undefined,
@@ -155,6 +156,7 @@ export function ItemForm({
         const parseOptional = (value: string) => value === '' ? undefined : Number(value);
         const submitData: ItemFormData = {
             ...formData,
+            publicUse: formData.privateResource && (!initialData || initialData.access?.canManage) ? formData.publicUse : undefined,
             imageFiles: images.files,
             removeImages: images.removed,
             imageReplacements: images.replacements,
@@ -262,7 +264,7 @@ export function ItemForm({
                     <Box>
                         <FormControlLabel
                             control={<Switch checked={Boolean(formData.privateResource)} disabled={Boolean(initialData) || !canCreatePublic}
-                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked }))} />}
+                                onChange={(_, checked) => setFormData(prev => ({ ...prev, privateResource: checked, publicUse: checked && prev.publicUse }))} />}
                             label={formData.privateResource ? t('forms.itemForm.privateItem') : t('forms.itemForm.inTheSharedCatalog')} />
                         <FormHelperText sx={{ mt: 0 }}>
                             {formData.privateResource
@@ -271,6 +273,10 @@ export function ItemForm({
                             {initialData ? ` ${t('forms.itemForm.visibilityCannotBeChangedAfterCreation')}` : ''}
                         </FormHelperText>
                     </Box>
+                    {formData.privateResource && <FormControlLabel
+                        control={<Switch checked={Boolean(formData.publicUse)} disabled={Boolean(initialData && !initialData.access?.canManage)}
+                            onChange={(_, checked) => setFormData(prev => ({ ...prev, publicUse: checked }))} />}
+                        label={t('items.inventorySharing.publicAvailabilityHelp')} />}
                 </FormSection>
 
                 <FormSection title={t('forms.itemForm.stockTracking')}>

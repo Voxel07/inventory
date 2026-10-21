@@ -1,6 +1,6 @@
 # Database Schema and Data Storage
 
-This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql) (including pickup groups, assigned roles, owned share groups, grant inheritance and offer for use); JPA mappings follow their [module owner](../backend/architecture/modules.json); operational entities are in [model/](../backend/src/main/java/org/ash/inventory/operations/internal/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
+This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql) (including pickup groups, assigned roles, owned share groups, grant inheritance and public availability); JPA mappings follow their [module owner](../backend/architecture/modules.json); operational entities are in [model/](../backend/src/main/java/org/ash/inventory/operations/internal/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
 
 ## 1. Persistence boundaries
 
@@ -75,7 +75,7 @@ Faction and general orders share `orders` (`kind=faction/general`), relational `
 |---|---|
 | `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app  active/deactivation/reason fields; revision-checked lifecycle |
 | `revoked_sessions` | Access-token SHA-256 hash PK; user FK and expiry; expired hashes are purged hourly |
-| `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (item offered for use) and timestamps |
+| `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (binary public availability for privately owned items) and timestamps |
 | `inventory_access_groups` | UUID; optional owner user FK (null = admin group, usable by everyone); name unique per owner, case-insensitive; revision |
 | `inventory_access_group_members` | Composite `(group_id, user_id)` PK; group/user FKs |
 | `inventory_access_grants` | Policy plus user **or** group; `can_edit`; XOR grantee check; unique grant per policy/grantee |
@@ -88,7 +88,7 @@ Items, locations and assemblies each have a unique nullable `access_policy_id`. 
 
 | Table | Key data and relationships |
 |---|---|
-| `items` | UUID, unique SKU, category/subcategory, description/hint, event tags, active flag, tracking mode, inventory role, minimum stock, value cents, ownership/consent metadata; storage/return locations; category meters/dates |
+| `items` | UUID, unique SKU, category/subcategory, description/hint, event tags, active flag, tracking mode, inventory role, minimum stock, value cents, ownership/provider metadata; creator-defaulted `responsible_person_id` or free-text `responsible_person_name` (varchar 255); storage/return locations; category meters/dates |
 | `item_images` | UUID; item FK, object key and display order |
 | `assemblies` | UUID; name, category/subcategory, description/hint, image object key, event tags, active flag and optional access policy |
 | `assembly_items` | Composite `(assembly_id, item_id)` PK; component quantity |
