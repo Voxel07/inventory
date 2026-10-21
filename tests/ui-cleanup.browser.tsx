@@ -100,7 +100,8 @@ const receipts: Receipt[] = [{ id: 'receipt-1', receiptNumber: 'GR-PREVIEW', pur
   lines: [{ id: 'receipt-line', itemName: 'Radio', acceptedQuantity: 5, damagedQuantity: 0, rejectedQuantity: 0 }] }];
 const vendors: Vendor[] = [{ id: 'vendor-1', name: 'Preview supplier', active: true }];
 const report: OperationalReport = { name: 'stock', definition: 'Fixture operational report', startedAt: now, generatedAt: now, stale: false, total: 1,
-  rows: [{ id: 'report-row', item: 'Radio', itemId: 'item-1', quantity: 7 }], monthlyTotals: [] };
+  rows: [{ id: 'report-row', item: 'Radio', itemId: 'item-1', quantity: 7 }], monthlyTotals: [],
+  job: { state: 'completed', attempts: 1, requestedAt: now, error: null } };
 const equipment = (itemId: string): EquipmentProfile => {
   const own = itemId === 'private-1';
   return { itemId, ownershipType: own ? 'private_owner' : 'organization', ownerName: own ? 'Preview user' : 'Warehouse team', keeperName: 'Radio keeper',
