@@ -1,5 +1,7 @@
 # Implementation Plan and Progress
 
+Modularity implementation details and prioritized findings are tracked in [the architecture review](MODULAR_MONOLITH_REVIEW.md); current contracts are in [Module Boundaries and Scaling](MODULAR_BOUNDARIES.md). Six module boundaries and separate worker roles are implemented in source; runtime acceptance remains pending.
+
 This is the single open-work register: requirement gaps, the prioritized backlog, acceptance work and recent fixes. Old finding numbers (e.g. "old #15") are kept only as provenance.
 
 ## 1. Status rules
@@ -31,7 +33,7 @@ Priorities: P1 stock/history/security and release acceptance, P2 architectural c
 | Event attendees, people registry, predefined roles, daily food stamps and crew catering timeline | Implemented | EventAttendees, EventTimeline, EventLogisticsService; baseline logistics tables | EventLogisticsApiTest and BaselineSchemaTest pass in the full PostgreSQL suite ([current validation](VALIDATION_2026_10_20.md)); browser acceptance pending |
 | Ownership, consent and loan/rental evidence | Implemented | EquipmentService, LoanService; EquipmentOwnership/LoansPanel | Integrated privacy/collection/return acceptance |
 | Action inbox, scheduled reminders and delivery | Implemented | ActionInboxService, NotificationDeliveryService; ActionInboxContent | Configure HTTPS gateway and verify delivery/recovery |
-| Eight reports, CSV/PDF and imports | Implemented | OperationalReportService SQL paging/on-open rebuild; ReportsPanel/CsvImportDialog | Rendered exports and representative snapshot rebuild/load acceptance |
+| Eight reports, CSV/PDF and imports | Implemented | ReportApi/ReportStore, leased ReportJobs/ReportWorker and owner snapshot/authorization ports; ReportsPanel/CsvImportDialog | Rendered exports and representative snapshot rebuild/load acceptance |
 | Offline queue/cold cached reads/correction | Implemented | offlineQueue, explicit offlineSnapshot, fieldCommand, SyncService | Field/browser acceptance ACC-02; optional library replacement PLAN-06 |
 | OIDC roles and session boundaries | Implemented | ActorService, AuthSessionService, EventStreamResource, ProductionAuthGuard | Provider revocation timing ACC-01; optional library replacement PLAN-05 |
 | REST/MCP policy and DTO boundaries | Implemented | Scoped queries, explicit DTOs, targeted reference redaction, custody/movement MCP readers | Generated client is an optional architecture target PLAN-04 |

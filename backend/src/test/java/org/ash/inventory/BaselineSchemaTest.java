@@ -1,5 +1,7 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.internal.model.Faction;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
@@ -25,14 +27,14 @@ class BaselineSchemaTest {
     }
     @Inject EntityManager entityManager;
     @Test @Transactional void canonicalBaselineContainsAllPrivacyTablesAndMatchesEntities() {
-        assertEquals(59L, ((Number) entityManager.createNativeQuery("select count(*) from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getSingleResult()).longValue());
+        assertEquals(64L, ((Number) entityManager.createNativeQuery("select count(*) from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getSingleResult()).longValue());
         assertEquals(0L, ((Number) entityManager.createQuery("select count(p) from InventoryAccessPolicy p").getSingleResult()).longValue());
     }
     @Test @Transactional void revisionTriggersUseTheirOwnSchema() {
-        assertEquals(25L, ((Number) entityManager.createNativeQuery("select count(distinct name) from inventory_baseline_test.source_revisions").getSingleResult()).longValue());
-        assertEquals(25L * 16, ((Number) entityManager.createNativeQuery("select count(*) from inventory_baseline_test.source_revisions").getSingleResult()).longValue());
+        assertEquals(27L, ((Number) entityManager.createNativeQuery("select count(distinct name) from inventory_baseline_test.source_revisions").getSingleResult()).longValue());
+        assertEquals(27L * 16, ((Number) entityManager.createNativeQuery("select count(*) from inventory_baseline_test.source_revisions").getSingleResult()).longValue());
         long before = ((Number) entityManager.createNativeQuery("select sum(revision) from inventory_baseline_test.source_revisions where name = 'factions'").getSingleResult()).longValue();
-        var faction = new org.ash.inventory.model.Faction(); faction.eventType = "P2"; faction.name = "Baseline " + java.util.UUID.randomUUID(); faction.slug = faction.name;
+        var faction = new org.ash.inventory.operations.internal.model.Faction(); faction.eventType = "P2"; faction.name = "Baseline " + java.util.UUID.randomUUID(); faction.slug = faction.name;
         entityManager.persist(faction); entityManager.flush();
         assertEquals(before + 1, ((Number) entityManager.createNativeQuery("select sum(revision) from inventory_baseline_test.source_revisions where name = 'factions'").getSingleResult()).longValue());
     }

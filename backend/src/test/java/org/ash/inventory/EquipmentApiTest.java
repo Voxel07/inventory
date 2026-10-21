@@ -11,6 +11,7 @@ import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class EquipmentApiTest {
+    @jakarta.inject.Inject org.ash.inventory.reporting.internal.ReportWorker reportWorker;
     private RequestSpecification admin() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "f19-admin").header("X-Actor-Role", "admin"); }
     private RequestSpecification reader() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "f19-reader").header("X-Actor-Role", "read_only"); }
     private String item(boolean serialized) {
@@ -149,10 +150,14 @@ class EquipmentApiTest {
                 .post("/api/transfers/" + transfer + "/receive").then().statusCode(200);
         admin().get(path(item)).then().body("ownershipType", equalTo("private_owner")).body("keeperName", equalTo("Garage keeper"));
         admin().get("/api/items/" + item).then().body("stock.onHand", equalTo(3)).body("stock.checkedOut", equalTo(0)).body("stock.totalOwned", equalTo(0));
-        admin().post("/api/reports/availability/rebuild").then().statusCode(204);
+        admin().post("/api/reports/availability/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().get("/api/reports/availability?itemId=" + item).then().statusCode(200).body("total", equalTo(2))
                 .body("rows.available", everyItem(equalTo(0))).body("rows.ownership", everyItem(equalTo("private_owner")));
         admin().body(profile(1)).put(path(item)).then().statusCode(200);
+        // A stale read queues the rebuild and serves the previous generation until a worker completes it.
+        admin().get("/api/reports/availability?itemId=" + item).then().body("stale", equalTo(true));
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().get("/api/reports/availability?itemId=" + item).then().body("stale", equalTo(false));
     }
 

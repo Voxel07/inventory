@@ -1,10 +1,12 @@
 package org.ash.inventory;
+
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.persistence.StockFactsOrm;
+import org.ash.inventory.platform.persistence.ConsistentRead;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.ash.inventory.helper.ConsistentRead;
-import org.ash.inventory.orm.StockFactsOrm;
-import org.ash.inventory.model.DomainEnums;
 import java.util.*;
 @ApplicationScoped
 public class SnapshotProbe {

@@ -1,6 +1,6 @@
 # Database Schema and Data Storage
 
-This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql) (including pickup groups, assigned roles, owned share groups, grant inheritance and offer for use); JPA mappings are in [model/](../backend/src/main/java/org/ash/inventory/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
+This document owns backend persistence, relationships, stock authority and browser/media storage. The exact executable schema is [V1.0.0__init.sql](../backend/src/main/resources/db/migration/V1.0.0__init.sql) (including pickup groups, assigned roles, owned share groups, grant inheritance and offer for use); JPA mappings follow their [module owner](../backend/architecture/modules.json); operational entities are in [model/](../backend/src/main/java/org/ash/inventory/operations/internal/model). Planned model changes are in [Implementation Plan](IMPLEMENTATION_PLAN.md).
 
 ## 1. Persistence boundaries
 
@@ -18,7 +18,7 @@ This document owns backend persistence, relationships, stock authority and brows
 
 ## 2. Schema conventions
 
-The baseline declares **59 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
+The baseline declares **64 tables**. Most domain entities have UUID IDs and creation/update timestamps. Exceptions include bigint identity order history, composite join tables, report rows keyed by report name, and revision counters keyed by `(name, shard)`. SQL enum-like fields use string/check constraints; JSON is PostgreSQL `jsonb`. Calendar dates use `date`, instants use timestamp with time zone, event logistics wall-clock times use timestamp without time zone, money generally uses integer cents and meters use decimal numeric values.
 
 Flyway applies the single editable baseline in dev/test/prod; Hibernate validates it. Data is disposable: recreate the database after a baseline change. There are no upgrade migrations or backfills. The test profile cleans its configured PostgreSQL test database at startup.
 
@@ -171,20 +171,25 @@ Receiving is a stock command. An unreceived purchase line is ordered supply, not
 
 Rental/loan economics and evidence live in the agreement's current fields/JSON; there is no separate billing/payment subsystem or relational loan-line table.
 
-### Member work and system support (8 tables)
+### Member work and system support (13 tables)
 
 | Table | Key data and relationships |
 |---|---|
 | `member_requests` | UUID; requester/item/asset/location/handler links; kind/quantity/notes, status/response/time, unique command ID and revision |
-| `notifications` | UUID; recipient/order links; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request  next attempt, lease UUID/expiry and bounded retry delivery state |
+| `notifications` | UUID; scalar recipient/order IDs across module boundaries; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request  next attempt, lease UUID/expiry and bounded retry delivery state |
 | `action_reminders` | UUID; user FK, action key and reminder time; unique user/action |
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
 | `operational_reports` | Report name PK; generation version/times, source token and JSON rows; eight snapshot kinds |
 | `sync_command_audit` | UUID; unique command ID, owner/operation/payload/local time, server result/status/conflict/retry; supersedes and resolution-root FKs to command IDs |
-| `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, delivery status/attempts/availability/published time/error |
+| `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, aggregate revision, delivery status/attempts/availability/published time/error |
+| `report_rebuild_jobs` | Reporting-owned coalesced jobs; requester, state, attempts, lease token/expiry and safe failure text |
+| `media_cleanup_jobs` | Operations-owned object cleanup intents; key, due time and fenced deletion lease |
+| `integration_aggregate_sequences` | Integration-owned commit-ordered revision per aggregate type/UUID |
+| `integration_subscriptions` | Integration-owned consumer name, event prefixes, replay start and enabled state |
+| `integration_deliveries` | Consumer/event composite key; lease, attempts, acknowledgement and per-consumer dead-letter state |
 | `source_revisions` | Composite `(name, shard)` PK; revision/epoch; 16 shards per tracked source table |
 
-All 59 baseline tables are listed once above. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
+All 64 baseline tables are listed once above. The complete module owner register is [modules.json](../backend/architecture/modules.json); notification and reporting code do not navigate operational JPA entities. Media registry rows also carry purge lease/token expiry. This inventory is descriptive; use the SQL for exact lengths, defaults, nullability and constraint definitions.
 
 ## 5. Stock authority and invariants
 

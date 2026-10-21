@@ -81,16 +81,9 @@ Source: [Maven project](../backend/pom.xml), [runtime configuration](../backend/
 | AI integration | `quarkus-mcp-server-http:2.0.1`; 31 tools (including shared order commands), 3 resources, 2 prompts |
 | Verification libraries | Quarkus JUnit and REST Assured; configured tests use PostgreSQL |
 
-H2 is a test-scoped dependency only, used by `TelemetryExportTest`; every profile (dev, test, prod) uses PostgreSQL. There is no integration-test (Failsafe) suite; the `native` profile only builds the native image.
+Every profile, including the isolated telemetry-export checks, uses PostgreSQL. There is no Failsafe suite; the `native` profile only builds the native image.
 
-```text
-resource/  HTTP routes, validation, explicit DTO mapping and status codes
-service/   use cases, authorization, transactions, invariants, domain events
-orm/       queries, locks, paging and batch fact loaders
-model/     JPA entities and enums; no active-record API
-helper/    security, media, events, rate limiting, business time and utilities
-mcp/       MCP adapters calling services
-```
+The backend is organized into six modules: `operations`, `notification`, `reporting`, `blobs`, `integration`, and `platform`. Business adapters/contracts/entities/persistence are internal to their owner. Cross-module calls use exported ID/value APIs. [Module Boundaries and Scaling](MODULAR_BOUNDARIES.md) defines the dependency graph and worker contracts; [modules.json](../backend/architecture/modules.json) owns the table register and [the static CI gate](../scripts/check-architecture.py) enforces it.
 
 ## 4. Command, consistency and API contracts
 
@@ -100,7 +93,7 @@ Order kinds share `/api/orders/{kind}` command contracts and `OrderService`; kin
 
 Use explicit request and response records in `ApiModels`, `ApiResponses` and `ApiMapper`; never serialize entities. Expected responses: 400 invalid input, 403 insufficient rights, 404 absent or invisible resource, 409 conflicting state. Supported list endpoints accept bounded paging/filtering/search. Paged endpoints (`@Paged`) send `X-Has-More`: whether the page query returned a full page before privacy filtering, so a privacy-shortened page never ends a listing early. Clients load further pages on demand; explicit exports/imports, the opt-in offline download and documented complete child/reference/worklist reads may read every page. Event lists now accept `status`, `page` and `size`; not every collection is a paged endpoint.
 
-The outbox is written in the business transaction. After commit, dispatch is woken locally; a default 5-second poll handles other nodes and recovery. Rows are claimed under a lease with `SKIP LOCKED`. Delivery is at least once, consumers deduplicate by event ID, 10 failed attempts cause dead letter, and published events default to 30-day retention. Operator retries require authorization.
+The outbox is written in the business transaction. After commit, dispatch is woken locally; a default 5-second poll handles other nodes and recovery. Rows are claimed under a lease with `SKIP LOCKED`. SSE publication is at least once. Durable integrations have independent consumer leases, acknowledgements, per-aggregate revisions and retry/dead-letter state; consumers commit their own event-ID inbox with their effects. Published events default to 30-day retention, pinned while a registered consumer still needs them. Operator retries require authorization.
 
 SSE sends change families and catalog resource kind, without IDs, actors, quantities or event payloads. The stream ends at token expiry. The frontend coalesces invalidations for 300 ms; reconnect and `access.changed` reset private inventory queries and private media references. SSE is a refresh signal, not a durable client ledger.
 
@@ -110,7 +103,7 @@ Domain event families include `catalog.*`, `stock.*`, `asset.*`, `order.*`, `cus
 
 - Browser login uses authorization code + PKCE. API bearer audience must match its configured OIDC client ID. Account identity is `(issuer, sub)`, not display name or email.
 - Access requires membership in the identity-provider group `inventory` (`inventory.auth.access-group`), checked on every request; no membership means 403. Assigned roles, the highest effective role and faction memberships (`EVENT:slug`) are stored on `app_users` and managed by the inventory admin (`PATCH /api/users/{id}`: revision check, reason, `user.changed` audit, never removes the last admin). New accounts start as `read_only`; tenants are explicitly assigned; `inventory.auth.bootstrap-admins` (e-mail addresses matched against the access token) become admin on first sign-in or while no admin exists. Roles form a ladder (`tenant < read_only < faction_leader < ash < warehouse_crew < admin`, `UserRole.atLeast`); checks name the minimum role. Factions limit faction-order writes, not reads. Development header authentication (`X-Actor-Role`, `X-Actor-Factions`) simulates the stored role. See [Authentik setup §3](AUTHENTIK_SETUP.md#3-access-and-roles).
-- Logout attempts access/refresh-token revocation, cross-tab logout and provider end-session. Local JWT validation continues to accept a revoked token until `exp`; optional `OIDC_REQUIRE_INTROSPECTION` bounds this by the provider/cache behavior. Immediate logout enforcement is therefore an acceptance/configuration task (ACC-01).
+- Logout attempts provider revocation/end-session and cross-tab logout, and records the current access-token hash in `revoked_sessions`. The owner checks this local block before admitting requests/continuing streams. Provider-wide revocation and cross-application behavior still need live acceptance (ACC-01).
 - Production startup rejects development header authentication or disabled OIDC. Production `/api/*`, `/mcp` and `/mcp/*` require authentication.
 - Private policy owners and the inventory admin have implicit access; other roles require resource-specific grants. View, edit, share management and stock operation rights differ. Private location data may remain restricted even when the item is visible.
 - Grants are inherited down private location trees: `inventory_access_links` materializes, per private item or location, the private locations it is stored in (home location `Item.storageLocation` and its ancestors). Grants and the owner of a linked location count as grants on the resource in `InventoryAccess.allows`, the `InventoryAccessOrm.visible` predicate and the sharing projection; share management is never inherited. `InventoryAccessInheritance` refreshes links on item/location create and move; edits lock the ancestor policies. Children of private locations must be private.

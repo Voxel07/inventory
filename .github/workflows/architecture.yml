@@ -1,0 +1,15 @@
+name: Architecture boundaries
+on:
+  pull_request:
+    paths: ['backend/**', 'scripts/check-architecture.py', '.github/workflows/architecture.yml']
+  push:
+    paths: ['backend/**', 'scripts/check-architecture.py', '.github/workflows/architecture.yml']
+permissions:
+  contents: read
+jobs:
+  boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check module dependencies and table ownership
+        run: python3 scripts/check-architecture.py

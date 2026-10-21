@@ -1,16 +1,47 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.adapter.rest.CatalogResponses;
+import org.ash.inventory.operations.internal.application.ApiQueryService;
+import org.ash.inventory.operations.internal.application.CatalogService;
+import org.ash.inventory.operations.internal.application.InventoryAccessService;
+import org.ash.inventory.operations.internal.application.InventoryOperationsService;
+import org.ash.inventory.operations.internal.application.MaintenanceEvaluationService;
+import org.ash.inventory.operations.internal.application.MaintenancePolicy;
+import org.ash.inventory.operations.internal.application.OperationalReportService;
+import org.ash.inventory.operations.internal.application.OrderAllocationService;
+import org.ash.inventory.operations.internal.application.PlanningStockService;
+import org.ash.inventory.operations.internal.application.StockReadService;
+import org.ash.inventory.operations.internal.model.AssetInstance;
+import org.ash.inventory.operations.internal.model.DamageReport;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.Faction;
+import org.ash.inventory.operations.internal.model.InventoryAccessGrant;
+import org.ash.inventory.operations.internal.model.InventoryAccessGroup;
+import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
+import org.ash.inventory.operations.internal.model.InventoryOrder;
+import org.ash.inventory.operations.internal.model.InventoryPosition;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.model.MemberRequest;
+import org.ash.inventory.operations.internal.model.OrderLine;
+import org.ash.inventory.operations.internal.model.StockReservation;
+import org.ash.inventory.operations.internal.model.StockTransaction;
+import org.ash.inventory.operations.internal.model.StorageLocation;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.persistence.CustodyOrm;
+import org.ash.inventory.operations.internal.persistence.OperationsOrm;
+import org.ash.inventory.operations.internal.persistence.SourceRevisionOrm;
+import org.ash.inventory.operations.internal.persistence.StockFactsOrm;
+import org.ash.inventory.operations.internal.projection.ApiMapper;
+import org.ash.inventory.operations.internal.security.ActorService;
+import org.ash.inventory.reporting.internal.OperationalReport;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.model.*;
-import org.ash.inventory.orm.*;
-import org.ash.inventory.resource.ApiMapper;
-import org.ash.inventory.service.*;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -20,11 +51,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest @TestProfile(StorageQueryRegressionTest.QueryStatistics.class)
 class P2StorageRegressionTest {
+    @jakarta.inject.Inject org.ash.inventory.reporting.internal.ReportWorker reportWorker;
     @Inject EntityManager em;
     @Inject ActorService actors;
     @Inject StockFactsOrm facts;
     @Inject InventoryOperationsService inventory;
     @Inject PlanningStockService planningStocks;
+    @Inject StockReadService stockReads;
     @Inject OperationsOrm operations;
     @Inject CustodyOrm custody;
     @Inject MaintenanceEvaluationService maintenance;
@@ -35,7 +68,7 @@ class P2StorageRegressionTest {
     @Inject CatalogService catalog;
     @Inject ApiQueryService queries;
     @Inject OperationalReportService reports;
-    @Inject org.ash.inventory.resource.CatalogResponses factionCache;
+    @Inject org.ash.inventory.operations.adapter.rest.CatalogResponses factionCache;
     @Inject com.fasterxml.jackson.databind.ObjectMapper json;
     @Inject OrderAllocationService allocation;
     private org.hibernate.stat.Statistics stats() { return em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics(); }
@@ -51,7 +84,7 @@ class P2StorageRegressionTest {
     }
     private InventoryOrder order(Item i, UserAccount u, int reserved) {
         var o = new InventoryOrder(); o.kind = InventoryOrder.Kind.general; o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = DomainEnums.OrderStatus.ready;
-        var line = new org.ash.inventory.model.OrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
+        var line = new org.ash.inventory.operations.internal.model.OrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
         line.requestedQuantity = reserved; line.preparedQuantity = reserved; o.lines.add(line);
         em.persist(o);
         var reservation = new StockReservation(); reservation.order = o; reservation.orderLine = line; reservation.item = i;
@@ -79,7 +112,7 @@ class P2StorageRegressionTest {
         assertEquals(Set.of(item.id), snapshot.memberDamage());
         assertEquals(operations.transactionTotals(item), snapshot.totals().get(item.id));
         assertEquals(operations.activeReservationQuantities(List.of(item.id)), snapshot.reservations());
-        assertEquals(inventory.readStock(List.of(item)).get(item.id).physical(), planningStocks.load(List.of(item)).get(item.id).physical());
+        assertEquals(stockReads.readStock(List.of(item)).get(item.id).physical(), planningStocks.load(List.of(item)).get(item.id).physical());
         stats().clear(); assertTrue(facts.load(List.of()).totals().isEmpty()); assertEquals(0, stats().getPrepareStatementCount());
     }
     @Test @TestTransaction
@@ -166,7 +199,7 @@ class P2StorageRegressionTest {
             actors.current(); em.flush();
             var report = em.find(OperationalReport.class, "movements");
             if (report == null) { report = new OperationalReport(); report.name = "movements"; em.persist(report); }
-            report.startedAt = Instant.now(); report.generatedAt = Instant.now(); report.sourceToken = revisions.reportToken();
+            report.startedAt = Instant.now(); report.generatedAt = Instant.now(); report.sourceToken = revisions.reportToken("movements");
             report.rows = List.of(Map.of("id", "test-row", "quantity", 5));
         });
         assertFalse(reports.read("movements", Map.of(), 0, 100).stale());
@@ -175,7 +208,7 @@ class P2StorageRegressionTest {
         assertEquals(0, stats().getEntityStatistics(OperationalReport.class.getName()).getLoadCount(), "Never hydrate the full snapshot for a page");
         assertEquals(0, stats().getEntityStatistics(StockTransaction.class.getName()).getLoadCount(), "Warm pages do not reread the movement ledger");
         QuarkusTransaction.requiringNew().run(() -> item());
-        assertFalse(reports.read("movements", Map.of(), 0, 100).stale());
+        assertTrue(reports.read("movements", Map.of(), 0, 100).stale());
     }
     @Test
     void factionCacheReadsCommittedRevisionAndSharesOneSnapshotAcrossFilters() throws Exception {
@@ -203,8 +236,9 @@ class P2StorageRegressionTest {
     }
     @Test
     void everyReportRebuildHasACompleteFetchPlan() {
-        for (var name : OperationalReportService.DEFINITIONS.keySet()) {
+        for (var name : org.ash.inventory.reporting.api.ReportDefinitions.all().keySet()) {
             reports.rebuild(name);
+            for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
             assertFalse(reports.read(name, Map.of(), 0, 100).stale(), name);
         }
     }
@@ -218,11 +252,11 @@ class P2StorageRegressionTest {
     }
     @Test
     void revisionsChangeWithCommitAndRollbackWithSources() {
-        String before = QuarkusTransaction.requiringNew().call(() -> { stats().clear(); var token = revisions.reportToken(); assertEquals(1, stats().getPrepareStatementCount()); assertEquals(0, stats().getEntityLoadCount()); return token; });
+        String before = QuarkusTransaction.requiringNew().call(() -> { stats().clear(); var token = revisions.reportToken("movements"); assertEquals(1, stats().getPrepareStatementCount()); assertEquals(0, stats().getEntityLoadCount()); return token; });
         assertThrows(io.quarkus.narayana.jta.QuarkusTransactionException.class, () -> QuarkusTransaction.requiringNew().run(() -> { item(); em.flush(); QuarkusTransaction.setRollbackOnly(); }));
-        assertEquals(before, QuarkusTransaction.requiringNew().call(revisions::reportToken));
+        assertEquals(before, QuarkusTransaction.requiringNew().call(() -> revisions.reportToken("movements")));
         QuarkusTransaction.requiringNew().run(() -> item());
-        assertNotEquals(before, QuarkusTransaction.requiringNew().call(revisions::reportToken));
+        assertNotEquals(before, QuarkusTransaction.requiringNew().call(() -> revisions.reportToken("movements")));
     }
 
     @Test @TestTransaction

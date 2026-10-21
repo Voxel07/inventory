@@ -10,8 +10,10 @@ This page is the entry point to the architecture documentation. Current source b
 | [Technical Requirements](TECHNICAL_REQUIREMENTS.md) | Frameworks, dependencies, boundaries, security, runtime constraints and observability | What the app is built with and how components cooperate |
 | [App Flow](APP_FLOW.md) | Routes, navigation, user journeys and lifecycle states | How users reach and complete tasks |
 | [Design Brief](DESIGN_BRIEF.md) | Theme tokens, typography, layout, component patterns and accessibility goals | How screens should look and behave |
-| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 59 tables, relationships, stock authority, media, caches, personal data and recovery | Where data lives and which store is authoritative |
+| [Database Schema and Data Storage](DATABASE_SCHEMA.md) | All 64 tables, relationships, stock authority, media, caches, personal data and recovery | Where data lives and which store is authoritative |
 | [Implementation Plan and Progress](IMPLEMENTATION_PLAN.md) | Prioritized gaps, target refactors, progress and acceptance evidence | What is complete, partial, planned or still unverified |
+| [Module Boundaries and Scaling](MODULAR_BOUNDARIES.md) | Implemented modules, ownership gates, workers and integration contracts | How to keep modules isolated and scale worker pools |
+| [Modular Monolith Review](MODULAR_MONOLITH_REVIEW.md) | Service boundaries, data ownership, extraction blockers and remediation | Whether capabilities can be isolated and scaled independently |
 
 Each subject has one owner above. Keep detailed requirements in the PRD, stack decisions in Technical Requirements and unfinished work in the progress register rather than duplicating their full tables here.
 
@@ -29,7 +31,7 @@ flowchart LR
     API <-->|Cluster fan-out and rate limiting| Valkey[(Valkey, cluster only)]
 ```
 
-A modular monolith keeps stock, order, custody and lifecycle changes in local ACID transactions. Default deployment is a single API node. The cluster template adds API replicas and Valkey while retaining shared PostgreSQL/media; it does not establish automatic database failover.
+The six enforced modules are operations, notifications, reporting, blob storage, integration and platform. The operations module keeps stock, order, custody and lifecycle changes in local ACID transactions. Default deployment is a single API node. The cluster template separates API, operational, report and notification worker pools and adds Valkey while retaining shared PostgreSQL/media; it does not establish automatic database failover.
 
 ## Cross-cutting rules
 

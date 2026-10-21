@@ -44,6 +44,12 @@ x-inventory-api: &inventory-api
     OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15s}
     OTEL_OUTBOX_SNAPSHOT_EVERY: ${OTEL_OUTBOX_SNAPSHOT_EVERY:-30s}
     INVENTORY_LOG_LEVEL: ${INVENTORY_LOG_LEVEL:-INFO}
+    DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+    INVENTORY_NOTIFICATION_WEBHOOK_URL: ${INVENTORY_NOTIFICATION_WEBHOOK_URL:-}
+    INVENTORY_NOTIFICATION_WEBHOOK_TOKEN: ${INVENTORY_NOTIFICATION_WEBHOOK_TOKEN:-}
+    INVENTORY_PUBLIC_URL: ${INVENTORY_PUBLIC_URL:-http://localhost:3333}
+    REPORT_MAX_SOURCE_ROWS: ${REPORT_MAX_SOURCE_ROWS:-25000}
+    REPORT_MAX_OUTPUT_ROWS: ${REPORT_MAX_OUTPUT_ROWS:-25000}
     DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
     APP_VERSION: ${APP_VERSION:-dev}
     MEDIA_MODE: s3
@@ -140,6 +146,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       <<: *inventory-api-environment
+      INVENTORY_PROCESS_ROLE: api
       OTEL_SERVICE_INSTANCE_ID: ${OTEL_SERVICE_INSTANCE_ID_1:-}
 
   # Secondary API Node (VPS 2 / Replica 2 for Load Balancing)
@@ -149,7 +156,35 @@ services:
       - "127.0.0.1:8081:8080"
     environment:
       <<: *inventory-api-environment
+      INVENTORY_PROCESS_ROLE: api
       OTEL_SERVICE_INSTANCE_ID: ${OTEL_SERVICE_INSTANCE_ID_2:-}
+
+  # Shared operational jobs; add replicas only after budgeting total database connections.
+  inventory-worker:
+    <<: *inventory-api
+    environment:
+      <<: *inventory-api-environment
+      INVENTORY_PROCESS_ROLE: worker
+      INVENTORY_WORKER_JOBS: outbox,reminders,digests,media,retention,sessions
+      DB_POOL_SIZE: ${WORKER_DB_POOL_SIZE:-3}
+
+  # Independently scalable delivery pool. No application HTTP port is published.
+  inventory-notifications:
+    <<: *inventory-api
+    environment:
+      <<: *inventory-api-environment
+      INVENTORY_PROCESS_ROLE: worker
+      INVENTORY_WORKER_JOBS: notifications
+      DB_POOL_SIZE: ${NOTIFICATION_DB_POOL_SIZE:-2}
+
+  # Report source work is bounded; this pool can scale separately from HTTP.
+  inventory-reports:
+    <<: *inventory-api
+    environment:
+      <<: *inventory-api-environment
+      INVENTORY_PROCESS_ROLE: worker
+      INVENTORY_WORKER_JOBS: reports
+      DB_POOL_SIZE: ${REPORT_DB_POOL_SIZE:-2}
 
   # Static Web Frontend
   inventory-app:

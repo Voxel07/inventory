@@ -1,14 +1,19 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.internal.application.InventoryOperationsService;
+import org.ash.inventory.operations.internal.application.PlanningStockService;
+import org.ash.inventory.operations.internal.model.AssetInstance;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.model.MemberRequest;
+import org.ash.inventory.operations.internal.model.UserAccount;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.model.*;
-import org.ash.inventory.service.InventoryOperationsService;
-import org.ash.inventory.service.PlanningStockService;
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.*;
@@ -18,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @QuarkusTest
 class MaintenanceStockApiTest {
+    @jakarta.inject.Inject org.ash.inventory.reporting.internal.ReportWorker reportWorker;
     @Inject EntityManager em;
     @Inject PlanningStockService planning;
     @Inject InventoryOperationsService inventory;
@@ -54,7 +60,8 @@ class MaintenanceStockApiTest {
             var snapshot = planning.load(List.of(value)).get(value.id).stock();
             assertEquals(onHand, snapshot.onHand()); assertEquals(transit, snapshot.inTransit()); assertEquals(owned, snapshot.totalOwned());
         });
-        admin().post("/api/reports/availability/rebuild").then().statusCode(204);
+        admin().post("/api/reports/availability/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         var rows = admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).extract().jsonPath();
         assertEquals(onHand, rows.getInt("rows.sum { it.onHand ?: 0 }"));
         assertEquals(transit, rows.getInt("rows.sum { it.inTransit ?: 0 }"));
@@ -97,7 +104,8 @@ class MaintenanceStockApiTest {
         QuarkusTransaction.requiringNew().run(() -> em.find(MaintenanceSchedule.class, UUID.fromString(schedule)).nextDueValue = null);
         parity(item, 0); transact(item, asset, "checkout", 409);
         admin().get("/api/action-inbox").then().statusCode(200).body("key", hasItem("maintenance:" + schedule));
-        admin().post("/api/reports/maintenance/rebuild").then().statusCode(204);
+        admin().post("/api/reports/maintenance/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().queryParam("itemId", item).get("/api/reports/maintenance").then().statusCode(200)
                 .body("rows.find { it.id == '" + schedule + "' }.status", equalTo("unknown"));
     }
@@ -181,7 +189,8 @@ class MaintenanceStockApiTest {
             em.persist(request);
         });
         admin().get("/api/items/" + item).then().statusCode(200).body("stock.onHand", equalTo(3)).body("stock.available", equalTo(0));
-        admin().post("/api/reports/availability/rebuild").then().statusCode(204);
+        admin().post("/api/reports/availability/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         var rows = admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).extract().jsonPath();
         assertEquals(3, rows.getInt("rows.sum { it.onHand ?: 0 }"));
         assertEquals(0, rows.getInt("rows.sum { it.available ?: 0 }"));

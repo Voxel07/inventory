@@ -1,12 +1,13 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.internal.model.UserAccount;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.model.UserAccount;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

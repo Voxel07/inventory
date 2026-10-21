@@ -1463,6 +1463,8 @@ export default {
       selectAFile: 'Datei auswählen.',
     },
     reportsPanel: {
+      generationPending: 'Der Bericht wird im Hintergrund erstellt. Die Ansicht aktualisiert sich automatisch.',
+      generationFailed: 'Der Bericht konnte nicht erstellt werden. Erneut versuchen oder die Berichtsgrenzen prüfen lassen.',
       reportLabels: {
         events: 'Eventbedarf und Nutzung',
         availability: 'Verfügbarkeit nach Lagerort',

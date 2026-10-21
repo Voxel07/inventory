@@ -12,6 +12,7 @@ import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class PrivateInventoryApiTest {
+    @jakarta.inject.Inject org.ash.inventory.reporting.internal.ReportWorker reportWorker;
     private RequestSpecification actor(String name, String role) {
         return given().contentType(ContentType.JSON).header("X-Actor-Id", "privacy-" + name).header("X-Actor-Name", "privacy-" + name).header("X-Actor-Role", role);
     }
@@ -133,7 +134,8 @@ class PrivateInventoryApiTest {
     @Test void historyAndCachedReportsDoNotRevealPrivateInventoryToWarehouseStaff() {
         String item = item();
         actor("warehouse", "warehouse_crew").get("/api/transactions").then().statusCode(200).body("itemId", not(hasItem(item)));
-        admin().body(Map.of()).post("/api/reports/availability/rebuild").then().statusCode(204);
+        admin().body(Map.of()).post("/api/reports/availability/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", greaterThan(0));
         actor("warehouse", "warehouse_crew").queryParam("itemId", item).get("/api/reports/availability").then().statusCode(200).body("total", equalTo(0)).body("rows", empty());
         String warehouseId = actor("warehouse", "warehouse_crew").get("/api/access/people").then().extract().jsonPath().getString("find { it.name == 'privacy-warehouse' }.id");

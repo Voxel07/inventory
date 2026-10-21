@@ -1,5 +1,13 @@
 package org.ash.inventory;
 
+import org.ash.inventory.notification.internal.Notification;
+import org.ash.inventory.notification.internal.NotificationDeliveryService;
+import org.ash.inventory.operations.internal.model.ActionReminder;
+import org.ash.inventory.operations.internal.model.CustodyHandover;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.InventoryOrder;
+import org.ash.inventory.operations.internal.model.UserAccount;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
@@ -14,8 +22,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 class DocsRemediationApiTest {
+    @jakarta.inject.Inject org.ash.inventory.notification.api.NotificationService notices;
+    @jakarta.inject.Inject org.ash.inventory.notification.api.RecipientPolicy audience;
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.application.NotificationTaskService notificationTasks;
     @Inject EntityManager em;
-    @Inject org.ash.inventory.service.NotificationDeliveryService delivery;
+    @Inject org.ash.inventory.notification.internal.NotificationDeliveryService delivery;
     private RequestSpecification actor(String id,String role){return given().contentType(ContentType.JSON).header("X-Actor-Id",id).header("X-Actor-Role",role);}
     private RequestSpecification admin(){return actor("review-admin","admin");}
     private String item(boolean privateResource,String name){return admin().body(Map.of("sku","REV-"+UUID.randomUUID(),"name",name,"category","Review","value",0,"amount",2,"privateResource",privateResource)).post("/api/items").then().statusCode(200).extract().path("id");}
@@ -97,9 +108,9 @@ class DocsRemediationApiTest {
         String source=admin().body(Map.of("name","Evidence source","purpose","Review")).post("/api/orders/general").then().statusCode(200).extract().path("id");
         String person=admin().get("/api/auth/me").then().extract().path("id");
         UUID handover=QuarkusTransaction.requiringNew().call(()->{
-            var value=new org.ash.inventory.model.CustodyHandover();value.order=em.getReference(org.ash.inventory.model.InventoryOrder.class,UUID.fromString(source));
-            value.marshal=em.getReference(org.ash.inventory.model.UserAccount.class,UUID.fromString(person));value.collectorName="Review collector";
-            value.type=org.ash.inventory.model.DomainEnums.HandoverType.checkout;value.handoverCode="REVIEW-"+UUID.randomUUID();em.persist(value);return value.id;
+            var value=new org.ash.inventory.operations.internal.model.CustodyHandover();value.order=em.getReference(org.ash.inventory.operations.internal.model.InventoryOrder.class,UUID.fromString(source));
+            value.marshal=em.getReference(org.ash.inventory.operations.internal.model.UserAccount.class,UUID.fromString(person));value.collectorName="Review collector";
+            value.type=org.ash.inventory.operations.internal.model.DomainEnums.HandoverType.checkout;value.handoverCode="REVIEW-"+UUID.randomUUID();em.persist(value);return value.id;
         });
         var input=Map.of("commandId",UUID.randomUUID().toString(),"conditionConfirmed",true,"conditionNotes","Cases dry; count checked with collector");
         actor("review-reader","read_only").body(input).post("/api/handovers/"+handover+"/evidence").then().statusCode(403);
@@ -114,31 +125,33 @@ class DocsRemediationApiTest {
         String inactive=actor("review-inactive-delivery-"+UUID.randomUUID(),"read_only").get("/api/auth/me").then().extract().path("id");
         String active=actor("review-active-delivery-"+UUID.randomUUID(),"read_only").get("/api/auth/me").then().extract().path("id");
         var ids=QuarkusTransaction.requiringNew().call(()->{
-            var disabled=em.find(org.ash.inventory.model.UserAccount.class,UUID.fromString(inactive));disabled.active=false;
-            var enabled=em.find(org.ash.inventory.model.UserAccount.class,UUID.fromString(active));enabled.email="delivery-fixture@example.invalid";
-            var skipped=new org.ash.inventory.model.Notification();skipped.recipient=disabled;skipped.type="action_reminder";skipped.createdAt=java.time.Instant.EPOCH;em.persist(skipped);
-            var ready=new org.ash.inventory.model.Notification();ready.recipient=enabled;ready.type="action_reminder";ready.createdAt=java.time.Instant.EPOCH.plusSeconds(1);em.persist(ready);
+            var disabled=em.find(org.ash.inventory.operations.internal.model.UserAccount.class,UUID.fromString(inactive));disabled.active=false;
+            var enabled=em.find(org.ash.inventory.operations.internal.model.UserAccount.class,UUID.fromString(active));enabled.email="delivery-fixture@example.invalid";
+            var skipped=new org.ash.inventory.notification.internal.Notification();skipped.recipientId=disabled.id;skipped.type="action_reminder";skipped.createdAt=java.time.Instant.EPOCH;em.persist(skipped);
+            var ready=new org.ash.inventory.notification.internal.Notification();ready.recipientId=enabled.id;ready.type="action_reminder";ready.createdAt=java.time.Instant.EPOCH.plusSeconds(1);em.persist(ready);
             return List.of(skipped.id,ready.id);
         });
-        var claimed=delivery.claim();assertNotNull(claimed);assertEquals(ids.get(1),claimed.id());
-        QuarkusTransaction.requiringNew().run(()->assertEquals("skipped",em.find(org.ash.inventory.model.Notification.class,ids.getFirst()).deliveryStatus));
-        delivery.finish(new org.ash.inventory.service.NotificationDeliveryService.Delivery(claimed.id(),UUID.randomUUID(),claimed.email()),true);
-        QuarkusTransaction.requiringNew().run(()->assertEquals("sending",em.find(org.ash.inventory.model.Notification.class,claimed.id()).deliveryStatus));
-        delivery.finish(claimed,true);
+        var ineligible=notices.claim();assertNotNull(ineligible);assertFalse(audience.resolve(ineligible.recipientId(),ineligible.orderId(),ineligible.itemId()).allowed());
+        notices.finish(ineligible,org.ash.inventory.notification.api.NotificationService.Outcome.SKIPPED);
+        var claimed=notices.claim();assertNotNull(claimed);assertEquals(ids.get(1),claimed.id());
+        QuarkusTransaction.requiringNew().run(()->assertEquals("skipped",em.find(org.ash.inventory.notification.internal.Notification.class,ids.getFirst()).deliveryStatus));
+        notices.finish(new org.ash.inventory.notification.api.NotificationService.Delivery(claimed.id(),UUID.randomUUID(),claimed.recipientId(),claimed.orderId(),claimed.itemId()),org.ash.inventory.notification.api.NotificationService.Outcome.SENT);
+        QuarkusTransaction.requiringNew().run(()->assertEquals("sending",em.find(org.ash.inventory.notification.internal.Notification.class,claimed.id()).deliveryStatus));
+        notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT);
         QuarkusTransaction.requiringNew().run(()->{
-            var row=em.find(org.ash.inventory.model.Notification.class,claimed.id());assertEquals("sent",row.deliveryStatus);em.remove(row);
+            var row=em.find(org.ash.inventory.notification.internal.Notification.class,claimed.id());assertEquals("sent",row.deliveryStatus);em.remove(row);
         });
-        assertDoesNotThrow(()->delivery.finish(claimed,true));
+        assertDoesNotThrow(()->notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT));
     }
 
     @Test void scheduledRemindersAreGenericAndDigestSqlExecutes(){
         String subject="review-reminder-"+UUID.randomUUID();
         String person=actor(subject,"faction_leader").get("/api/auth/me").then().extract().path("id");
         QuarkusTransaction.requiringNew().run(()->{
-            var reminder=new org.ash.inventory.model.ActionReminder();reminder.user=em.getReference(org.ash.inventory.model.UserAccount.class,UUID.fromString(person));
+            var reminder=new org.ash.inventory.operations.internal.model.ActionReminder();reminder.user=em.getReference(org.ash.inventory.operations.internal.model.UserAccount.class,UUID.fromString(person));
             reminder.actionKey="lot:"+UUID.randomUUID();reminder.remindAt=java.time.Instant.now().minusSeconds(60);em.persist(reminder);
         });
-        delivery.reminders();delivery.reminders();delivery.digest();
+        notificationTasks.reminders();notificationTasks.reminders();notificationTasks.digest();
         actor(subject,"faction_leader").get("/api/notifications").then().statusCode(200)
                 .body("findAll { it.type=='action_reminder' }.size()",equalTo(1)).body("find { it.type=='action_reminder' }.payload.path",equalTo("/"))
                 .body("find { it.type=='action_reminder' }.payload.itemId",nullValue());

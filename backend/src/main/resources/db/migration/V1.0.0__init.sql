@@ -128,6 +128,7 @@ create table damage_reports (
 );
 
 create table domain_event_outbox (
+    aggregate_revision bigint not null default 0,
     attempt_count integer not null,
     available_at timestamp(6) with time zone not null,
     created_at timestamp(6) with time zone not null,
@@ -993,8 +994,6 @@ alter table if exists maintenance_records add constraint FKa9b4v1xbl41ojn1nv0alx
 alter table if exists maintenance_schedules add constraint FKa5k6d8pwvk2owwrywruax68gm foreign key (asset_instance_id) references asset_instances;
 alter table if exists maintenance_schedules add constraint FKfowb478r1hybovjlbckinkbq0 foreign key (item_id) references items;
 alter table if exists maintenance_schedules add constraint FK4ctnmnplwnq1t6jcx7i8coewt foreign key (responsible_person_id) references app_users;
-alter table if exists notifications add constraint FKdjkdrxn3guyelfwepstlh9ujf foreign key (order_id) references orders;
-alter table if exists notifications add constraint FK7mpd9n24ptruj9hf4lw0otrf6 foreign key (recipient_id) references app_users;
 alter table if exists order_line_asset_assignments add constraint FKlulb9vi531os91f8ii4ekb1mw foreign key (asset_instance_id) references asset_instances;
 alter table if exists order_line_asset_assignments add constraint FK3u63m4j57j3r5380usk4mg14f foreign key (order_id) references orders;
 alter table if exists order_line_asset_assignments add constraint FKnaixvgl99bm7bfldppc640r82 foreign key (order_line_id) references order_lines;
@@ -1128,6 +1127,8 @@ alter table items add column responsible_person_id uuid references app_users(id)
 create index ix_items_responsible_person on items (responsible_person_id);
 alter table orders add column pickup_assignments jsonb not null default '{}';
 create table inventory_media_objects (
+    purge_lease_until timestamptz,
+    purge_lease uuid,
     id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
     object_key varchar(1024) not null unique, uploader_id uuid not null references app_users(id),
     resource_type varchar(255), resource_id uuid,
@@ -1357,3 +1358,55 @@ create function inventory_maintenance_attention(target_item uuid) returns boolea
   end
  );
 $$;
+
+-- Reporting owns its job queue. Baseline-only: recreate disposable databases after this change.
+create table report_rebuild_jobs (
+    name varchar(255) primary key,
+    status varchar(32) not null check (status in ('pending','running','retry','completed','failed')),
+    requested_by uuid not null,
+    requested_at timestamptz not null,
+    available_at timestamptz not null,
+    attempts integer not null default 0,
+    lease uuid,
+    lease_until timestamptz,
+    last_error varchar(2000)
+);
+create index report_rebuild_jobs_pending on report_rebuild_jobs(available_at,requested_at) where status in ('pending','retry','running');
+INSERT INTO source_revisions (name, shard) SELECT 'order_line_asset_assignments', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON order_line_asset_assignments FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+
+create table media_cleanup_jobs (
+    object_key varchar(1024) primary key,
+    available_at timestamptz not null,
+    lease uuid,
+    lease_until timestamptz
+);
+create index media_cleanup_jobs_pending on media_cleanup_jobs(available_at);
+
+create table integration_aggregate_sequences (
+    aggregate_type varchar(255) not null,
+    aggregate_id uuid not null,
+    revision bigint not null,
+    primary key(aggregate_type,aggregate_id)
+);
+create table integration_subscriptions (
+    name varchar(128) primary key,
+    prefixes jsonb not null,
+    since timestamptz not null,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now()
+);
+create table integration_deliveries (
+    consumer varchar(128) not null references integration_subscriptions(name) on delete cascade,
+    event_id uuid not null references domain_event_outbox(event_id) on delete cascade,
+    state varchar(32) not null check(state in ('leased','acknowledged','dead_letter')),
+    attempts integer not null default 0,
+    lease uuid,
+    lease_until timestamptz,
+    acknowledged_at timestamptz,
+    primary key(consumer,event_id)
+);
+create index integration_deliveries_pending on integration_deliveries(consumer,state,lease_until);
+
+INSERT INTO source_revisions (name, shard) SELECT 'assemblies', shard FROM generate_series(0, 15) AS shard;
+CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON assemblies FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();

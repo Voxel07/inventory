@@ -1,0 +1,110 @@
+{
+  "modules": {
+    "notification": {
+      "requires": [
+        "platform"
+      ],
+      "tables": [
+        "notifications"
+      ]
+    },
+    "reporting": {
+      "requires": [
+        "platform"
+      ],
+      "tables": [
+        "operational_reports",
+        "report_rebuild_jobs"
+      ]
+    },
+    "integration": {
+      "requires": [
+        "platform"
+      ],
+      "tables": [
+        "domain_event_outbox",
+        "integration_aggregate_sequences",
+        "integration_deliveries",
+        "integration_subscriptions"
+      ]
+    },
+    "platform": {
+      "requires": [],
+      "tables": []
+    },
+    "blobs": {
+      "requires": [
+        "platform"
+      ],
+      "tables": []
+    },
+    "operations": {
+      "requires": [
+        "platform",
+        "notification",
+        "reporting",
+        "blobs",
+        "integration"
+      ],
+      "tables": [
+        "action_reminders",
+        "app_users",
+        "assemblies",
+        "assembly_items",
+        "asset_instances",
+        "category_maintenance_policies",
+        "custody_handover_lines",
+        "custody_handovers",
+        "damage_reports",
+        "equipment_commitments",
+        "event_attendee_roles",
+        "event_attendees",
+        "event_occurrences",
+        "event_people",
+        "event_timeline_entries",
+        "factions",
+        "goods_receipt_lines",
+        "goods_receipts",
+        "handover_evidence",
+        "inventory_access_grants",
+        "inventory_access_group_members",
+        "inventory_access_groups",
+        "inventory_access_links",
+        "inventory_access_policies",
+        "inventory_count_lines",
+        "inventory_count_sessions",
+        "inventory_lots",
+        "inventory_media_objects",
+        "inventory_positions",
+        "inventory_transfer_lines",
+        "inventory_transfers",
+        "item_images",
+        "items",
+        "loan_arrangements",
+        "maintenance_records",
+        "maintenance_schedules",
+        "media_cleanup_jobs",
+        "member_requests",
+        "order_history",
+        "order_line_asset_assignments",
+        "order_lines",
+        "orders",
+        "planning_overrides",
+        "purchase_order_lines",
+        "purchase_orders",
+        "repair_cases",
+        "return_reconciliations",
+        "return_submissions",
+        "revoked_sessions",
+        "runtime_entries",
+        "source_revisions",
+        "stock_reservations",
+        "stock_transactions",
+        "storage_locations",
+        "sync_command_audit",
+        "vendor_documents",
+        "vendors"
+      ]
+    }
+  }
+}

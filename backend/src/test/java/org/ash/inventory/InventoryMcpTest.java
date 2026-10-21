@@ -1,5 +1,32 @@
 package org.ash.inventory;
 
+import org.ash.inventory.integration.internal.DomainEvent;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpDtos;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpPrompts;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpResources;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpTools;
+import org.ash.inventory.operations.internal.contract.ApiModels;
+import org.ash.inventory.operations.internal.model.Assembly;
+import org.ash.inventory.operations.internal.model.AssemblyItem;
+import org.ash.inventory.operations.internal.model.AssemblyItemId;
+import org.ash.inventory.operations.internal.model.AssetInstance;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.EventOccurrence;
+import org.ash.inventory.operations.internal.model.Faction;
+import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
+import org.ash.inventory.operations.internal.model.InventoryOrder;
+import org.ash.inventory.operations.internal.model.InventoryPosition;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.model.MemberRequest;
+import org.ash.inventory.operations.internal.model.OrderLine;
+import org.ash.inventory.operations.internal.model.PurchaseOrder;
+import org.ash.inventory.operations.internal.model.StockReservation;
+import org.ash.inventory.operations.internal.model.StockTransaction;
+import org.ash.inventory.operations.internal.model.StorageLocation;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.model.Vendor;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkiverse.mcp.server.ToolCallException;
@@ -8,12 +35,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.mcp.InventoryMcpDtos;
-import org.ash.inventory.mcp.InventoryMcpPrompts;
-import org.ash.inventory.mcp.InventoryMcpResources;
-import org.ash.inventory.mcp.InventoryMcpTools;
-import org.ash.inventory.model.*;
-import org.ash.inventory.resource.ApiModels;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -270,7 +291,7 @@ class InventoryMcpTest {
             order.purpose = "Position availability regression";
             order.createdBy = em.find(UserAccount.class, owner.id);
             order.status = DomainEnums.OrderStatus.ready;
-            var line = new org.ash.inventory.model.OrderLine();
+            var line = new org.ash.inventory.operations.internal.model.OrderLine();
             line.order = order; line.item = em.find(Item.class, bulk.id); line.lineNumber = 1;
             line.requestedQuantity = 3; line.preparedQuantity = 3; line.sourceLocation = em.find(StorageLocation.class, location.id);
             order.lines.add(line);

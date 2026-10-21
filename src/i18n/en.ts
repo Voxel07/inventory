@@ -1461,6 +1461,8 @@ export default {
       selectAFile: 'Select a file.',
     },
     reportsPanel: {
+      generationPending: 'The report is being generated in the background. This view updates automatically.',
+      generationFailed: 'The report could not be generated. Retry or ask an administrator to review its limits.',
       reportLabels: {
         events: 'Event demand and use',
         availability: 'Availability by location',

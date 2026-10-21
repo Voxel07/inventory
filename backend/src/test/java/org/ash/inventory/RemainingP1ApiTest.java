@@ -10,6 +10,7 @@ import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class RemainingP1ApiTest {
+    @jakarta.inject.Inject org.ash.inventory.reporting.internal.ReportWorker reportWorker;
     private RequestSpecification admin() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "remaining-p1-admin").header("X-Actor-Role", "admin"); }
     private RequestSpecification reader() { return given().contentType(ContentType.JSON).header("X-Actor-Id", "remaining-p1-reader").header("X-Actor-Role", "read_only"); }
     private String item() {
@@ -64,7 +65,8 @@ class RemainingP1ApiTest {
         String item = item();
         var event = new HashMap<String, Object>(Map.of("name", "P1 planned-only event", "eventType", "DE", "startDate", "2039-04-12", "endDate", "2039-04-13", "plannedQuantities", Map.of(item, 20)));
         String eventId = admin().body(event).post("/api/events").then().statusCode(200).extract().path("id");
-        admin().post("/api/reports/events/rebuild").then().statusCode(204);
+        admin().post("/api/reports/events/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         String filter = "/api/reports/events?eventId=" + eventId + "&itemId=" + item;
         admin().get(filter).then().statusCode(200).body("total", equalTo(1)).body("rows[0].planned", equalTo(20)).body("rows[0].handedOver", equalTo(0)).body("stale", equalTo(false));
         String generation = admin().get(filter).then().statusCode(200).extract().path("generatedAt");
@@ -74,16 +76,21 @@ class RemainingP1ApiTest {
         admin().get("/api/reports/events/export").then().statusCode(400);
         event.put("plannedQuantities", Map.of(item, 25));
         admin().body(event).patch("/api/events/" + eventId).then().statusCode(200);
+        // Opening a stale report serves the previous generation and queues its rebuild.
+        admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(20)).body("stale", equalTo(true));
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25)).body("stale", equalTo(false));
         admin().queryParam("generation", generation).queryParam("eventId", eventId).queryParam("itemId", item)
                 .get("/api/reports/events/export").then().statusCode(409);
-        admin().post("/api/reports/events/rebuild").then().statusCode(204);
+        admin().post("/api/reports/events/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().queryParam("generation", generation).get("/api/reports/events/export").then().statusCode(409);
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25));
         admin().get(filter + "&from=2040-01-01").then().statusCode(200).body("total", equalTo(0));
         admin().get(filter + "&from=bad-date").then().statusCode(400);
         for (String name : List.of("availability", "returns", "repairs", "maintenance", "purchases", "counts", "movements")) {
-            admin().post("/api/reports/" + name + "/rebuild").then().statusCode(204);
+            admin().post("/api/reports/" + name + "/rebuild").then().statusCode(202);
+        for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
             admin().get("/api/reports/" + name).then().statusCode(200).body("generatedAt", notNullValue());
         }
         admin().get("/api/reports/availability?itemId=" + item).then().statusCode(200)

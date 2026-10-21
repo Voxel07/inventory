@@ -47,7 +47,7 @@ For a stateful Streamable HTTP session, initialize, send `notifications/initiali
 
 ## Tool contracts
 
-Create/update tools accept a required nested `input` object using the explicit REST records in [ApiModels.java](../backend/src/main/java/org/ash/inventory/resource/ApiModels.java). Item, assembly, event, location and asset responses use [ApiResponses.java](../backend/src/main/java/org/ash/inventory/resource/dto/ApiResponses.java). MCP stock positions, alerts, summaries and delete results have explicit records in [InventoryMcpDtos.java](../backend/src/main/java/org/ash/inventory/mcp/InventoryMcpDtos.java).
+Create/update tools accept a required nested `input` object using the explicit REST records in [ApiModels.java](../backend/src/main/java/org/ash/inventory/operations/internal/contract/ApiModels.java). Item, assembly, event, location and asset responses use [ApiResponses.java](../backend/src/main/java/org/ash/inventory/operations/internal/contract/dto/ApiResponses.java). MCP stock positions, alerts, summaries and delete results have explicit records in [InventoryMcpDtos.java](../backend/src/main/java/org/ash/inventory/operations/adapter/mcp/InventoryMcpDtos.java).
 
 This replaces the old individual create/update parameters and MCP-specific catalog DTOs. `delete_item` accepts only `itemId` and retires the item. `list_asset_instances` requires `itemId`. Clients should refresh `tools/list` and use the current schemas.
 

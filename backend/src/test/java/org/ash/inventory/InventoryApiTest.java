@@ -1,15 +1,16 @@
 package org.ash.inventory;
 
+import org.ash.inventory.integration.api.DomainEventService;
+import org.ash.inventory.integration.api.OutboxStatus;
+import org.ash.inventory.integration.internal.DomainEvent;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
-import org.ash.inventory.model.DomainEvent;
-import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.service.DomainEventService;
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -584,20 +585,20 @@ class InventoryApiTest {
     @Test
     void expiredOutboxLeasesAreDeadLetteredAndPublishedAcksAreBatched() {
         java.util.UUID expiredId = QuarkusTransaction.requiringNew().call(() -> {
-            var event = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+            var event = outboxEvent(OutboxStatus.processing, java.time.Instant.parse("2000-01-01T00:00:00Z"));
             event.attemptCount = 10;
             entityManager.persist(event);
             entityManager.flush();
             return event.id;
         });
         domainEvents.claim(1);
-        DomainEnums.OutboxStatus expiredStatus = QuarkusTransaction.requiringNew().call(() ->
+        OutboxStatus expiredStatus = QuarkusTransaction.requiringNew().call(() ->
                 entityManager.find(DomainEvent.class, expiredId).status);
-        org.junit.jupiter.api.Assertions.assertEquals(DomainEnums.OutboxStatus.dead_letter, expiredStatus);
+        org.junit.jupiter.api.Assertions.assertEquals(OutboxStatus.dead_letter, expiredStatus);
 
         java.util.List<java.util.UUID> publishedIds = QuarkusTransaction.requiringNew().call(() -> {
-            var first = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
-            var second = outboxEvent(DomainEnums.OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
+            var first = outboxEvent(OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
+            var second = outboxEvent(OutboxStatus.processing, java.time.Instant.now().plusSeconds(3600));
             entityManager.persist(first);
             entityManager.persist(second);
             entityManager.flush();
@@ -609,12 +610,12 @@ class InventoryApiTest {
                 where event.id in :ids and event.status = :status
                 """, Long.class)
                 .setParameter("ids", publishedIds)
-                .setParameter("status", DomainEnums.OutboxStatus.published)
+                .setParameter("status", OutboxStatus.published)
                 .getSingleResult());
         org.junit.jupiter.api.Assertions.assertEquals(2L, publishedCount);
     }
 
-    private DomainEvent outboxEvent(DomainEnums.OutboxStatus status, java.time.Instant availableAt) {
+    private DomainEvent outboxEvent(OutboxStatus status, java.time.Instant availableAt) {
         var event = new DomainEvent();
         event.eventType = "test.event";
         event.aggregateType = "test";
@@ -870,7 +871,7 @@ class InventoryApiTest {
                 where reconciliation.order.id = :orderId and reconciliation.outcome = :outcome
                 """, Object[].class)
                 .setParameter("orderId", java.util.UUID.fromString(orderId))
-                .setParameter("outcome", org.ash.inventory.model.DomainEnums.ReconciliationOutcome.missing)
+                .setParameter("outcome", org.ash.inventory.operations.internal.model.DomainEnums.ReconciliationOutcome.missing)
                 .getSingleResult());
         org.junit.jupiter.api.Assertions.assertEquals(2L, missingAudit[0]);
         org.junit.jupiter.api.Assertions.assertEquals(2L, missingAudit[1]);

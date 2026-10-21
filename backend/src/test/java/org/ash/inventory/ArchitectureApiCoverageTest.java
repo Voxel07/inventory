@@ -1,14 +1,18 @@
 package org.ash.inventory;
 
+import org.ash.inventory.integration.api.EventBroadcaster;
+import org.ash.inventory.integration.api.OutboxStatus;
+import org.ash.inventory.integration.internal.DomainEvent;
+import org.ash.inventory.notification.internal.Notification;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.platform.api.BusinessTime;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.helper.BusinessTime;
-import org.ash.inventory.helper.event.EventBroadcaster;
-import org.ash.inventory.model.*;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -244,7 +248,7 @@ class ArchitectureApiCoverageTest {
                 .post("/api/orders/faction/" + order + "/return").then().statusCode(200);
         admin().get("/api/orders/faction/" + order + "/reconciliations").then().statusCode(200).body("size()", equalTo(1));
         String notification = QuarkusTransaction.requiringNew().call(() -> {
-            var n = new Notification(); n.recipient = em.find(UserAccount.class, UUID.fromString(creator)); n.type = "architecture.review";
+            var n = new Notification(); n.recipientId = UUID.fromString(creator); n.type = "architecture.review";
             em.persist(n); return n.id.toString();
         });
         reader().get("/api/notifications").then().statusCode(200).body("id", not(hasItem(notification)));
@@ -261,7 +265,7 @@ class ArchitectureApiCoverageTest {
     @Test void deadLetterRecoveryHasAdminGuardAndResetsDeliveryState() {
         String id = QuarkusTransaction.requiringNew().call(() -> {
             var event = new DomainEvent(); event.eventType = "architecture.review"; event.aggregateType = "review";
-            event.aggregateId = UUID.randomUUID(); event.status = DomainEnums.OutboxStatus.dead_letter;
+            event.aggregateId = UUID.randomUUID(); event.status = OutboxStatus.dead_letter;
             event.attemptCount = 10; event.lastError = "Delivery failed"; em.persist(event); return event.id.toString();
         });
         reader().get("/api/outbox/status").then().statusCode(403);

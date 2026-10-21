@@ -49,7 +49,7 @@ export function ReportsPanel() {
   async function download(format: 'csv' | 'pdf') {
     setExporting(true); setExportError('');
     try {
-      const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('operations.reportsPanel.reportRebuiltDuringExportPleaseRetry'));
+      const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('operations.reportsPanel.reportRebuiltDuringExportPleaseRetry'), t('operations.reportsPanel.generationPending'));
       const fileName = `${name}-${generation?.slice(0, 10) ?? 'unbuilt'}.${format}`;
       if (format === 'pdf') {
         const label = labels[name as keyof typeof labels];
@@ -70,7 +70,7 @@ export function ReportsPanel() {
     <Alert severity={report.data?.stale ? 'warning' : 'info'}>{report.data?.generatedAt ? <>{t('operations.reportsPanel.generated')}: {formatDateTime(report.data.generatedAt)} · {report.data.stale ? t('operations.reportsPanel.sourcesOrTimeReferenceChangedRebuildRequired') : t('operations.reportsPanel.asOfTheLastRebuild')}</> : t('operations.reportsPanel.noReportBuiltYetRebuildFromSourceRecordsNow')}</Alert>
     <ActionBar align="start" actions={[
       { key: 'rebuild', label: t('operations.reportsPanel.rebuildReport'), title: translate('operations.reportsPanel.recalculateThisReportUsingCurrentData'),
-        variant: 'contained', pinned: true, disabled: command.isPending, onClick: () => command.mutate(() => reportApi.rebuild(name)) },
+        variant: 'contained', pinned: true, disabled: command.isPending || ['pending', 'running', 'retry'].includes(report.data?.job.state ?? ''), onClick: () => command.mutate(async () => { await reportApi.rebuild(name); await report.refetch(); }) },
       { key: 'csv', label: t('operations.reportsPanel.exportFilteredCSV'), title: translate('operations.reportsPanel.downloadTheFilteredReportDataAsCSV'),
         variant: 'text', disabled: exporting || !report.data?.generatedAt, onClick: () => { void download('csv'); } },
       { key: 'pdf', label: t('operations.reportsPanel.exportFilteredPDF'), title: translate('operations.reportsPanel.downloadTheFilteredReportAsPDF'),
@@ -96,7 +96,9 @@ export function ReportsPanel() {
       </Box>
     </Stack>
     {(filters.from || filters.to) && <Typography variant="caption">{t('operations.reportsPanel.dateFiltersExcludeRowsWithNoDateTheDefinitionAbove')}</Typography>}
-    {(report.isFetching || command.isPending || exporting) && <LinearProgress />}
+    {['pending', 'running', 'retry'].includes(report.data?.job.state ?? '') && <Alert severity="info">{t('operations.reportsPanel.generationPending')}</Alert>}
+    {report.data?.job.state === 'failed' && <Alert severity="error">{t('operations.reportsPanel.generationFailed')}</Alert>}
+    {(report.isFetching || command.isPending || exporting || ['pending', 'running', 'retry'].includes(report.data?.job.state ?? '')) && <LinearProgress />}
     {(report.error || definitions.error || command.error || exportError) && <Alert severity="error">{(report.error || definitions.error || command.error)?.message || exportError}</Alert>}
     {['purchases', 'movements'].includes(name) && <Typography variant="body2">{t('operations.reportsPanel.selectOneItemToSeeMonthlyTotalsByStatusAcross')}</Typography>}
     {!!report.data?.monthlyTotals.length && <TableContainer><Table size="small"><TableHead><TableRow>{Object.keys(report.data.monthlyTotals[0]).map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data.monthlyTotals.map((row, i) => <TableRow key={i}>{Object.entries(row).map(([key, value]) => <TableCell key={key}>{String(value ?? '—')}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>}

@@ -1,0 +1,212 @@
+package org.ash.inventory.operations.internal.application;
+
+import org.ash.inventory.integration.api.DomainEventService;
+import org.ash.inventory.operations.internal.contract.ApiModels;
+import org.ash.inventory.operations.internal.contract.dto.LifecycleDtos;
+import org.ash.inventory.operations.internal.model.AssetInstance;
+import org.ash.inventory.operations.internal.model.DamageReport;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.model.RepairCase;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.model.Vendor;
+import org.ash.inventory.operations.internal.persistence.LifecycleOrm;
+import org.ash.inventory.operations.internal.security.ActorService;
+import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
+import org.ash.inventory.platform.api.ApiException;
+import org.ash.inventory.platform.api.PageBounds;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+@ApplicationScoped
+public class LifecycleService {
+    private static final Map<DomainEnums.RepairStatus, Set<DomainEnums.RepairStatus>> TRANSITIONS = Map.of(
+            DomainEnums.RepairStatus.reported, Set.of(DomainEnums.RepairStatus.triaged, DomainEnums.RepairStatus.written_off),
+            DomainEnums.RepairStatus.triaged, Set.of(DomainEnums.RepairStatus.awaiting_repair, DomainEnums.RepairStatus.written_off),
+            DomainEnums.RepairStatus.awaiting_repair, Set.of(DomainEnums.RepairStatus.in_repair, DomainEnums.RepairStatus.written_off),
+            DomainEnums.RepairStatus.in_repair, Set.of(DomainEnums.RepairStatus.repaired, DomainEnums.RepairStatus.written_off),
+            DomainEnums.RepairStatus.repaired, Set.of(DomainEnums.RepairStatus.verified),
+            DomainEnums.RepairStatus.verified, Set.of(DomainEnums.RepairStatus.returned_to_service));
+
+    private final LifecycleOrm orm;
+    private final ActorService actors;
+    private final DomainEventService events;
+    private final InventoryOperationsService inventory;
+
+    public LifecycleService(LifecycleOrm orm, ActorService actors, DomainEventService events,
+            InventoryOperationsService inventory) {
+        this.orm = orm;
+        this.actors = actors;
+        this.events = events;
+        this.inventory = inventory;
+    }
+
+    public List<MaintenanceSchedule> schedules(UUID itemId, UUID assetId, int page, int size) {
+        actors.current();
+        return orm.schedules(itemId, assetId, PageBounds.of(page, size).offset(), size);
+    }
+
+    @Transactional
+    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
+    public MaintenanceSchedule createSchedule(LifecycleDtos.ScheduleInput input) {
+        actors.requireWarehouse();
+        var schedule = new MaintenanceSchedule();
+        apply(schedule, input);
+        orm.persist(schedule);
+        events.record("maintenance_schedule.created", "maintenance_schedule", schedule.id, actors.current().id, null,
+                Map.of("itemId", schedule.item.id.toString()));
+        return schedule;
+    }
+
+    @Transactional
+    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
+    public MaintenanceSchedule updateSchedule(UUID id, LifecycleDtos.ScheduleInput input) {
+        actors.requireWarehouse();
+        var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
+        apply(schedule, input);
+        events.record("maintenance_schedule.updated", "maintenance_schedule", schedule.id, actors.current().id, null,
+                scheduleEvidence(schedule));
+        return schedule;
+    }
+
+    @Transactional
+    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
+    public void retireSchedule(UUID id) {
+        actors.requireWarehouse();
+        var schedule = orm.requireLocked(MaintenanceSchedule.class, id, "Maintenance schedule");
+        schedule.active = false;
+        events.record("maintenance_schedule.retired", "maintenance_schedule", schedule.id, actors.current().id, null,
+                scheduleEvidence(schedule));
+    }
+
+    /** Audit payload: what changes checkout blocking and due-date evaluation for other sessions. */
+    private static Map<String, Object> scheduleEvidence(MaintenanceSchedule schedule) {
+        var payload = new java.util.LinkedHashMap<String, Object>();
+        payload.put("itemId", schedule.item.id.toString());
+        if (schedule.assetInstance != null) payload.put("assetInstanceId", schedule.assetInstance.id.toString());
+        payload.put("active", schedule.active);
+        payload.put("checkoutBlocking", schedule.checkoutBlocking);
+        if (schedule.nextDueAt != null) payload.put("nextDueAt", schedule.nextDueAt.toString());
+        if (schedule.nextDueValue != null) payload.put("nextDueValue", schedule.nextDueValue.toPlainString());
+        return payload;
+    }
+
+    private void apply(MaintenanceSchedule schedule, LifecycleDtos.ScheduleInput input) {
+        schedule.item = orm.require(Item.class, input.itemId(), "Item");
+        schedule.assetInstance = input.assetInstanceId() == null ? null : orm.require(AssetInstance.class, input.assetInstanceId(), "Asset");
+        if (schedule.assetInstance != null && !schedule.assetInstance.item.id.equals(schedule.item.id)) {
+            throw ApiException.badRequest("Maintenance asset does not belong to item");
+        }
+        schedule.maintenanceType = input.maintenanceType();
+        schedule.intervalType = input.intervalType();
+        schedule.intervalValue = input.intervalValue();
+        schedule.nextDueAt = input.nextDueAt();
+        schedule.nextDueValue = input.nextDueValue();
+        if (schedule.intervalType == DomainEnums.MaintenanceIntervalType.date && schedule.nextDueAt == null) {
+            throw ApiException.badRequest("nextDueAt is required for date-based schedules");
+        }
+        if (schedule.intervalType != DomainEnums.MaintenanceIntervalType.date && schedule.nextDueValue == null) {
+            throw ApiException.badRequest("nextDueValue is required for meter-based schedules");
+        }
+        schedule.warningWindow = input.warningWindow() == null ? BigDecimal.ZERO : input.warningWindow();
+        schedule.responsiblePerson = input.responsiblePersonId() == null ? null : orm.require(UserAccount.class, input.responsiblePersonId(), "User");
+        schedule.requiredChecklist = input.requiredChecklist();
+        schedule.checkoutBlocking = input.checkoutBlocking();
+        if (input.active() != null) schedule.active = input.active();
+    }
+
+    public List<RepairCase> repairs(String status, int page, int size) {
+        actors.current();
+        try { return orm.repairs(status, PageBounds.of(page, size).offset(), size); }
+        catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown repair status"); }
+    }
+
+    @Transactional
+    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
+    public RepairCase createRepair(LifecycleDtos.RepairInput input) {
+        actors.requireWarehouse();
+        var occurredAt = inventory.historicalTimestamp(input.occurredAt());
+        var damage = orm.require(DamageReport.class, input.damageReportId(), "Damage report");
+        var existing = orm.repairForDamage(damage.id);
+        if (existing != null) return existing;
+        if (occurredAt.isBefore(damage.createdAt)) throw ApiException.badRequest("Repair date precedes damage report");
+        var repair = new RepairCase();
+        repair.createdAt = occurredAt;
+        repair.damageReport = damage;
+        repair.assetInstance = damage.assetInstance;
+        repair.handover = damage.handover;
+        repair.safetyImpact = damage.safetyImpact;
+        repair.repairOwner = input.repairOwnerId() == null ? actors.current() : orm.require(UserAccount.class, input.repairOwnerId(), "User");
+        repair.repairVendor = input.vendorId() == null ? null : orm.require(Vendor.class, input.vendorId(), "Vendor");
+        repair.partsAndCostNotes = input.partsAndCostNotes();
+        repair.notes = input.notes();
+        orm.persist(repair);
+        events.record("repair.created", "repair_case", repair.id, actors.current().id, null,
+                Map.of("damageReportId", damage.id.toString()));
+        return repair;
+    }
+
+    @Transactional
+    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
+    public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
+        actors.requireWarehouse();
+        var occurredAt = inventory.historicalTimestamp(input.occurredAt());
+        var repair = orm.requireLocked(RepairCase.class, id, "Repair case");
+        if (occurredAt.isBefore(repair.createdAt)
+                || (repair.startedAt != null && occurredAt.isBefore(repair.startedAt))
+                || (repair.completedAt != null && occurredAt.isBefore(repair.completedAt))) {
+            throw ApiException.badRequest("Repair transition date precedes prior repair activity");
+        }
+        if (!TRANSITIONS.getOrDefault(repair.status, Set.of()).contains(input.status())) {
+            throw ApiException.conflict("Invalid repair transition: " + repair.status + " -> " + input.status());
+        }
+        if (input.status() == DomainEnums.RepairStatus.written_off) actors.requireAdmin();
+        if (input.repairOwnerId() != null) repair.repairOwner = orm.require(UserAccount.class, input.repairOwnerId(), "User");
+        if (input.vendorId() != null) repair.repairVendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
+        if (input.status() == DomainEnums.RepairStatus.in_repair && repair.startedAt == null) repair.startedAt = occurredAt;
+        if (input.status() == DomainEnums.RepairStatus.repaired || input.status() == DomainEnums.RepairStatus.written_off) {
+            int amount = input.amount() == null && repair.assetInstance != null ? 1
+                    : input.amount() == null ? 0 : input.amount();
+            if (amount < 1) throw ApiException.badRequest("amount is required for a bulk repair resolution");
+            if (input.status() == DomainEnums.RepairStatus.repaired) {
+                int unresolved = repair.damageReport.quantity - repair.damageReport.repairedQuantity - repair.damageReport.writtenOffQuantity;
+                if (amount > unresolved) throw ApiException.badRequest("Repair quantity exceeds unresolved damage");
+                repair.repairedPendingQuantity = amount;
+            } else {
+                inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
+                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
+            }
+            repair.completedAt = occurredAt;
+        }
+        if (input.status() == DomainEnums.RepairStatus.verified) {
+            if (input.verificationResult() == null || input.verificationResult().isBlank()) {
+                throw ApiException.badRequest("verificationResult is required");
+            }
+            repair.verificationResult = input.verificationResult();
+            repair.approvedBy = actors.current();
+        }
+        if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.repairedPendingQuantity > 0) {
+            inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
+                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
+            repair.repairedPendingQuantity = 0;
+        }
+        if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {
+            // Custody, reservation and transit states stay owned by their workflows.
+            repair.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
+            repair.assetInstance.availabilityStatus = StockPolicy.releasedState(repair.assetInstance);
+        }
+        repair.status = input.status();
+        repair.notes = input.notes() == null ? repair.notes : input.notes();
+        events.record("repair." + input.status().name(), "repair_case", repair.id, actors.current().id,
+                input.idempotencyKey(), Map.of("damageReportId", repair.damageReport.id.toString()));
+        return repair;
+    }
+
+}

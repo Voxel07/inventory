@@ -1,5 +1,25 @@
 package org.ash.inventory;
 
+import org.ash.inventory.reporting.internal.ReportStore;
+import org.ash.inventory.notification.internal.Notification;
+import org.ash.inventory.notification.internal.NotificationDeliveryService;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpResources;
+import org.ash.inventory.operations.adapter.mcp.InventoryMcpTools;
+import org.ash.inventory.operations.internal.application.MaintenancePolicy;
+import org.ash.inventory.operations.internal.application.PersonalDataRetentionService;
+import org.ash.inventory.operations.internal.model.ActionReminder;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.EventAttendee;
+import org.ash.inventory.operations.internal.model.EventOccurrence;
+import org.ash.inventory.operations.internal.model.EventPerson;
+import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.model.StorageLocation;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.platform.api.ApiException;
+import org.ash.inventory.reporting.internal.OperationalReport;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.TestTransaction;
@@ -7,10 +27,6 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.model.*;
-import org.ash.inventory.mcp.*;
-import org.ash.inventory.orm.OperationalReportOrm;
-import org.ash.inventory.service.*;
 import org.junit.jupiter.api.Test;
 import java.time.*;
 import java.util.*;
@@ -21,10 +37,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 class ReviewFollowupApiTest {
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.application.NotificationTaskService notificationTasks;
     @Inject EntityManager em;
     @Inject InventoryMcpResources resources;
     @Inject InventoryMcpTools tools;
-    @Inject OperationalReportOrm reportRows;
+    @Inject ReportStore reportRows;
     @Inject PersonalDataRetentionService retention;
     @Inject NotificationDeliveryService delivery;
     private RequestSpecification actor(String id, String role) {
@@ -133,25 +150,20 @@ class ReviewFollowupApiTest {
                 .header("X-Has-More",equalTo("true")).body("[0].id",equalTo(visible));
     }
 
-    @Test void concurrentOnOpenRefreshServesTheLastSnapshotWhileExplicitRebuildConflicts() throws Exception {
+    @Test void concurrentOnOpenRefreshServesTheLastSnapshotAndRebuildRequestsCoalesce() throws Exception {
         QuarkusTransaction.requiringNew().run(()->{
             var report=em.find(OperationalReport.class,"events");if(report==null){report=new OperationalReport();report.name="events";em.persist(report);}
             report.startedAt=Instant.now().minusSeconds(600);report.generatedAt=report.startedAt;report.sourceToken="old";
             report.rows=List.of(Map.of("id","stale-marker","label","Last committed view"));
         });
-        var acquired=new CountDownLatch(1);var release=new CountDownLatch(1);
+        admin().get("/api/reports/events").then().statusCode(200).body("stale",equalTo(true)).body("rows[0].label",equalTo("Last committed view"));
         try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
-            var lock=executor.submit(()->QuarkusTransaction.requiringNew().run(()->{
-                em.createNativeQuery("select pg_advisory_xact_lock(659743252,hashtext('events'))").getSingleResult();acquired.countDown();
-                try {assertTrue(release.await(15,TimeUnit.SECONDS));}catch(InterruptedException e){throw new RuntimeException(e);}
-            }));
-            try {
-                assertTrue(acquired.await(5,TimeUnit.SECONDS));
-                admin().get("/api/reports/events").then().statusCode(200).body("stale",equalTo(true)).body("rows[0].label",equalTo("Last committed view"));
-                admin().post("/api/reports/events/rebuild").then().statusCode(409);
-            } finally {release.countDown();}
-            lock.get(5,TimeUnit.SECONDS);
+            var first=executor.submit(()->admin().post("/api/reports/events/rebuild").then().statusCode(202).extract().path("state"));
+            var second=executor.submit(()->admin().post("/api/reports/events/rebuild").then().statusCode(202).extract().path("state"));
+            assertEquals("pending",first.get(5,TimeUnit.SECONDS));assertEquals("pending",second.get(5,TimeUnit.SECONDS));
         }
+        assertEquals(1L,QuarkusTransaction.requiringNew().call(()->((Number)em.createNativeQuery("select count(*) from report_rebuild_jobs where name='events'").getSingleResult()).longValue()));
+        admin().get("/api/reports/events").then().statusCode(200).body("rows[0].label",equalTo("Last committed view"));
     }
 
     @Test void sqlReportFiltersPagesTotalsAndPrivacyApplyBeforePagination() {
@@ -169,20 +181,20 @@ class ReviewFollowupApiTest {
         });
         QuarkusTransaction.requiringNew().run(()->{
             var viewer=em.find(UserAccount.class,ids[0]);
-            var first=reportRows.rows("movements",Map.of("category","Filter review"),viewer,0,1);
-            var second=reportRows.rows("movements",Map.of(),viewer,1,1);
+            var first=reportRows.rows("movements",Map.of("category","Filter review"),viewer.id,0,1);
+            var second=reportRows.rows("movements",Map.of(),viewer.id,1,1);
             assertEquals(2,first.total());assertEquals("row-0",first.rows().getFirst().get("id"));assertEquals("row-1",second.rows().getFirst().get("id"));
-            var filtered=reportRows.rows("movements",Map.of("itemId",ids[1].toString(),"from","2030-01-01","to","2030-01-02","status","consumed","search","%_"),viewer,0,100);
+            var filtered=reportRows.rows("movements",Map.of("itemId",ids[1].toString(),"from","2030-01-01","to","2030-01-02","status","consumed","search","%_"),viewer.id,0,100);
             assertEquals(1,filtered.total());assertEquals(2,((Number)filtered.monthlyTotals().getFirst().get("quantity")).intValue());
-            assertEquals(5,((Number)reportRows.rows("movements",Map.of("itemId",ids[1].toString()),viewer,0,100).monthlyTotals().getFirst().get("quantity")).intValue());
-            assertThrows(org.ash.inventory.resource.ApiException.class,()->reportRows.rows("movements",Map.of("unsupported","x"),viewer,0,100));
+            assertEquals(5,((Number)reportRows.rows("movements",Map.of("itemId",ids[1].toString()),viewer.id,0,100).monthlyTotals().getFirst().get("quantity")).intValue());
+            assertThrows(org.ash.inventory.platform.api.ApiException.class,()->reportRows.rows("movements",Map.of("unsupported","x"),viewer.id,0,100));
         });
     }
 
     @Test @TestTransaction void retentionPurgesOnlyExpiredTransientRowsAndOldUnlinkedAttendees() {
         var person=user("Retention linked person");
-        var sent=new Notification();sent.recipient=person;sent.type="retention-fixture";sent.deliveryStatus="sent";sent.createdAt=Instant.now().minus(Duration.ofDays(181));em.persist(sent);
-        var pending=new Notification();pending.recipient=person;pending.type="retention-fixture";pending.createdAt=sent.createdAt;em.persist(pending);
+        var sent=new Notification();sent.recipientId=person.id;sent.type="retention-fixture";sent.deliveryStatus="sent";sent.createdAt=Instant.now().minus(Duration.ofDays(181));em.persist(sent);
+        var pending=new Notification();pending.recipientId=person.id;pending.type="retention-fixture";pending.createdAt=sent.createdAt;em.persist(pending);
         var reminder=new ActionReminder();reminder.user=person;reminder.actionKey="retention-fixture";em.persist(reminder);
         var oldEvent=new EventOccurrence();oldEvent.eventType="DE";oldEvent.name="Old retention event";oldEvent.startDate=LocalDate.now().minusDays(800);oldEvent.endDate=oldEvent.startDate;em.persist(oldEvent);
         var unlinked=new EventPerson();unlinked.name="Old unlinked name";em.persist(unlinked);
@@ -214,8 +226,8 @@ class ReviewFollowupApiTest {
         em.createNativeQuery("alter table maintenance_schedules alter column warning_window drop not null").executeUpdate();
         em.createNativeQuery("update maintenance_schedules set warning_window=null where id=:id").setParameter("id",schedule.id).executeUpdate();
         assertEquals(Boolean.TRUE,em.createNativeQuery("select inventory_maintenance_attention(:id)").setParameter("id",item.id).getSingleResult());
-        delivery.digest();
-        assertEquals(1L,em.createQuery("select count(n) from Notification n where n.recipient=:user and n.type='action_digest'",Long.class).setParameter("user",recipient).getSingleResult());
+        notificationTasks.digest();
+        assertEquals(1L,em.createQuery("select count(n) from Notification n where n.recipientId=:user and n.type='action_digest'",Long.class).setParameter("user",recipient.id).getSingleResult());
         assertEquals(MaintenancePolicy.Status.unknown,MaintenancePolicy.status(new MaintenancePolicy.Facts(null,DomainEnums.MaintenanceIntervalType.date,schedule.nextDueAt,null,null),Instant.now(),null));
     }
 

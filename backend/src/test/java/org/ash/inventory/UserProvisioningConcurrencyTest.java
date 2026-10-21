@@ -1,11 +1,12 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.persistence.UserOrm;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ash.inventory.model.DomainEnums;
-import org.ash.inventory.model.UserAccount;
-import org.ash.inventory.orm.UserOrm;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -1,5 +1,19 @@
 package org.ash.inventory;
 
+import org.ash.inventory.operations.internal.model.AssetInstance;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.InventoryAccessGrant;
+import org.ash.inventory.operations.internal.model.InventoryAccessGroup;
+import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
+import org.ash.inventory.operations.internal.model.InventoryOrder;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.OrderLine;
+import org.ash.inventory.operations.internal.model.StorageLocation;
+import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.persistence.InventoryAccessOrm;
+import org.ash.inventory.operations.internal.persistence.UserOrm;
+import org.ash.inventory.operations.internal.security.ActorService;
+
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.quarkus.test.junit.QuarkusTest;
@@ -8,10 +22,6 @@ import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.TestTransaction;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import org.ash.inventory.helper.security.ActorService;
-import org.ash.inventory.model.*;
-import org.ash.inventory.orm.InventoryAccessOrm;
-import org.ash.inventory.orm.UserOrm;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 
@@ -127,9 +137,9 @@ class StorageQueryRegressionTest {
         order.name = "Order line privacy provenance";
         order.purpose = "regression";
         order.createdBy = owner;
-        var requested = new org.ash.inventory.model.OrderLine();
+        var requested = new org.ash.inventory.operations.internal.model.OrderLine();
         requested.order = order; requested.item = privateItem; requested.lineNumber = 1; requested.requestedQuantity = 1;
-        var sourced = new org.ash.inventory.model.OrderLine();
+        var sourced = new org.ash.inventory.operations.internal.model.OrderLine();
         sourced.order = order; sourced.item = publicItem; sourced.lineNumber = 2; sourced.requestedQuantity = 1; sourced.sourceLocation = location;
         order.lines.addAll(List.of(requested, sourced));
         em.persist(order);
