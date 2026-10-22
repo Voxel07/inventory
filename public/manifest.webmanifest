@@ -2,11 +2,14 @@
   "name": "ASH Inventory",
   "short_name": "Inventory",
   "description": "Offline-capable event inventory and custody management",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f4f1ea",
   "theme_color": "#fdfcf9",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/logo_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }

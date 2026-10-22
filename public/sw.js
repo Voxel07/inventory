@@ -3,7 +3,8 @@
 const BUILD_ID = '__BUILD_ID__';
 const CACHE_PREFIX = 'ash-inventory-shell-';
 const CACHE = `${CACHE_PREFIX}${BUILD_ID}`;
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg',
+  '/logo_180.png', '/logo_192.png', '/logo_512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

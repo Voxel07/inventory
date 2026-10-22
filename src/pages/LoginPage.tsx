@@ -14,6 +14,7 @@ import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
 import { translate, useT } from '../utils/naming';
 import { AUTH_CONFIGURATION_ERROR } from '../config/runtimeConfig';
+import { InstallAppCard } from '../components/shared/InstallAppCard';
 
 export function LoginPage() {
     const t = useT();
@@ -41,7 +42,6 @@ export function LoginPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'background.default',
                 py: 8,
             }}
         >
@@ -97,6 +97,7 @@ export function LoginPage() {
                     </Button>
                     <Box sx={{ mt: 3 }}><LanguageSelector compact /></Box>
                 </Paper>
+                <InstallAppCard />
             </Container>
         </Box>
     );

@@ -1,6 +1,14 @@
 import type { TranslationCatalog } from './types';
 
 export default {
+  pwa: {
+    title: 'Inventar installieren',
+    description: 'Füge Inventar zum Home-Bildschirm hinzu, um es direkt als App zu öffnen.',
+    install: 'App installieren',
+    appleInstructions: 'Öffne in Safari das Teilen-Menü und wähle Zum Home-Bildschirm. Lass Als Web-App öffnen aktiviert, falls angezeigt, und tippe auf Hinzufügen.',
+    browserInstructions: 'Öffne das Browsermenü und wähle App installieren oder Zum Startbildschirm hinzufügen. Falls beides fehlt, öffne diese Seite in Chrome auf Android oder Safari auf dem iPhone.',
+    failed: 'Der Installationsdialog konnte nicht geöffnet werden. Versuche die Installation über das Browsermenü.',
+  },
   review: {
     hiddenHierarchy: 'Die übergeordnete Struktur ist geschützt. Übergeordneten Ort beibehalten oder ausdrücklich einen neuen wählen.',
     reversedBy: 'Storniert von {{name}}',

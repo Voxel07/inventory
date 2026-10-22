@@ -1,4 +1,12 @@
 export default {
+  pwa: {
+    title: 'Install Inventory',
+    description: 'Add Inventory to your home screen to open it directly as an app.',
+    install: 'Install app',
+    appleInstructions: 'In Safari, open Share and choose Add to Home Screen. Leave Open as Web App enabled if shown, then tap Add.',
+    browserInstructions: 'Open your browser menu and choose Install app or Add to Home screen. If neither appears, open this page in Chrome on Android or Safari on iPhone.',
+    failed: 'The installation dialog could not be opened. Try installing from your browser menu.',
+  },
   review: {
     hiddenHierarchy: 'Parent hierarchy is restricted. Keep the current parent or explicitly select a new location.',
     reversedBy: 'Reversed by {{name}}',

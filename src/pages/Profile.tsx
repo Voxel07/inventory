@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useT, type TranslationKey } from '../utils/naming';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { factionKeyOf } from '../utils/access';
+import { InstallAppCard } from '../components/shared/InstallAppCard';
 
 const ROLE_KEYS: Record<string, TranslationKey> = {
   admin: 'profile.roles.admin',
@@ -99,6 +100,7 @@ export function Profile() {
           </Stack>
         </Stack>
       </Paper>
+      <InstallAppCard />
     </Box>
   );
 }

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Open box logo. Each part is its own element with an id and a class.
+    Change colours / stroke in the <style> block below; delete #background to get a transparent icon.
+  -->
+  <style>
+    :root {
+      --bg: #ffffff;
+      --hex: #e4e4e4;
+      --box: #000000;
+      --inside: #a8161d;
+      --edge: #c4c4c4;
+      --edge-width: 6;
+    }
+    .part   { stroke: var(--edge); stroke-width: var(--edge-width); stroke-linejoin: round; }
+    .body   { fill: var(--box); }
+    .flap   { fill: var(--box); }
+    .inside { fill: var(--inside); }
+  </style>
+
+  <defs>
+    <pattern id="hex-pattern" width="17.32" height="30" patternUnits="userSpaceOnUse">
+      <path d="M8.66 0 L17.32 5 V15 L8.66 20 L0 15 V5 Z M8.66 20 V30" fill="none" stroke="var(--hex)" stroke-width="0.75"/>
+    </pattern>
+  </defs>
+
+  <!-- Background (optional) -->
+  <g id="background">
+    <rect id="background-fill" width="512" height="512" fill="var(--bg)"/>
+    <rect id="background-hex" width="512" height="512" fill="url(#hex-pattern)"/>
+  </g>
+
+  <g id="box">
+    <!-- Back flaps (behind the opening) -->
+    <polygon id="flap-back-left"  class="part flap" points="150,205 106,167.5 207.5,120 256,161"/>
+    <polygon id="flap-back-right" class="part flap" points="256,161 304.5,120 406,167.5 362,205"/>
+
+    <!-- Inside of the box (two halves split by the back corner) -->
+    <polygon id="inside-left"  class="part inside" points="150,205 256,161 256,252.5"/>
+    <polygon id="inside-right" class="part inside" points="256,161 362,205 256,252.5"/>
+
+    <!-- Box body -->
+    <polygon id="body-left"  class="part body" points="150,205 256,252.5 256,390 150,345"/>
+    <polygon id="body-right" class="part body" points="256,252.5 362,205 362,345 256,390"/>
+
+    <!-- Front flaps (folded outward over the body) -->
+    <polygon id="flap-front-left"  class="part flap" points="150,205 256,252.5 212,302.5 106,252.5"/>
+    <polygon id="flap-front-right" class="part flap" points="256,252.5 362,205 406,252.5 300,302.5"/>
+  </g>
+</svg>
