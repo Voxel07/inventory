@@ -139,7 +139,7 @@ export function EventDetail() {
 
   const quantityInput = (values: QuantityInputs, setValues: (update: (current: QuantityInputs) => QuantityInputs) => void, id: string) =>
     <TextField type="number" size="small" value={values[id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [id]: event.target.value }))}
-      slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': itemName(id) } }} sx={{ width: 100 }} />;
+      slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', 'aria-label': itemName(id) } }} sx={{ width: { xs: 72, sm: 100 } }} />;
 
   return (
     <Box>
@@ -172,10 +172,10 @@ export function EventDetail() {
       </Stack>
 
       {!editing && <>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mb: 3 }}>
-          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
-          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
-          <Paper sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: { xs: 1, sm: 1.5 }, mb: 3 }}>
+          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
+          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
+          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
         </Box>
         <EventQuantities event={report} />
         <Paper sx={{ p: 2 }}>
@@ -184,7 +184,7 @@ export function EventDetail() {
         </Paper>
       </>}
 
-      {editing && <Paper sx={{ p: 2 }}>
+      {editing && <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
           <Typography variant="h6">{t('pages.eventDetail.itemsUsed')}</Typography>
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setAdding(true)}>{t('pages.eventDetail.addItems')}</Button>
@@ -193,24 +193,24 @@ export function EventDetail() {
           {closed ? t('pages.eventDetail.thisEventIsClosedUsedQuantitiesAreItsReport') : t('pages.eventDetail.usedQuantitiesComeFromOrdersUntilTheEventIsClosed')}
         </Typography>
         <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table size="small">
+          <Table size="small" sx={{ '& .MuiTableCell-root:not(.MuiTableCell-paddingNone)': { px: { xs: 0.75, sm: 2 } } }}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('common.item')}</TableCell>
-                <TableCell>{t('common.category')}</TableCell>
+                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{t('common.category')}</TableCell>
                 <TableCell align="right">{t('common.planned')}</TableCell>
                 <TableCell align="right">{t('common.used')}</TableCell>
-                <TableCell align="right" sx={{ width: 56 }} />
+                <TableCell align="right" padding="none" sx={{ width: 48 }} />
               </TableRow>
             </TableHead>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
-                  <TableCell>{row.category || '—'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, overflowWrap: 'break-word', hyphens: 'auto' }}>{row.name}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{row.category || '—'}</TableCell>
                   <TableCell align="right">{quantityInput(planned, setPlanned, row.id)}</TableCell>
                   <TableCell align="right">{closed ? quantityInput(used, setUsed, row.id) : usedQuantities[row.id] ?? 0}</TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" padding="none">
                     <IconButton size="small" title={t('pages.eventDetail.removeItem')} disabled={!closed && (usedQuantities[row.id] ?? 0) > 0} onClick={() => removeItem(row.id)}>
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>

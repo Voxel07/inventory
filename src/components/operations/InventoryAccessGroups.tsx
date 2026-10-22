@@ -46,6 +46,9 @@ function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => voi
   </Dialog>;
 }
 
+/** Owner and group type columns are dropped on phones; the owner moves under the group name. */
+const wideOnly = { display: { xs: 'none', sm: 'table-cell' } } as const;
+
 /**
  * Share groups: everyone who owns private inventory (e.g. a tenant for the people allowed into their
  * building) manages their own groups; read-only accounts only see the groups they belong to.
@@ -82,8 +85,8 @@ export function InventoryAccessGroups() {
     <TableContainer><Table size="small" aria-label={t('operations.inventoryAccessGroups.groupsForPrivateSharing')}>
       <TableHead><TableRow>
         <TableCell>{t('operations.inventoryAccessGroups.groupName')}</TableCell>
-        <TableCell>{t('operations.inventoryAccessGroups.owner')}</TableCell>
-        <TableCell>{t('operations.inventoryAccessGroups.groupType')}</TableCell>
+        <TableCell sx={wideOnly}>{t('operations.inventoryAccessGroups.owner')}</TableCell>
+        <TableCell sx={wideOnly}>{t('operations.inventoryAccessGroups.groupType')}</TableCell>
         <TableCell>{t('operations.inventoryAccessGroups.members')}</TableCell>
         <TableCell>{t('common.actions')}</TableCell>
       </TableRow></TableHead>
@@ -93,9 +96,12 @@ export function InventoryAccessGroups() {
           {groups.data.length ? t('operations.inventoryAccessGroups.noMatchingGroups') : t('operations.inventoryAccessGroups.noGroups')}
         </TableCell></TableRow>}
         {!groups.isError && pagination.pageItems.map(group => <TableRow key={group.id} hover>
-          <TableCell component="th" scope="row" sx={{ fontWeight: 700 }}>{group.name}</TableCell>
-          <TableCell>{group.ownerName ?? t('operations.inventoryAccessGroups.inventoryAdmins')}</TableCell>
-          <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small"
+          <TableCell component="th" scope="row" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+            {group.name}
+            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 400 }}>{group.ownerName ?? t('operations.inventoryAccessGroups.inventoryAdmins')}</Typography>
+          </TableCell>
+          <TableCell sx={wideOnly}>{group.ownerName ?? t('operations.inventoryAccessGroups.inventoryAdmins')}</TableCell>
+          <TableCell sx={{ ...wideOnly, whiteSpace: 'nowrap' }}><Chip size="small"
             label={group.ownerId ? t('operations.inventoryAccessGroups.personal') : t('operations.inventoryAccessGroups.adminManaged')}
             sx={{ bgcolor: group.ownerId ? '#1d4ed8' : '#c2410c', color: '#fff' }} /></TableCell>
           <TableCell>{group.canManage || group.memberIds.includes(user?.id ?? '') ? <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>

@@ -221,7 +221,7 @@ export function PrintQRCodesPage() {
                             renderInput={(params) => (
                                 <TextField {...params} label={t('pages.printQRCodes.selectItemOrAssembly')} size="small" />
                             )}
-                            sx={{ minWidth: 280 }}
+                            sx={{ minWidth: { xs: '100%', sm: 280 } }}
                         />
                     )}
                     {filterMode === 'selected' && <Autocomplete multiple options={allEntries}
@@ -233,7 +233,7 @@ export function PrintQRCodesPage() {
                             setPage(1);
                         }}
                         renderInput={(params) => <TextField {...params} label={t('pages.printQRCodes.selectQRCodes')} size="small" />}
-                        sx={{ minWidth: 300, flex: 1 }} />}
+                        sx={{ minWidth: { xs: '100%', sm: 300 }, flex: 1 }} />}
 
                     <TextField
                         select

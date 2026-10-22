@@ -2179,6 +2179,8 @@ export default {
       needed: 'Needed',
       editName: 'Edit {{name}}',
       removeName: 'Remove {{name}}',
+      detailsForName: 'Details for {{name}}',
+      linkedAppAccount: 'Linked app account',
       noMatchingAttendees: 'No matching attendees.',
       removeAttendee: 'Remove attendee',
       removeNameFromThisEventThePersonStaysAvailableFor: 'Remove {{name}} from this event? The person stays available for other events; food-stamp totals will be updated.',

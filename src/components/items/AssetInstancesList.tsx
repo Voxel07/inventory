@@ -1,6 +1,6 @@
 import { Button } from '../shared/ActionButtons';
 import { RowActions, type RowAction } from '../shared/RowActions';
-import { ActionBar } from '../shared/ActionBar';
+import { ActionBar, ActionMenu } from '../shared/ActionBar';
 import { useOverflowCollapse } from '../../hooks/useOverflowCollapse';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
@@ -273,7 +273,7 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                         <DynamicFeedIcon color="primary" fontSize="small" />
                         {t('items.assetInstancesList.serializedAssets')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
                         {t('items.assetInstancesList.individuallyIdentifiedPhysicalUnitsWithDistinctStatusesQRCodesAnd')}
                     </Typography>
                 </Box>
@@ -368,8 +368,10 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                         color={statusColorMap[asset.availabilityStatus] || 'default'}
                                         sx={{ flexShrink: 0 }}
                                     />
+                                    {/* Phones get every unit action in one menu instead of a row of icons. */}
+                                    <Box sx={{ flexShrink: 0, m: -0.75 }}><ActionMenu actions={assetActions(asset)} /></Box>
                                 </Box>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.8rem', color: 'text.secondary' }}>
                                     <div>{t('items.assetInstancesList.condition')}: <strong>{formatStatus(asset.conditionStatus)}</strong></div>
                                     <div>{t('enum.value.location')}: <strong>{asset.currentLocationCode || asset.currentLocationName || '—'}</strong></div>
                                     {item.tracksRuntime && (
@@ -380,7 +382,6 @@ export function AssetInstancesList({ item, canEdit = true, canReportDamage = tru
                                     )}
                                     {reservationNote(asset, '1 / -1')}
                                 </Box>
-                                <RowActions actions={assetActions(asset)} />
                             </CardContent>
                         </Card>
                     ))}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Autocomplete, Box, Chip, DialogContent, DialogTitle, InputAdornment, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Chip, DialogContent, DialogTitle, InputAdornment, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -8,6 +8,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import { Button, IconButton } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
+import { ActionMenu } from '../shared/ActionBar';
 import { FormDialog, DialogForm } from '../shared/FormDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { QueryFeedback } from '../common/QueryFeedback';
@@ -36,6 +37,9 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
   const term = search.trim().toLocaleLowerCase();
   const all = people.data ?? [];
   const visible = all.filter((person) => [person.name, person.userName ?? ''].join(' ').toLocaleLowerCase().includes(term));
+  const theme = useTheme();
+  // Phones keep the name and "add to event"; the account moves under the name, edit and delete into a menu.
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
 
   return <>
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -58,32 +62,43 @@ export function EventPeopleDirectory({ open, onClose, attendingPersonIds, onAddT
               <Table size="small" aria-label={t('events.eventPeopleDirectory.peopleList')}>
                 <TableHead><TableRow>
                   <TableCell>{t('profile.name')}</TableCell>
-                  <TableCell>{t('events.eventPeopleDirectory.appAccount')}</TableCell>
-                  <TableCell align="right">{t('nav.events')}</TableCell>
-                  <TableCell align="right">{t('common.actions')}</TableCell>
+                  {!compact && <TableCell>{t('events.eventPeopleDirectory.appAccount')}</TableCell>}
+                  {!compact && <TableCell align="right">{t('nav.events')}</TableCell>}
+                  <TableCell align="right">{compact ? '' : t('common.actions')}</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {visible.map((person) => {
                     const attending = attendingPersonIds.includes(person.id);
                     return <TableRow key={person.id} hover>
-                      <TableCell sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{person.name}</TableCell>
-                      <TableCell>{person.userName
+                      <TableCell sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                        {person.name}
+                        {compact && person.userName && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 400 }}>{person.userName}</Typography>}
+                      </TableCell>
+                      {!compact && <TableCell>{person.userName
                         ? <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><AccountCircleOutlinedIcon fontSize="small" color="action" /><span>{person.userName}</span></Stack>
-                        : '—'}</TableCell>
-                      <TableCell align="right" className="tabular">{person.attendances}</TableCell>
+                        : '—'}</TableCell>}
+                      {!compact && <TableCell align="right" className="tabular">{person.attendances}</TableCell>}
                       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                         {attending
                           ? <Chip size="small" variant="outlined" color="success" label={t('events.eventPeopleDirectory.attending')} sx={{ mr: 1 }} />
-                          : <Button size="small" startIcon={<PersonAddAlt1OutlinedIcon />} onClick={() => onAddToEvent(person)}>{t('events.eventPeopleDirectory.addToEvent')}</Button>}
+                          : compact
+                            ? <IconButton title={t('events.eventPeopleDirectory.addToEvent')} color="primary" onClick={() => onAddToEvent(person)}><PersonAddAlt1OutlinedIcon fontSize="small" /></IconButton>
+                            : <Button size="small" startIcon={<PersonAddAlt1OutlinedIcon />} onClick={() => onAddToEvent(person)}>{t('events.eventPeopleDirectory.addToEvent')}</Button>}
+                        {compact ? <ActionMenu actions={[
+                          { key: 'edit', label: t('common.edit'), icon: <EditOutlinedIcon fontSize="small" />, onClick: () => setEditing(person) },
+                          { key: 'delete', label: t('common.delete'), icon: <DeleteOutlineIcon fontSize="small" />, color: 'error', disabled: person.attendances > 0,
+                            title: t('events.eventPeopleDirectory.peopleWhoAttendEventsCannotBeDeleted'), onClick: () => setDeleting(person) },
+                        ]} /> : <>
                         <IconButton title={t('events.eventPeopleDirectory.editName', { name: String(person.name) })} onClick={() => setEditing(person)}><EditOutlinedIcon fontSize="small" /></IconButton>
                         <IconButton title={person.attendances > 0
                           ? t('events.eventPeopleDirectory.peopleWhoAttendEventsCannotBeDeleted')
                           : t('events.eventPeopleDirectory.deleteName', { name: String(person.name) })}
                           disabled={person.attendances > 0} onClick={() => setDeleting(person)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                        </>}
                       </TableCell>
                     </TableRow>;
                   })}
-                  {!visible.length && <TableRow><TableCell colSpan={4}>
+                  {!visible.length && <TableRow><TableCell colSpan={compact ? 2 : 4}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <span>{t('events.eventPeopleDirectory.noMatchingPeople')}</span>
                       {term && <Button size="small" startIcon={<AddIcon />} onClick={() => setEditing('new')}>{t('events.eventPeopleDirectory.createSearch', { search: String(search.trim()) })}</Button>}

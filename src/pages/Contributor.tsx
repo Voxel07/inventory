@@ -3,7 +3,7 @@ import { Button, IconButton, Tab } from '../components/shared/ActionButtons';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Box, Stack, Tabs, TextField, Tooltip, Typography, useMediaQuery } from '@mui/material';
-import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import { DataGrid, type GridColDef, type GridColumnVisibilityModel } from '@mui/x-data-grid';
 import { deDE, enUS } from '@mui/x-data-grid/locales';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -24,6 +24,7 @@ import { nameFor, translate, useAppLanguage, useT } from '../utils/naming';
 import { SEVERITY_LEVELS } from '../utils/constants';
 import type { DamageSeverity } from '../types';
 import { OperationForm } from '../components/operations/OperationForm';
+import { ActionMenu, type Action } from '../components/shared/ActionBar';
 import { factionOrderOf } from '../utils/custody';
 
 type EquipmentSource =
@@ -47,6 +48,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const assetDamage = request?.kind === 'damage' && Boolean(request.item.assetId);
   const language = useAppLanguage();
   const isMobile = useMediaQuery('(max-width:599.95px)');
+  const narrow = useMediaQuery('(max-width:899.95px)');
   // Inbox deep links (/?equipment=<section>&focus=<row id>) select the section and highlight the task row.
   const [params] = useSearchParams();
   const linkedSection = params.get('equipment');
@@ -87,9 +89,40 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
     .some(value => value?.toLocaleLowerCase().includes(query))) : sectionRows;
   // The linked task leads the first page.
   const rows = focus ? [...filteredRows.filter(row => row.id === focus), ...filteredRows.filter(row => row.id !== focus)] : filteredRows;
+  // Narrow screens keep item, quantity and actions; the other columns move under the item name.
+  const secondary = (row: EquipmentRow) => [
+    row.pending ? `${t('pages.contributor.awaitingAcknowledgement')}: ${row.pending}` : '',
+    row.event, row.location, row.kind, row.requester, row.created, row.status, row.notes,
+  ].filter(Boolean).join(' · ');
+  const columnVisibilityModel: GridColumnVisibilityModel = Object.fromEntries(
+    ['pending', 'event', 'location', 'kind', 'requester', 'created', 'status', 'notes'].map((field) => [field, !narrow]));
+  function rowActions(row: EquipmentRow): Action[] {
+    const source = row.source;
+    const damage = (item: Stored): Action => ({ key: 'damage', label: t('common.reportDamage'), icon: <ReportProblemOutlinedIcon fontSize="small" />, onClick: () => report(item, 'damage') });
+    const pickup = (item: Stored): Action => ({ key: 'pickup', label: t('pages.contributor.coordinatePickup'), icon: <LocalShippingOutlinedIcon fontSize="small" />, onClick: () => report(item, 'pickup') });
+    if (source.kind === 'custody' && writable) {
+      const data = source.data;
+      const item: Stored = { itemId: data.itemId, name: data.name, assetId: data.assetInstanceId, quantity: data.checkedOut };
+      return [
+        { key: 'return', label: t('pages.contributor.submitReturn'), icon: <AssignmentReturnIcon fontSize="small" />, disabled: data.checkedOut <= (data.pendingQuantity ?? 0),
+          onClick: () => { setReturnCommand(crypto.randomUUID()); setReturning(data); } },
+        damage(item), pickup(item),
+      ];
+    }
+    if (source.kind === 'stored' && writable) return [damage(source.data), pickup(source.data)];
+    if (source.kind === 'requests' && warehouse && source.data.status !== 'resolved') return [
+      { key: 'reply', label: t('pages.contributor.respondResolve'), icon: <ReplyIcon fontSize="small" />, onClick: () => setReply(source.data) },
+      { key: 'inspect', label: t('pages.contributor.inspectItem'), icon: <OpenInNewIcon fontSize="small" />,
+        to: source.data.assetId ? `/items/${source.data.itemId}/assets/${source.data.assetId}` : `/items/${source.data.itemId}` },
+    ];
+    return [];
+  }
   const columns: GridColDef<EquipmentRow>[] = [
-    { field: 'name', headerName: t('common.item'), flex: 1.3, minWidth: 180,
-      renderCell: ({ value }) => <Typography variant="body2" sx={{ fontWeight: 600 }}>{value}</Typography> },
+    { field: 'name', headerName: t('common.item'), flex: 1.3, minWidth: narrow ? 140 : 180,
+      renderCell: ({ value, row }) => <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" noWrap={narrow} sx={{ fontWeight: 600 }}>{value}</Typography>
+        {narrow && secondary(row) && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{secondary(row)}</Typography>}
+      </Box> },
     { field: 'quantity', headerName: t('common.quantity'), type: 'number', width: 85 },
     ...(section === 'custody' ? [
       { field: 'pending', headerName: t('pages.contributor.awaitingAcknowledgement'), type: 'number', width: 180 },
@@ -109,31 +142,20 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
         renderCell: ({ value }) => <Tooltip title={value ?? ''}><Typography variant="body2" noWrap>{value || '—'}</Typography></Tooltip> },
     ] satisfies GridColDef<EquipmentRow>[] : []),
     ...(section !== 'returns' && (writable || warehouse) ? [{
-      field: 'actions', headerName: t('common.actions'), width: isMobile ? 160 : 125, sortable: false, filterable: false,
+      field: 'actions', headerName: isMobile ? '' : t('common.actions'), width: isMobile ? 56 : 125, sortable: false, filterable: false,
       renderCell: ({ row }) => {
-        const source = row.source;
-        if (source.kind === 'custody' && writable) {
-          const data = source.data;
-          const item: Stored = { itemId: data.itemId, name: data.name, assetId: data.assetInstanceId, quantity: data.checkedOut };
-          return <Stack direction="row" spacing={0.25}>
-            <IconButton size="small" title={t('pages.contributor.submitReturn')} disabled={data.checkedOut <= (data.pendingQuantity ?? 0)}
-              onClick={() => { setReturnCommand(crypto.randomUUID()); setReturning(data); }}><AssignmentReturnIcon fontSize="small" /></IconButton>
-            <IconButton size="small" title={t('common.reportDamage')} onClick={() => report(item, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
-            <IconButton size="small" title={t('pages.contributor.coordinatePickup')} onClick={() => report(item, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
-          </Stack>;
-        }
-        if (source.kind === 'stored' && writable) return <Stack direction="row" spacing={0.25}>
-          <IconButton size="small" title={t('common.reportDamage')} onClick={() => report(source.data, 'damage')}><ReportProblemOutlinedIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title={t('pages.contributor.coordinatePickup')} onClick={() => report(source.data, 'pickup')}><LocalShippingOutlinedIcon fontSize="small" /></IconButton>
+        const actions = rowActions(row);
+        if (!actions.length) return null;
+        // Phones get one menu instead of a row of icons, so the item name keeps the width.
+        if (isMobile) return <ActionMenu actions={actions} />;
+        return <Stack direction="row" spacing={0.25}>
+          {actions.map((action) => <IconButton key={action.key} size="small" title={action.label} disabled={action.disabled} onClick={action.onClick}
+            {...(action.to ? { component: Link, to: action.to } : {})}>{action.icon}</IconButton>)}
         </Stack>;
-        if (source.kind === 'requests' && warehouse && source.data.status !== 'resolved') return <Stack direction="row" spacing={0.25}>
-          <IconButton size="small" title={t('pages.contributor.respondResolve')} onClick={() => setReply(source.data)}><ReplyIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title={t('pages.contributor.inspectItem')} component={Link} to={source.data.assetId ? `/items/${source.data.itemId}/assets/${source.data.assetId}` : `/items/${source.data.itemId}`}><OpenInNewIcon fontSize="small" /></IconButton>
-        </Stack>;
-        return null;
       },
     } satisfies GridColDef<EquipmentRow>] : []),
   ];
+
   return <Stack spacing={1}>
     {!embedded && <Typography variant="h6">{t('pages.contributor.myEquipmentPickups')}</Typography>}
     {error && <Alert severity="error" action={<Button size="small" title={translate('common.retryLoadingTheData')} onClick={() => { void custody.refetch(); void stored.refetch(); void requests.refetch(); void returns.refetch(); }}>{t('common.retry')}</Button>}>{t('pages.contributor.couldNotLoadAllOfYourEquipment')}</Alert>}
@@ -148,7 +170,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
       {t('pages.contributor.damageToASerializedUnitIsFiledAsADamage')}
     </Alert>}
     <Box ref={panel} role="tabpanel" id={`equipment-panel-${section}`} aria-labelledby={`equipment-tab-${section}`} sx={{ scrollMarginTop: 80 }}>
-      <DataGrid key={section} rows={rows} columns={columns} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight disableRowSelectionOnClick
+      <DataGrid key={section} rows={rows} columns={columns} columnVisibilityModel={columnVisibilityModel} density="compact" rowHeight={isMobile ? 60 : 52} autoHeight disableRowSelectionOnClick
         loading={sections.find(entry => entry.key === section)?.loading}
         initialState={{ pagination: { paginationModel: { page: 0, pageSize: 20 } } }} pageSizeOptions={[20, 50, 100]}
         localeText={language === 'de' ? deDE.components.MuiDataGrid.defaultProps.localeText : enUS.components.MuiDataGrid.defaultProps.localeText}

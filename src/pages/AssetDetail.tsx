@@ -166,7 +166,7 @@ export function AssetDetail() {
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(260px, 0.8fr) minmax(0, 1.7fr)' }, gap: 3 }}>
-                <Paper sx={{ p: 3 }}>
+                <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>{t('pages.assetDetail.assetInformation')}</Typography>
                     <Stack spacing={1.5} divider={<Divider flexItem />}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
@@ -288,6 +288,9 @@ export function AssetDetail() {
     );
 }
 
+/** Meter reading, source and the notes column are dropped on phones; notes move under the event. */
+const wideOnly = { display: { xs: 'none', sm: 'table-cell' } } as const;
+
 /** Runtime bookings with a per-event summary, so it is visible which event a unit ran at and for how long. */
 function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: RuntimeEntry[]; loading: boolean; error: boolean; onRetry: () => void; actions?: React.ReactNode }) {
     const t = useT();
@@ -310,28 +313,29 @@ function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: 
             : entries.length === 0 ? <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noRuntimeRecordedYet')}</Typography>
             : <Stack spacing={1.5}>
                 <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                    {[...byEvent.values()].map((summary) => <Chip key={summary.label} variant="outlined" label={`${summary.label}: ${summary.hours} h`} />)}
+                    {[...byEvent.values()].map((summary) => <Chip key={summary.label} variant="outlined" sx={{ maxWidth: '100%' }} label={`${summary.label}: ${summary.hours} h`} />)}
                 </Stack>
                 <TableContainer sx={{ maxHeight: 320 }}>
-                    <Table size="small" stickyHeader>
+                    <Table size="small" stickyHeader sx={{ '& .MuiTableCell-root': { px: { xs: 1, sm: 2 } } }}>
                         <TableHead>
                             <TableRow>
                                 <TableCell>{t('common.date')}</TableCell>
                                 <TableCell>{t('items.operatingHoursDialog.event')}</TableCell>
                                 <TableCell align="right">{t('items.operatingHoursDialog.hoursRun')}</TableCell>
-                                <TableCell align="right">{t('pages.assetDetail.meterReading')}</TableCell>
-                                <TableCell>{t('pages.assetDetail.source')}</TableCell>
-                                <TableCell>{t('common.notes')}</TableCell>
+                                <TableCell align="right" sx={wideOnly}>{t('pages.assetDetail.meterReading')}</TableCell>
+                                <TableCell sx={wideOnly}>{t('pages.assetDetail.source')}</TableCell>
+                                <TableCell sx={wideOnly}>{t('common.notes')}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {entries.map((entry) => <TableRow key={entry.id} hover>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(entry.recordedAt)}</TableCell>
-                                <TableCell>{entry.eventName ?? '—'}{entry.orderLabel && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.orderLabel}</Typography>}</TableCell>
+                                <TableCell sx={{ whiteSpace: { sm: 'nowrap' } }}>{formatDateTime(entry.recordedAt)}</TableCell>
+                                <TableCell>{entry.eventName ?? '—'}{entry.orderLabel && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.orderLabel}</Typography>}
+                                    {entry.notes && <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' } }}>{entry.notes}</Typography>}</TableCell>
                                 <TableCell align="right" className="tabular">{Number(entry.hours) > 0 ? `+${entry.hours}` : entry.hours} h</TableCell>
-                                <TableCell align="right" className="tabular">{entry.readingAfter} h</TableCell>
-                                <TableCell>{sources[entry.source]}{entry.recordedByName && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.recordedByName}</Typography>}</TableCell>
-                                <TableCell>{entry.notes || '—'}</TableCell>
+                                <TableCell align="right" className="tabular" sx={wideOnly}>{entry.readingAfter} h</TableCell>
+                                <TableCell sx={wideOnly}>{sources[entry.source]}{entry.recordedByName && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{entry.recordedByName}</Typography>}</TableCell>
+                                <TableCell sx={wideOnly}>{entry.notes || '—'}</TableCell>
                             </TableRow>)}
                         </TableBody>
                     </Table>

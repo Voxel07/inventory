@@ -2181,6 +2181,8 @@ export default {
       needed: 'Benötigt',
       editName: '{{name}} bearbeiten',
       removeName: '{{name}} entfernen',
+      detailsForName: 'Details zu {{name}}',
+      linkedAppAccount: 'Verknüpftes App-Konto',
       noMatchingAttendees: 'Keine passenden Teilnehmer.',
       removeAttendee: 'Teilnehmer entfernen',
       removeNameFromThisEventThePersonStaysAvailableFor: '{{name}} aus diesem Event entfernen? Die Person bleibt für andere Events erhalten; die Essensmarken-Summen werden angepasst.',

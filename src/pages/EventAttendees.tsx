@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Autocomplete, Box, Checkbox, Chip, FormControlLabel, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Checkbox, Chip, DialogActions, DialogContent, DialogTitle, FormControlLabel, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Typography } from '@mui/material';
 import { DateRangeField, TextField } from '../components/shared/DateTextField';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -8,10 +8,13 @@ import SearchIcon from '@mui/icons-material/Search';
 import RestaurantOutlinedIcon from '@mui/icons-material/RestaurantOutlined';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Button, IconButton } from '../components/shared/ActionButtons';
 import { PageHeader } from '../components/shared/PageHeader';
 import { FormDialog, DialogForm } from '../components/shared/FormDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
+import { Dialog } from '../components/shared/ClosableDialog';
+import { Field, FieldGrid } from '../components/items/CompactDetail';
 import { QueryFeedback } from '../components/common/QueryFeedback';
 import { EventMetric, EventWorkspace } from '../components/events/EventWorkspace';
 import { EventPeopleDirectory } from '../components/events/EventPeopleDirectory';
@@ -20,6 +23,7 @@ import { attendeeHooks, useCateringSettings, useSaveCateringSettings, useEventAc
 import { useEventWorkspace } from '../hooks/useEventWorkspace';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { useAuth } from '../hooks/useAuth';
+import { useOverflowCollapse } from '../hooks/useOverflowCollapse';
 import { canEditEvents } from '../utils/access';
 import { useT } from '../utils/naming';
 import { formatDateTime } from '../utils/dateFormat';
@@ -43,6 +47,28 @@ function useRoleLabels(): Record<AttendeeRoleKind, string> {
 function roleText(role: AttendeeRole, labels: Record<AttendeeRoleKind, string>) {
   if (FACTION_ROLES.includes(role.role)) return `${labels[role.role]} · ${role.factionName ?? '—'}`;
   return role.assignment ? `${labels[role.role]}: ${role.assignment}` : labels[role.role];
+}
+
+function RoleChips({ attendee, eventType }: { attendee: EventAttendee; eventType: EventType }) {
+  const roleLabels = useRoleLabels();
+  return <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+    {attendee.roles.map((role) => {
+      const color = factionColor(eventType, role.factionName);
+      return <Chip key={`${role.role}:${role.factionId ?? ''}`} size="small" sx={{ maxWidth: '100%', ...(color && { bgcolor: color, color: (theme) => theme.palette.getContrastText(color) }) }}
+        color={FACTION_ROLES.includes(role.role) ? 'primary' : role.role === 'as_held' ? 'secondary' : 'default'}
+        variant={role.role === 'event_crew' ? 'outlined' : 'filled'} label={roleText(role, roleLabels)} />;
+    })}
+  </Stack>;
+}
+
+function TravelTime({ value }: { value: string | null }) {
+  const t = useT();
+  return value ? <>{formatDateTime(value)}</> : <Chip size="small" variant="outlined" label={t('pages.eventAttendees.toConfirm')} />;
+}
+
+function IssuedChip({ attendee }: { attendee: EventAttendee }) {
+  const t = useT();
+  return <Chip size="small" color={attendee.foodStampsIssued ? 'success' : 'warning'} variant="outlined" label={attendee.foodStampsIssued ? t('pages.eventAttendees.issued2') : t('pages.eventAttendees.needed')} />;
 }
 
 export function EventAttendees() {
@@ -73,6 +99,9 @@ function AttendeeList({ event }: { event: EventReport }) {
   const [deleting, setDeleting] = useState<EventAttendee | null>(null);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [pickedPerson, setPickedPerson] = useState<EventPerson | undefined>();
+  const [details, setDetails] = useState<EventAttendee | null>(null);
+  // Without room for the full table only name and roles stay; the rest moves into the details dialog.
+  const { ref: tableRef, collapsed: compact } = useOverflowCollapse<HTMLDivElement>();
   const attendees = query.data ?? [];
   const unissued = attendees.filter((attendee) => !attendee.foodStampsIssued);
   const missingDates = attendees.filter((attendee) => !attendee.arrivesAt || !attendee.leavesAt).length;
@@ -100,6 +129,12 @@ function AttendeeList({ event }: { event: EventReport }) {
   function changeSort(column: typeof sortBy) {
     setSortDirection(sortBy === column && sortDirection === 'asc' ? 'desc' : 'asc');
     setSortBy(column);
+  }
+
+  function openEdit(attendee: EventAttendee) {
+    save.reset();
+    setDetails(null);
+    setEditing(attendee);
   }
 
   function submit(data: EventAttendeeInput) {
@@ -142,42 +177,42 @@ function AttendeeList({ event }: { event: EventReport }) {
       {!attendees.length ? <Alert severity="info">{t('pages.eventAttendees.noAttendeesYetAddTheFirstPeopleToPlanRoles')}</Alert>
         : <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('pages.eventAttendees.visibleCountOfAttendeeCountPeople', { visibleCount: String(visible.length), attendeeCount: String(attendees.length) })}</Typography>
-          <TableContainer component={Paper}>
-            <Table size="small" sx={{ minWidth: 960 }} aria-label={t('pages.eventAttendees.attendeesAndCatering')}>
+          <TableContainer component={Paper} ref={tableRef}>
+            <Table size="small" sx={compact ? { tableLayout: 'fixed', '& .MuiTableCell-root': { px: 1 } } : { minWidth: 960 }} aria-label={t('pages.eventAttendees.attendeesAndCatering')}>
               <TableHead><TableRow>
-                <TableCell sortDirection={sortBy === 'name' ? sortDirection : false}><TableSortLabel active={sortBy === 'name'} direction={sortBy === 'name' ? sortDirection : 'asc'} onClick={() => changeSort('name')}>{t('enum.value.person')}</TableSortLabel></TableCell>
+                <TableCell sx={compact ? { width: '38%' } : undefined} sortDirection={sortBy === 'name' ? sortDirection : false}><TableSortLabel active={sortBy === 'name'} direction={sortBy === 'name' ? sortDirection : 'asc'} onClick={() => changeSort('name')}>{t('enum.value.person')}</TableSortLabel></TableCell>
                 <TableCell sortDirection={sortBy === 'roles' ? sortDirection : false}><TableSortLabel active={sortBy === 'roles'} direction={sortBy === 'roles' ? sortDirection : 'asc'} onClick={() => changeSort('roles')}>{t('pages.eventAttendees.roles')}</TableSortLabel></TableCell>
-                <TableCell sortDirection={sortBy === 'arrivesAt' ? sortDirection : false}><TableSortLabel active={sortBy === 'arrivesAt'} direction={sortBy === 'arrivesAt' ? sortDirection : 'asc'} onClick={() => changeSort('arrivesAt')}>{t('pages.eventAttendees.arrival')}</TableSortLabel></TableCell>
-                <TableCell>{t('pages.eventAttendees.departure')}</TableCell>
-                <TableCell>{t('pages.eventAttendees.foodStamps')}</TableCell><TableCell>{t('pages.eventAttendees.issued')}</TableCell>
-                {canEdit && <TableCell align="right">{t('common.actions')}</TableCell>}
+                {compact ? <TableCell padding="none" sx={{ width: 56 }} /> : <>
+                  <TableCell sortDirection={sortBy === 'arrivesAt' ? sortDirection : false}><TableSortLabel active={sortBy === 'arrivesAt'} direction={sortBy === 'arrivesAt' ? sortDirection : 'asc'} onClick={() => changeSort('arrivesAt')}>{t('pages.eventAttendees.arrival')}</TableSortLabel></TableCell>
+                  <TableCell>{t('pages.eventAttendees.departure')}</TableCell>
+                  <TableCell>{t('pages.eventAttendees.foodStamps')}</TableCell><TableCell>{t('pages.eventAttendees.issued')}</TableCell>
+                  {canEdit && <TableCell align="right">{t('common.actions')}</TableCell>}
+                </>}
               </TableRow></TableHead>
               <TableBody>
                 {visible.map((attendee) => <TableRow key={attendee.id} hover>
-                  <TableCell sx={{ maxWidth: 260, overflowWrap: 'anywhere' }}>
+                  <TableCell sx={{ maxWidth: 260, overflowWrap: compact ? 'break-word' : 'anywhere' }}>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                       <Typography sx={{ fontWeight: 600 }}>{attendee.person.name}</Typography>
-                      {attendee.person.userId && <AccountCircleOutlinedIcon fontSize="small" color="action" titleAccess={t('pages.eventAttendees.linkedToUserName', { userName: String(attendee.person.userName) })} />}
+                      {!compact && attendee.person.userId && <AccountCircleOutlinedIcon fontSize="small" color="action" titleAccess={t('pages.eventAttendees.linkedToUserName', { userName: String(attendee.person.userName) })} />}
                     </Stack>
-                    {attendee.notes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{attendee.notes}</Typography>}
+                    {!compact && attendee.notes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{attendee.notes}</Typography>}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 300 }}>
-                    <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                      {attendee.roles.map((role) => <Chip key={`${role.role}:${role.factionId ?? ''}`} size="small" sx={{ maxWidth: '100%', ...(factionColor(eventType, role.factionName) && { bgcolor: factionColor(eventType, role.factionName), color: (theme) => theme.palette.getContrastText(factionColor(eventType, role.factionName)!) }) }}
-                        color={FACTION_ROLES.includes(role.role) ? 'primary' : role.role === 'as_held' ? 'secondary' : 'default'}
-                        variant={role.role === 'event_crew' ? 'outlined' : 'filled'} label={roleText(role, roleLabels)} />)}
-                    </Stack>
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{attendee.arrivesAt ? formatDateTime(attendee.arrivesAt) : <Chip size="small" variant="outlined" label={t('pages.eventAttendees.toConfirm')} />}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{attendee.leavesAt ? formatDateTime(attendee.leavesAt) : <Chip size="small" variant="outlined" label={t('pages.eventAttendees.toConfirm')} />}</TableCell>
-                  <TableCell><Typography variant="body2">{t('pages.eventAttendees.mainMealStampsMainMeals', { mainMealStamps: String(attendee.mainMealStamps) })}</Typography><Typography variant="body2" color="text.secondary">{t('pages.eventAttendees.breakfastStampsBreakfast', { breakfastStamps: String(attendee.breakfastStamps) })}</Typography></TableCell>
-                  <TableCell><Chip size="small" color={attendee.foodStampsIssued ? 'success' : 'warning'} variant="outlined" label={attendee.foodStampsIssued ? t('pages.eventAttendees.issued2') : t('pages.eventAttendees.needed')} /></TableCell>
-                  {canEdit && <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                    <IconButton title={t('pages.eventAttendees.editName', { name: String(attendee.person.name) })} onClick={() => { save.reset(); setEditing(attendee); }}><EditOutlinedIcon fontSize="small" /></IconButton>
-                    <IconButton title={t('pages.eventAttendees.removeName', { name: String(attendee.person.name) })} onClick={() => setDeleting(attendee)}><DeleteOutlineIcon fontSize="small" /></IconButton>
-                  </TableCell>}
+                  <TableCell sx={{ maxWidth: 300 }}><RoleChips attendee={attendee} eventType={eventType} /></TableCell>
+                  {compact ? <TableCell padding="none" align="center">
+                    <IconButton title={t('pages.eventAttendees.detailsForName', { name: attendee.person.name })} onClick={() => setDetails(attendee)}><InfoOutlinedIcon fontSize="small" /></IconButton>
+                  </TableCell> : <>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><TravelTime value={attendee.arrivesAt} /></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><TravelTime value={attendee.leavesAt} /></TableCell>
+                    <TableCell><Typography variant="body2">{t('pages.eventAttendees.mainMealStampsMainMeals', { mainMealStamps: String(attendee.mainMealStamps) })}</Typography><Typography variant="body2" color="text.secondary">{t('pages.eventAttendees.breakfastStampsBreakfast', { breakfastStamps: String(attendee.breakfastStamps) })}</Typography></TableCell>
+                    <TableCell><IssuedChip attendee={attendee} /></TableCell>
+                    {canEdit && <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton title={t('pages.eventAttendees.editName', { name: String(attendee.person.name) })} onClick={() => openEdit(attendee)}><EditOutlinedIcon fontSize="small" /></IconButton>
+                      <IconButton title={t('pages.eventAttendees.removeName', { name: String(attendee.person.name) })} onClick={() => setDeleting(attendee)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    </TableCell>}
+                  </>}
                 </TableRow>)}
-                {!visible.length && <TableRow><TableCell colSpan={canEdit ? 7 : 6}>{t('pages.eventAttendees.noMatchingAttendees')}</TableCell></TableRow>}
+                {!visible.length && <TableRow><TableCell colSpan={compact ? 3 : canEdit ? 7 : 6}>{t('pages.eventAttendees.noMatchingAttendees')}</TableCell></TableRow>}
               </TableBody>
             </Table>
           </TableContainer>
@@ -192,6 +227,8 @@ function AttendeeList({ event }: { event: EventReport }) {
     {canEdit && <EventPeopleDirectory open={directoryOpen} onClose={() => setDirectoryOpen(false)}
       attendingPersonIds={attendees.map((attendee) => attendee.person.id)}
       onAddToEvent={(person) => { save.reset(); setPickedPerson(person); setDirectoryOpen(false); setEditing('new'); }} />}
+    <AttendeeDetailsDialog attendee={details} eventType={eventType} canEdit={canEdit} onClose={() => setDetails(null)}
+      onEdit={openEdit} onRemove={(attendee) => { setDetails(null); setDeleting(attendee); }} />
     <ConfirmDialog open={Boolean(deleting)} title={t('pages.eventAttendees.removeAttendee')}
       message={t('pages.eventAttendees.removeNameFromThisEventThePersonStaysAvailableFor', { name: String(deleting?.person.name ?? '') })}
       actionLabel={t('common.remove')} actionColor="error" pending={remove.isPending} onClose={() => { if (!remove.isPending) setDeleting(null); }}
@@ -200,6 +237,37 @@ function AttendeeList({ event }: { event: EventReport }) {
         onError: (error) => showSnackbar(error.message, 'error'),
       }); }} />
   </>;
+}
+
+/** Everything the compact attendee table leaves out: travel times, catering, notes and the row actions. */
+function AttendeeDetailsDialog({ attendee, eventType, canEdit, onClose, onEdit, onRemove }: {
+  attendee: EventAttendee | null; eventType: EventType; canEdit: boolean; onClose: () => void;
+  onEdit: (attendee: EventAttendee) => void; onRemove: (attendee: EventAttendee) => void;
+}) {
+  const t = useT();
+  return <Dialog open={Boolean(attendee)} onClose={onClose} maxWidth="xs" fullWidth>
+    {attendee && <>
+      <DialogTitle sx={{ overflowWrap: 'anywhere' }}>{attendee.person.name}</DialogTitle>
+      <DialogContent dividers>
+        <FieldGrid minWidth={140}>
+          <Field wide label={t('pages.eventAttendees.roles')}><RoleChips attendee={attendee} eventType={eventType} /></Field>
+          <Field label={t('pages.eventAttendees.arrival')}><TravelTime value={attendee.arrivesAt} /></Field>
+          <Field label={t('pages.eventAttendees.departure')}><TravelTime value={attendee.leavesAt} /></Field>
+          <Field label={t('pages.eventAttendees.foodStamps')}>
+            {t('pages.eventAttendees.mainMealStampsMainMeals', { mainMealStamps: String(attendee.mainMealStamps) })}
+            <Box component="span" sx={{ display: 'block', color: 'text.secondary', fontWeight: 400 }}>{t('pages.eventAttendees.breakfastStampsBreakfast', { breakfastStamps: String(attendee.breakfastStamps) })}</Box>
+          </Field>
+          <Field label={t('pages.eventAttendees.issued')}><IssuedChip attendee={attendee} /></Field>
+          {attendee.person.userId && <Field wide label={t('pages.eventAttendees.linkedAppAccount')}>{attendee.person.userName ?? attendee.person.userId}</Field>}
+          {attendee.notes && <Field wide label={t('common.notes')}><Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{attendee.notes}</Box></Field>}
+        </FieldGrid>
+      </DialogContent>
+      {canEdit && <DialogActions>
+        <Button color="error" startIcon={<DeleteOutlineIcon />} onClick={() => onRemove(attendee)}>{t('common.remove')}</Button>
+        <Button variant="contained" startIcon={<EditOutlinedIcon />} onClick={() => onEdit(attendee)}>{t('common.edit')}</Button>
+      </DialogActions>}
+    </>}
+  </Dialog>;
 }
 
 function CateringRates({ eventId, canEdit }: { eventId: string; canEdit: boolean }) {

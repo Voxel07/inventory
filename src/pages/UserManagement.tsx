@@ -3,9 +3,12 @@ import { AccountLifecyclePanel } from '../components/operations/AccountLifecycle
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
 import { Alert, Autocomplete, Box, Chip, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, useMediaQuery, useTheme } from '@mui/material';
 import { Button, MenuItem } from '../components/shared/ActionButtons';
 import { Dialog } from '../components/shared/ClosableDialog';
+import { ActionMenu } from '../components/shared/ActionBar';
+import EditIcon from '@mui/icons-material/Edit';
+import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
@@ -78,7 +81,7 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
   </Dialog>;
 }
 
-function UserRow({ user, factions, onEdit, onHistory }: { user: User; factions: Faction[]; onEdit: () => void; onHistory: () => void }) {
+function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; factions: Faction[]; compact: boolean; onEdit: () => void; onHistory: () => void }) {
   const t = useT();
   const factionLabel = (key: string) => {
     const faction = factions.find((candidate) => factionKeyOf(candidate) === key);
@@ -86,18 +89,24 @@ function UserRow({ user, factions, onEdit, onHistory }: { user: User; factions: 
   };
   return (
     <TableRow hover>
-      <TableCell component="th" scope="row" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{user.name || user.username || user.email}</TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }}>{user.email}</TableCell>
+      <TableCell component="th" scope="row" sx={{ fontWeight: 700, whiteSpace: compact ? undefined : 'nowrap', overflowWrap: 'anywhere' }}>
+        {user.name || user.username || user.email}
+        {compact && user.email && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 400 }}>{user.email}</Typography>}
+      </TableCell>
+      {!compact && <TableCell sx={{ whiteSpace: 'nowrap' }}>{user.email}</TableCell>}
       <TableCell><UserRoleChips roles={user.roles} /></TableCell>
-      <TableCell>
+      {!compact && <TableCell>
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, minWidth: 150 }}>
           {(user.faction ?? []).map((key) => <Chip key={key} size="small" variant="outlined" label={factionLabel(key)} />)}
         </Stack>
-      </TableCell>
-      <TableCell><Stack direction="row" spacing={0.5}>
+      </TableCell>}
+      {compact ? <TableCell padding="checkbox" align="right"><ActionMenu actions={[
+        { key: 'edit', label: t('pages.userManagement.changeRoleAndFactions'), icon: <EditIcon fontSize="small" />, onClick: onEdit },
+        { key: 'history', label: t('pages.userManagement.accessHistory'), icon: <HistoryIcon fontSize="small" />, onClick: onHistory },
+      ]} /></TableCell> : <TableCell><Stack direction="row" spacing={0.5}>
         <Button title={t('pages.userManagement.changeRoleAndFactions')} size="small" onClick={onEdit}>{t('common.edit')}</Button>
         <Button title={t('pages.userManagement.accessHistory')} size="small" onClick={onHistory}>{t('common.history')}</Button>
-      </Stack></TableCell>
+      </Stack></TableCell>}
     </TableRow>
   );
 }
@@ -146,6 +155,10 @@ function UserDirectory({ search, role, factions, onEdit, onHistory }: {
   const [size, setSize] = useState(20);
   const result = useUsers(page, size, search, role);
   const users = result.data?.rows ?? [];
+  const theme = useTheme();
+  // Phones keep name and roles; the e-mail moves under the name, factions show in the access editor.
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  const columns = compact ? 3 : 5;
   return (
     <Box>
       {result.isError && <Alert severity="error" sx={{ mb: 2 }}
@@ -155,15 +168,15 @@ function UserDirectory({ search, role, factions, onEdit, onHistory }: {
       <TableContainer component={Paper} variant="outlined"><Table size="small" aria-label={t('nav.userManagement')}>
         <TableHead><TableRow>
           <TableCell>{t('profile.name')}</TableCell>
-          <TableCell>{t('pages.userManagement.email')}</TableCell>
+          {!compact && <TableCell>{t('pages.userManagement.email')}</TableCell>}
           <TableCell>{t('pages.userManagement.roles')}</TableCell>
-          <TableCell>{t('profile.assignedFactions')}</TableCell>
-          <TableCell>{t('common.actions')}</TableCell>
+          {!compact && <TableCell>{t('profile.assignedFactions')}</TableCell>}
+          {compact ? <TableCell padding="checkbox" /> : <TableCell>{t('common.actions')}</TableCell>}
         </TableRow></TableHead>
         <TableBody>
-          {result.isPending && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.loadingUsers')}</TableCell></TableRow>}
-          {result.isSuccess && !users.length && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.noUsersFound')}</TableCell></TableRow>}
-          {!result.isError && users.map(user => <UserRow key={user.id} user={user} factions={factions}
+          {result.isPending && <TableRow><TableCell colSpan={columns}>{t('pages.userManagement.loadingUsers')}</TableCell></TableRow>}
+          {result.isSuccess && !users.length && <TableRow><TableCell colSpan={columns}>{t('pages.userManagement.noUsersFound')}</TableCell></TableRow>}
+          {!result.isError && users.map(user => <UserRow key={user.id} user={user} factions={factions} compact={compact}
             onEdit={() => onEdit(user)} onHistory={() => onHistory(user)} />)}
         </TableBody>
       </Table></TableContainer>
