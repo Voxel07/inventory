@@ -515,12 +515,6 @@ public class InventoryOperationsService {
             report.description = input.description().trim();
         }
         if (input.severity() != null) report.severity = input.severity();
-        if (input.itemHint() != null) {
-            if (report.item == null) throw ApiException.badRequest("An item hint requires an item damage report");
-            var hint = input.itemHint().trim();
-            if (hint.length() > 255) throw ApiException.badRequest("Item hint must be 255 characters or less");
-            report.item.hint = hint.isEmpty() ? null : hint;
-        }
         if (input.status() == null) {
             events.record("damage.updated", "damage_report", report.id, actors.current().id, input.idempotencyKey(),
                     Map.of("severity", report.severity.name()));

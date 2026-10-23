@@ -153,6 +153,16 @@ The inbox collects recipient-scoped pickup, return, damage and other required ac
 
 Transfers keep goods in transit until receipt, including partial receipt/discrepancy handling; they are not custody handovers. Material count variance requires approval by a different admin before ledger adjustment. Lot selection follows usable FEFO supply. Maintenance or damage holds block allocation/checkout; repair changes condition, while authorized write-off reduces stock.
 
+### Damage reports
+
+`/damage-reports` uses the shared page header, a search field and server pagination (20, 50 or 100 rows). Search matches item/assembly names, asset codes and descriptions across the selected tab; changing the search or tab starts at the first page.
+
+Open contains `reported`, `triaged`, `awaiting_repair`, `in_review` and `in_repair`. History contains only `repaired`, `verified`, `returned_to_service`, `written_off` and `resolved`. Both desktop and mobile lists omit descriptions, resolution comments and activity; History also omits severity and edit/repair actions. The info icon opens the description, recorded action comments and available activity details.
+
+Warehouse staff select **Start repair** to open a modal with the description, repair/write-off choice, unresolved quantity and a required comment describing what was done. Only admins may choose write-off. Opening the modal does not change the report. Saving records the selected quantity and comment; failed saves keep the input for retry. There is no item-hint update in this workflow.
+
+Partial resolution keeps the report Open with its remaining quantity. Resolving all units moves it to History: all repaired → `repaired`, all written off → `written_off`, mixed outcomes → `resolved`. Resolving the last row on a later page returns to the preceding page. The separate Operations repair-case workflow still supports verification and release. See the [API and quantity-resolution contract](WORKFLOW_CONTRACTS.md#damage-reports-and-quantity-resolution).
+
 Account-owned items are private or publicly available, selected during creation or changed later by the owner/admin. Publicly available items can be ordered through faction and general orders using normal usable stock, with no commitments. The named Access & sharing list is below Overview; Manage sharing requires no reason and lists people/groups once instead of repeating location access. Sharing/Users group tables show member names to their peers. New storage location dialogs provide an explicit Create new location button before typing. External-provider lending remains a separate workflow with consent windows, loan/rental agreement, collection evidence, extensions and return evidence. Possession, legal ownership, privacy owner and keeper are separate concepts.
 
 ## 8. Offline and recovery journey

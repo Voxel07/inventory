@@ -92,7 +92,7 @@ Every remaining file in `tests/` has one of these roles:
 | `image-editor.browser.html`, `image-editor.browser.tsx` | Keep: manual item/assembly crop, removal, image-order and save-payload preview |
 | `layout.browser.html`, `layout.browser.tsx` | Keep: grouped custody/assembly layout preview |
 | `orderPreparation.browser.html`, `orderPreparation.browser.tsx` | Keep: faction/general preparation and warehouse queue preview |
-| `ui-cleanup.browser.html`, `ui-cleanup.browser.tsx` | Keep: consolidated navigation, task tabs, catalog, inbox, returns and sharing preview |
+| `ui-cleanup.browser.html`, `ui-cleanup.browser.tsx` | Keep: consolidated navigation, task tabs, catalog, inbox, returns, sharing and damage-report preview |
 | `event-detail.browser.html`, `event-detail.browser.tsx` | Event item editor with the real Demo DE 2026 CSV report; cached by default, add `?cold` to fetch after mount; save shows the submitted quantities |
 | `fixtures/dto.ts`, `fixtures/api.ts` | Added: typed DTO builders and a paged mock transport (`X-Has-More`) shared by the previews |
 | `refactoring.browser.html`, `refactoring.browser.jsx` | **Removed:** older operations/catalog/inbox preview superseded by `ui-cleanup.browser.*` |
@@ -107,6 +107,8 @@ typecheck. Run
 `bun run dev --host 127.0.0.1`, then open the corresponding HTML under `/tests/`.
 `media.browser.html` runs its own assertions; the other previews require UI checks.
 The image editor selects the item form with `?item`.
+
+For Damage reports, open `/tests/ui-cleanup.browser.html?damagePreview`; add `&damageFailure` to fail the first save. Fixtures include 21 open reports, each completed status, partial quantities and stored comments. Check next/previous pages and page size, search beyond the first page, disjoint Open/History results, required repair comments, partial and complete repair/write-off, retained input after failure, and info-only descriptions/activity with no History severity. These are manual acceptance checks, not assertions performed by the fixture itself.
 
 The live-data smoke script is also explicit, outside `bun test`:
 
@@ -137,7 +139,8 @@ Backend class names below use the inventory table above; frontend names refer to
 | ORD-05 | `catalogWorkflows.test.ts`: previous-year scope and status-dependent demand/preparation baseline |
 | ORD-06, ORD-07 | `sessionIsolation.test.ts`: exact QR/asset/location/order targets, targeted fallback, retired-label termination, no stock writes; physical camera acceptance remains separate |
 | RET-01, RET-02 | `InventoryApiTest`, `PriorityRefactorApiTest`, `ArchitectureApiCoverageTest`: custody evidence, pending acceptance, rejection and recipient-scoped retries |
-| DAM-01, DAM-02 | `InventoryApiTest`, `ArchitectureApiCoverageTest`: triage/repair/verify, hint changes, restricted and idempotent write-off |
+| DAM-01, DAM-02 | `InventoryApiTest`, `ArchitectureApiCoverageTest`: triage/repair/verify, accumulated action comments, restricted and idempotent write-off; damage resolution no longer updates item hints |
+| DAM-02, DAM-03 | `ui-cleanup.browser.*?damagePreview&damageFailure`: typed manual preview for search/pagination, status-tab separation, resolution retries and info modals; browser acceptance remains pending |
 | MNT-01 | `MaintenancePolicyTest`, `InventoryApiTest`, `MaintenanceStockApiTest`, `InventoryMcpTest`, `ArchitectureApiCoverageTest` |
 | PRC-01, PRC-02, PRC-03 | `InventoryApiTest`, `ArchitectureApiCoverageTest`: demand/supply, permissions, partial receipts, ordered stock, vendor/document workflows |
 | OWN-03 | `EquipmentApiTest`, `MaintenanceStockApiTest`, `InventoryApiTest`, `ArchitectureApiCoverageTest`: consent, agreements, transfer/collection/return and versioned extensions |

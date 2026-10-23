@@ -11,6 +11,7 @@ import { AssemblyDetail } from '../src/pages/AssemblyDetail';
 import { StorageLocations } from '../src/pages/StorageLocations';
 import { ActionInboxContent } from '../src/components/dialogs/ActionInboxContent';
 import { ReturnedItemsPage } from '../src/pages/ReturnedItems';
+import { DamageReportsPage } from '../src/pages/DamageReports';
 import { UserDashboard } from '../src/pages/UserDashboard';
 import { ActionInboxDialogProvider } from '../src/components/dialogs/ActionInboxDialogProvider';
 import { useActionInboxDialog } from '../src/hooks/useActionInboxDialog';
@@ -92,6 +93,18 @@ const schedules: Schedule[] = [{ id: 'schedule-1', itemId: 'item-1', itemName: '
   nextDueAt: '2026-10-15', active: true, checkoutBlocking: true }];
 const damage: DamageReport[] = [{ id: 'damage-1', itemId: 'item-1', itemName: 'Radio', amount: 1, reportedBy: 'preview', description: 'Battery connector damaged',
   severity: 'medium', status: 'reported', timestamp: now, created: now, updated: now }];
+if (query.has('damagePreview')) {
+  const base = damage[0];
+  damage.splice(0, damage.length, ...Array.from({ length: 21 }, (_, index): DamageReport => ({
+    ...base, id: `damage-${index + 1}`, itemName: `Radio ${String(index + 1).padStart(2, '0')}`, amount: index === 0 ? 3 : 1,
+    repairedAmount: 0, writtenOffAmount: 0, description: `Connector damage on radio ${index + 1}`,
+    expand: { reportedBy: { id: 'preview', name: 'Preview user' } },
+  })), ...(['repaired', 'verified', 'returned_to_service', 'written_off', 'resolved'] as const).map((status, index): DamageReport => ({
+    ...base, id: `closed-${index}`, itemName: `Completed ${status}`, status, repairedAmount: status === 'written_off' ? 0 : 1,
+    writtenOffAmount: status === 'written_off' ? 1 : 0, handledBy: 'preview', resolutionNotes: 'Connector replaced and checked',
+    expand: { reportedBy: { id: 'preview', name: 'Preview user' }, handledBy: { id: 'preview', name: 'Preview user' } },
+  })));
+}
 const repairs: Repair[] = [{ id: 'repair-1', damageReportId: 'damage-1', itemId: 'item-1', itemName: 'Radio', damageDescription: 'Battery connector damaged',
   status: 'awaiting_repair', safetyImpact: true, partsAndCostNotes: 'Replacement connector', notes: 'Awaiting workshop' }];
 const loans: Loan[] = [{ id: 'loan-1', itemId: 'rental-1', item: 'My checked-out rental', commitmentId: 'commitment-1', providerLocationId: 'location-b', provider: 'Preview supplier',
@@ -113,6 +126,7 @@ type CountSubmit = { lines: { lineId: string; quantity: number }[] };
 type TransferCreate = { sourceLocationId: string; destinationLocationId: string; lines: { itemId: string; quantity: number }[] };
 const param = (url: URL, name: string) => url.searchParams.get(name);
 let positionFailures = query.has('storageError') ? 1 : 0;
+let damageFailures = query.has('damageFailure') ? 1 : 0;
 installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/inventory-positions' && positionFailures > 0) {
     positionFailures -= 1;
@@ -164,7 +178,32 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/vendors') return vendors;
   if (path === '/api/inventory-lots') return lots;
   if (path === '/api/maintenance-schedules') return schedules;
-  if (path === '/api/damage-reports') return damage;
+  if (path === '/api/damage-reports') {
+    const statuses = url.searchParams.getAll('status');
+    const search = (param(url, 'search') ?? '').toLowerCase();
+    return damage.filter((row) => (!statuses.length || statuses.includes(row.status))
+      && (!search || [row.itemName, row.assemblyName, row.assetCode, row.description].some((value) => value?.toLowerCase().includes(search))));
+  }
+  if (path.startsWith('/api/damage-reports/') && method === 'PATCH') {
+    if (damageFailures > 0) {
+      damageFailures -= 1;
+      return Response.json({ message: 'Fixture repair temporarily unavailable' }, { status: 503 });
+    }
+    const row = damage.find((entry) => entry.id === path.split('/')[3])!;
+    const input = body as { status?: 'repaired' | 'written_off'; amount: number; notes: string; description?: string; severity?: DamageReport['severity'] };
+    if (input.status) {
+      if (input.status === 'repaired') row.repairedAmount = (row.repairedAmount ?? 0) + input.amount;
+      else row.writtenOffAmount = (row.writtenOffAmount ?? 0) + input.amount;
+      row.status = (row.repairedAmount ?? 0) + (row.writtenOffAmount ?? 0) < row.amount ? 'in_review'
+        : row.repairedAmount === row.amount ? 'repaired' : row.writtenOffAmount === row.amount ? 'written_off' : 'resolved';
+      row.resolutionNotes = [row.resolutionNotes, input.notes].filter(Boolean).join('\n');
+      row.handledBy = 'preview';
+      row.expand = { ...row.expand, handledBy: { id: 'preview', name: 'Preview user' } };
+    }
+    if (input.description) row.description = input.description;
+    if (input.severity) row.severity = input.severity;
+    return row;
+  }
   if (path === '/api/repairs') return repairs;
   if (path === '/api/loans') return loans;
   if (path === '/api/goods-receipts' && method === 'POST') { purchases[0].status = 'received'; return receipts[0]; }
@@ -194,6 +233,6 @@ root.render(<ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider cli
     <Typography variant="caption" color="text.secondary">Local regression preview · fixture inventory</Typography>
     <Stack direction="row" spacing={2} sx={{ mb: 2 }}><Link to="/operations">Operations</Link><Link to="/items">Items</Link><Link to="/assemblies">Assemblies</Link><Link to="/inbox">Actions & reminders</Link></Stack>
     <InboxLauncher />
-    <Routes><Route path="/tests/ui-cleanup.browser.html" element={query.has('storagePreview') ? <StorageLocations /> : <Operations />} /><Route path="/" element={<UserDashboard />} /><Route path="/returns" element={<ReturnedItemsPage />} /><Route path="/operations" element={<Operations />} /><Route path="/items" element={<Items />} /><Route path="/items/:itemId" element={<ItemDetail />} /><Route path="/storage-locations" element={<StorageLocations />} /><Route path="/assemblies" element={<Assemblies />} /><Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} /><Route path="/inbox" element={<ActionInboxContent onOpenTask={() => {}} />} /><Route path="*" element={<Operations />} /></Routes>
+    <Routes><Route path="/tests/ui-cleanup.browser.html" element={query.has('damagePreview') ? <DamageReportsPage /> : query.has('storagePreview') ? <StorageLocations /> : <Operations />} /><Route path="/" element={<UserDashboard />} /><Route path="/returns" element={<ReturnedItemsPage />} /><Route path="/damage-reports" element={<DamageReportsPage />} /><Route path="/operations" element={<Operations />} /><Route path="/items" element={<Items />} /><Route path="/items/:itemId" element={<ItemDetail />} /><Route path="/storage-locations" element={<StorageLocations />} /><Route path="/assemblies" element={<Assemblies />} /><Route path="/assemblies/:assemblyId" element={<AssemblyDetail />} /><Route path="/inbox" element={<ActionInboxContent onOpenTask={() => {}} />} /><Route path="*" element={<Operations />} /></Routes>
   </Box>
 </ActionInboxDialogProvider></BrowserRouter></QueryClientProvider></ThemeProvider>);

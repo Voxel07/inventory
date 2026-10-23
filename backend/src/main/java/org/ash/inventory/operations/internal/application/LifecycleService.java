@@ -181,7 +181,7 @@ public class LifecycleService {
                 repair.repairedPendingQuantity = amount;
             } else {
                 inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
-                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
+                        DomainEnums.DamageStatus.written_off, amount, input.notes(), input.idempotencyKey(), null, null, input.occurredAt()));
             }
             repair.completedAt = occurredAt;
         }
@@ -194,7 +194,7 @@ public class LifecycleService {
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.repairedPendingQuantity > 0) {
             inventory.resolveDamage(repair.damageReport.id, new ApiModels.DamageResolutionInput(
-                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, null, input.occurredAt()));
+                    DomainEnums.DamageStatus.repaired, repair.repairedPendingQuantity, input.notes(), input.idempotencyKey(), null, null, input.occurredAt()));
             repair.repairedPendingQuantity = 0;
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {

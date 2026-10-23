@@ -1,6 +1,5 @@
 import type { DamageReport } from '../types';
-
-const CLOSED_DAMAGE = ['repaired', 'verified', 'returned_to_service', 'written_off', 'resolved'];
+import { OPEN_DAMAGE_STATUSES } from '../types/damageReport';
 
 /** Damage stays open until it is repaired, written off or otherwise closed. */
-export const isOpenDamage = (report: Pick<DamageReport, 'status'>) => !CLOSED_DAMAGE.includes(report.status);
+export const isOpenDamage = (report: Pick<DamageReport, 'status'>) => OPEN_DAMAGE_STATUSES.includes(report.status);

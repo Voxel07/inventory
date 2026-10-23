@@ -28,6 +28,27 @@ Generated handovers record what the application posted; they no longer automatic
 
 Administrators can reverse the latest direct addition, adjustment, checkout or check-in through a linked compensating movement, with a reason and command ID. Original facts remain unchanged. Reversal rows record the executing administrator in `reversedBy`; `userId` stays the original custody beneficiary. Reservations, pending returns, subsequent movements and changed assets can block reversal. Document-driven purchases, counts, transfers, orders and damage use their own reconciliation workflows. Quantities on reversal rows are signed; usage counters subtract reversed checkouts. Database triggers reject changes/deletion of committed movement, order, handover, reconciliation, runtime, maintenance and sync history. Initial finalization in the inserting transaction remains allowed.
 
+## Damage reports and quantity resolution
+
+The Damage reports page reads `GET /api/damage-reports` with zero-based `page`, `size`, optional `search`, optional `itemId`/`assetInstanceId`/`assemblyId`, and repeated `status` parameters. The response is a row array with `X-Has-More` continuation. Search matches description, item/assembly name and asset code in the database before pagination. The page uses 20, 50 or 100 rows and resets to page zero when its tab or search changes.
+
+| Tab | Requested statuses |
+|---|---|
+| Open | `reported`, `triaged`, `awaiting_repair`, `in_review`, `in_repair` |
+| History | `repaired`, `verified`, `returned_to_service`, `written_off`, `resolved` |
+
+The tabs are disjoint; History is never an unfiltered collection read. The desktop and mobile lists omit descriptions, resolution comments and activity. History also omits severity and editing. An info modal shows the description, accumulated resolution notes, reporter and current handling details. The REST projection supplies current status and reporter/handler summaries, rather than a complete per-transition timeline.
+
+**Start repair** opens a modal without posting a status change. The page requires a repair/write-off choice, a positive integer quantity up to the unresolved amount, and a nonblank action comment. Submission uses `PATCH /api/damage-reports/{id}`:
+
+```json
+{ "status": "repaired", "amount": 2, "notes": "Replaced connectors and checked operation" }
+```
+
+The resolution input contains `status`, `amount`, `notes`, `idempotencyKey`, `description`, `severity` and `occurredAt`; `itemHint` is no longer part of the contract. Description/severity edits use the same endpoint without a status. The service also accepts `in_review` for triage. The backend checks warehouse permission, requires admin permission for write-off, locks the report, rejects quantities above the unresolved amount, and appends trimmed nonblank notes to `resolutionNotes`. The comment requirement is enforced by the page; internal repair-case commands retain their existing notes contract.
+
+`unresolved = amount - repairedAmount - writtenOffAmount`. After quantity resolution, remaining units keep the report `in_review`; with none remaining, all repaired units produce `repaired`, all written-off units produce `written_off`, and mixed outcomes produce `resolved`. Existing change events refresh the page and related stock readers. Failed saves retain modal input; resolving the last row on a later page returns to the previous page. Repairs restore condition without creating owned stock; write-off reduces stock. The Operations repair-case verification/release lifecycle remains separate.
+
 ## Events, reports and readers
 
 An optional event order deadline blocks creation, edits and submission after the instant; preparation, returns and cancellations retain their normal lifecycle rules. The event edit dialog uses local date/time input. Copying an earlier order creates an independent draft for an open event with current permissions/catalog validation. It preserves faction-order assembly grouping and resolves components from the current assembly recipe; general orders copy item quantities. The new draft carries no preparation, reservations, custody or evidence.

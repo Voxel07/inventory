@@ -132,7 +132,7 @@ public final class ApiModels {
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     public record DamageResolutionInput(
             DomainEnums.DamageStatus status, @Min(1) Integer amount, String notes, UUID idempotencyKey,
-            String description, DomainEnums.DamageSeverity severity, String itemHint,
+            String description, DomainEnums.DamageSeverity severity,
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
 
     public record MaintenanceInput(

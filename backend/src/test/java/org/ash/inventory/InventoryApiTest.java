@@ -1698,7 +1698,7 @@ class InventoryApiTest {
     }
 
     @Test
-    void damageResolutionStoresActionCommentAndItemHint() {
+    void damageResolutionStoresActionComment() {
         String itemId = request().body(Map.of("sku", "DAMAGE-NOTES-001", "name", "Damage notes item",
                         "category", "Test", "amount", 2, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
@@ -1706,11 +1706,9 @@ class InventoryApiTest {
                         "description", "Broken latch", "severity", "medium"))
                 .post("/api/damage-reports").then().statusCode(200).extract().path("id");
         request().body(Map.of("status", "repaired", "amount", 1,
-                        "notes", "Replaced latch and tested fit", "itemHint", "Check latch before checkout"))
+                        "notes", "Replaced latch and tested fit"))
                 .patch("/api/damage-reports/" + reportId).then().statusCode(200)
                 .body("resolutionNotes", equalTo("Replaced latch and tested fit"));
-        request().get("/api/items/" + itemId).then().statusCode(200)
-                .body("hint", equalTo("Check latch before checkout"));
         request().body(Map.of("status", "written_off", "amount", 1,
                         "notes", "Second unit could not be repaired"))
                 .patch("/api/damage-reports/" + reportId).then().statusCode(200)

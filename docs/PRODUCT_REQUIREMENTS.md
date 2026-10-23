@@ -103,8 +103,9 @@ Legacy F-labels map as follows: F01 events; F02 planning; F03/F04/F14 purchasing
 
 | ID | Requirement | Status | Implementation |
 |---|---|:-:|---|
-| DAM-01 | Report → triage → repair → verify, or write off; repair never creates stock; write-off only by `admin` | Implemented | `LifecycleService`, `DamageReportsList` |
-| DAM-02 | Resolution comment; optionally update the item hint | Implemented | `LifecycleService`, `DamageReportsList` |
+| DAM-01 | Report → triage → repair → verify, or write off; direct quantity resolution is available on Damage reports; repair never creates stock; write-off only by `admin` | Implemented | `LifecycleService`, `InventoryOperationsService`, `DamageReportsList` |
+| DAM-02 | Start repair opens the description, repair/write-off choice, quantity and required action comment; failed saves retain the input; damage resolution does not update item hints | Implemented | `DamageResolutionDialog`, `InventoryOperationsService.resolveDamage`; [contract](WORKFLOW_CONTRACTS.md#damage-reports-and-quantity-resolution) |
+| DAM-03 | Searchable, server-paginated Open/History lists; repaired/completed reports only in History; descriptions and activity in an info modal, with no History severity | Implemented | `DamageReportsPage`, `DamageReportsList`, `DamageReportInfoDialog`, `OperationsOrm.damageReports` |
 | MNT-01 | Schedules by date, operating hours or usage, per item/asset; warning and checkout blocking | Implemented | Schedules-only storage, category-generated plans and derived item/asset summaries; [contracts](WORKFLOW_CONTRACTS.md) |
 | MNT-02 | Runtime-tracked items/assets book every meter change as a runtime entry (hours, reading after, event/order, source, actor); returning a runtime-tracked unit to stock requires the hours run; readings never go backwards except through an explicit correction | Implemented | `RuntimeService`, `runtime_entries`, `Item.tracksRuntime`, `RuntimeReturnField`, `OperatingHoursDialog` |
 | PRC-01 | Deficit = demand vs usable stock incl. expected receipts and overrides; planners/admins only | Implemented | `PlanningService`, `PlanningStockService`, `Procurement` |
