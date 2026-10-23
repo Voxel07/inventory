@@ -19,7 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { canManageUsers } from '../../utils/access';
 import { CustodyEvidence } from './CustodyEvidence';
 import { restockOrder } from '../../services/orderCommands';
-import { formatQuantity, fromSteps, inputStep, toSteps } from '../../utils/stock';
+import { formatQuantity, fromSteps, toSteps, usesPercentage } from '../../utils/stock';
 
 /**
  * `itemIds` limits the form to some of the order's items, e.g. a quick return of one checked-out line. `restock` brings
@@ -48,13 +48,15 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     const item = items.find((value) => value.id === id); const name = order.itemNames?.[id] ?? item?.name ?? id;
     // No source choice: the backend takes the item's default location, or the location with free stock.
     if (action === 'prepare') return [
-      { key: `prepare:${id}`, label: `${name} · ${t('common.prepared')}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true, help: `${t('orders.generalOrderWorkflow.requested')}: ${order.requestedQuantities[id]}` },
+      { key: `prepare:${id}`, label: `${name} · ${t('common.prepared')}${usesPercentage(item) ? ' (%)' : ''}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true,
+        help: [usesPercentage(item) && t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }), `${t('orders.generalOrderWorkflow.requested')}: ${formatQuantity(item, order.requestedQuantities[id])}`].filter(Boolean).join(' ') },
       ...(assets.data?.[id] ?? []).filter((asset) => (asset.availabilityStatus === 'available' && (!equipment.data?.[id] || equipment.data[id].assetIds.includes(asset.id))) || order.assetAssignments[id]?.includes(asset.id)).map((asset): Field => ({ key: `asset:${asset.id}`, label: `${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox' })),
     ];
     if ((action === 'return' || action === 'restock') && restockable(id) && item) {
       const consumed = order.consumedQuantities[id] ?? 0;
-      return [{ key: `restock:${id}`, label: `${name} · ${t('orders.restockUnused.unusedAmount')}${item.unit ? ` (${item.unit})` : ''}`, type: 'number',
-        min: 0, step: inputStep(item), max: fromSteps(item, consumed), help: t('orders.restockUnused.consumed', { quantity: formatQuantity(item, consumed) }) }];
+      return [{ key: `restock:${id}`, label: `${name} · ${t('orders.restockUnused.unusedAmount')}${usesPercentage(item) ? ' (%)' : item.unit ? ` (${item.unit})` : ''}`, type: 'number',
+        min: 0, step: 1, max: usesPercentage(item) ? consumed : fromSteps(item, consumed),
+        help: [usesPercentage(item) && t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }), t('orders.restockUnused.consumed', { quantity: formatQuantity(item, consumed) })].filter(Boolean).join(' ') }];
     }
     if (action !== 'return' || outstanding(id) <= 0) return [];
     if (item?.trackingMode === 'serialized') return (order.assetAssignments[id] ?? []).filter((assetId) => !order.reconciledAssets?.[id]?.includes(assetId)).flatMap((assetId): Field[] => {
@@ -79,8 +81,11 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
   if (action === 'return') ids.forEach((id) => { initial[`missing:${id}`] = order.missingQuantities[id] ?? 0; });
   return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : (values) => [...fields(values), { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' && ids.some((id) => outstanding(id) > 0) }]} onClose={onClose} onSave={async (values) => {
     if (action === 'history') return;
-    // Typed in the item's unit (7.5 L), restocked in its steps (75).
-    const restock = Object.fromEntries(ids.filter(restockable).map((id) => [id, toSteps(items.find((item) => item.id === id), String(values[`restock:${id}`] || 0))])
+    // Percentage inputs already represent the integer steps of one full unit.
+    const restock = Object.fromEntries(ids.filter(restockable).map((id) => {
+      const item = items.find((item) => item.id === id);
+      return [id, toSteps(item, String(values[`restock:${id}`] || 0), usesPercentage(item))];
+    })
       .filter(([, steps]) => Number(steps) > 0));
     const restockUnused = () => restockOrder('general', order.id, { quantities: restock, idempotencyKey: restockKey, notes: optionalText(values.notes) });
     if (action === 'restock') return Object.keys(restock).length ? restockUnused() : undefined;

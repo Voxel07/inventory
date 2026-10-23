@@ -26,7 +26,7 @@ import type { CheckedOutRow } from '../../types/custody';
 import { useCustodyBalances } from '../../hooks/useCustodyBalances';
 import { useItemAssets } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
-import { formatQuantity, fromSteps, getItemStock, inputStep, quantityScale, toSteps } from '../../utils/stock';
+import { formatQuantity, fromSteps, getItemStock, quantityScale, toSteps, usesPercentage } from '../../utils/stock';
 import { translate, useNames, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
@@ -81,8 +81,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     };
     const [formData, setFormData] = useState<TransactionFormData>(initialForm);
     const [usage, setUsage] = useState<Usage>(initialUsage);
-    const [quantityInput, setQuantityInput] = useState(String(initialData?.quantityChanged ?? 1));
-    const [quantityUnit, setQuantityUnit] = useState<'items' | 'boxes'>('items');
+    const initialItem = items.find((item) => item.id === (initialData?.itemId ?? preselectedItemId));
+    const initialPercentage = usesPercentage(initialItem);
+    const initialQuantityInput = String(initialData?.quantityChanged ?? (initialPercentage ? 100 : 1));
+    const [quantityInput, setQuantityInput] = useState(initialQuantityInput);
+    const [quantityUnit, setQuantityUnit] = useState<'items' | 'boxes' | 'percent'>(initialPercentage ? 'percent' : 'items');
     const [restocking, setRestocking] = useState(false);
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
@@ -125,10 +128,11 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const custodySource = custodySources.find((row) => row.key === custodyKey);
     const returnLimit = custodySource ? returnable(custodySource) : 0;
     const hasBoxes = !isSerialized && (selectedItem?.containerSize ?? 0) > 0;
-    // Typed in the item's unit (7.5 L), booked in its steps (75).
-    const quantity = hasBoxes && quantityUnit === 'boxes' ? Number(quantityInput) * selectedItem!.containerSize! : toSteps(selectedItem, quantityInput);
+    const percentage = usesPercentage(selectedItem);
+    const percentageInput = percentage && quantityUnit === 'percent';
+    const quantity = hasBoxes && quantityUnit === 'boxes' ? Number(quantityInput) * selectedItem!.containerSize! : toSteps(selectedItem, quantityInput, percentageInput);
     const quantityLimit = isCheckout ? checkoutAvailable : isCheckin ? returnLimit : undefined;
-    const quantityInvalid = quantityInput === '' || quantity < 1 || !Number.isSafeInteger(quantity)
+    const quantityInvalid = quantityInput === '' || !Number.isInteger(Number(quantityInput)) || quantity < 1 || !Number.isSafeInteger(quantity)
         || (quantityLimit !== undefined && quantity > quantityLimit);
     const checkoutContextMissing = eventUse && (!formData.eventOccurrenceId || !formData.faction);
     const selectableAssets = itemAssets.filter((asset) => {
@@ -163,8 +167,9 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             assetInstanceId: row?.assetInstanceId,
         }));
         if (row) {
-            setQuantityUnit('items');
-            setQuantityInput(String(fromSteps(selectedItem, Math.min(Number.isSafeInteger(quantity) && quantity > 0 ? quantity : quantityScale(selectedItem), returnable(row)))));
+            setQuantityUnit(percentage ? 'percent' : 'items');
+            const amount = Math.min(Number.isSafeInteger(quantity) && quantity > 0 ? quantity : quantityScale(selectedItem), returnable(row));
+            setQuantityInput(String(percentage ? amount : fromSteps(selectedItem, amount)));
         }
     }
 
@@ -231,7 +236,12 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     select
                     label={t('common.item')}
                     value={formData.itemId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined }))}
+                    onChange={(e) => {
+                        const nextItem = items.find((item) => item.id === e.target.value);
+                        setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined }));
+                        setQuantityUnit(usesPercentage(nextItem) ? 'percent' : 'items');
+                        setQuantityInput(usesPercentage(nextItem) ? '100' : '1');
+                    }}
                     required
                     fullWidth
                 >
@@ -396,29 +406,32 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         ))}
                     </TextField>
                 )}
-                {hasBoxes && <TextField
+                {(hasBoxes || percentage) && <TextField
                     select
                     label={t('forms.transactionForm.quantityUnit')}
                     value={quantityUnit}
-                    onChange={(event) => { setQuantityUnit(event.target.value as 'items' | 'boxes'); setQuantityInput('1'); }}
+                    onChange={(event) => { const mode = event.target.value as 'items' | 'boxes' | 'percent'; setQuantityUnit(mode); setQuantityInput(mode === 'percent' ? '100' : '1'); }}
                     required
                     fullWidth
                 >
-                    <MenuItem value="items">{t('forms.transactionForm.individualItems')}</MenuItem>
-                    <MenuItem value="boxes">{t('forms.transactionForm.wholeBoxes', { count: selectedItem!.containerSize! })}</MenuItem>
+                    <MenuItem value="items">{t('forms.itemForm.wholeUnits')}</MenuItem>
+                    {hasBoxes && <MenuItem value="boxes">{t('forms.transactionForm.wholeBoxes', { count: selectedItem!.containerSize! })}</MenuItem>}
+                    {percentage && <MenuItem value="percent">{t('forms.itemForm.percentageUsage')}</MenuItem>}
                 </TextField>}
                 {!isSerialized && <TextField
-                    label={selectedItem?.unit && !(hasBoxes && quantityUnit === 'boxes') ? `${t('common.quantity')} (${selectedItem.unit})` : t('common.quantity')}
+                    label={percentageInput ? `${t('common.quantity')} (%)` : percentage ? t('forms.itemForm.numberOfFullUnits') : selectedItem?.unit && !(hasBoxes && quantityUnit === 'boxes') ? `${t('common.quantity')} (${selectedItem.unit})` : t('common.quantity')}
                     type="number"
                     value={quantityInput}
                     onChange={(e) => setQuantityInput(e.target.value)}
                     required
                     fullWidth
-                    helperText={hasBoxes
+                    helperText={percentage
+                        ? [t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(selectedItem, 100) }), !quantityInvalid && formatQuantity(selectedItem, quantity), quantityLimit !== undefined && t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: formatQuantity(selectedItem, quantityLimit) })].filter(Boolean).join(' ')
+                        : hasBoxes
                         ? t('forms.transactionForm.individualItemQuantity', { count: Number.isFinite(quantity) ? quantity : 0 })
                         : quantityLimit !== undefined ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: formatQuantity(selectedItem, quantityLimit) }) : undefined}
                     error={quantityInvalid && quantityInput !== ''}
-                    slotProps={{ htmlInput: { min: inputStep(selectedItem), step: inputStep(selectedItem), ...(quantityLimit !== undefined ? { max: hasBoxes && quantityUnit === 'boxes' ? Math.floor(quantityLimit / selectedItem!.containerSize!) : fromSteps(selectedItem, quantityLimit) } : {}) } }}
+                    slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric', ...(quantityLimit !== undefined ? { max: percentageInput ? quantityLimit : hasBoxes && quantityUnit === 'boxes' ? Math.floor(quantityLimit / selectedItem!.containerSize!) : Math.floor(fromSteps(selectedItem, quantityLimit)) } : {}) } }}
                 />}
                 {isSerialized && (
                     <Alert severity="info">
@@ -455,8 +468,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             setCustodyKey('');
                             setFormData(initialForm());
                             setUsage(initialUsage);
-                            setQuantityInput(String(initialData?.quantityChanged ?? 1));
-                            setQuantityUnit('items');
+                            setQuantityInput(initialQuantityInput);
+                            setQuantityUnit(initialPercentage ? 'percent' : 'items');
                         }}
                         disabled={isLoading}
                         sx={{ minHeight: 48 }}

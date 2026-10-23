@@ -146,9 +146,10 @@ public final class ApiResponses {
             @com.fasterxml.jackson.annotation.JsonProperty("isConsumable") boolean isConsumable,
             String trackingMode,
             String inventoryRole,
-            /** Quantities of this item are whole steps of 10^-quantityDecimals {@code unit}. */
+            /** 0 decimals counts whole units; 2 counts 1% steps of a full canister/bag. */
             String unit,
             int quantityDecimals,
+            BigDecimal unitCapacity,
             String storageLocation,
             String returnLocation,
             String status,

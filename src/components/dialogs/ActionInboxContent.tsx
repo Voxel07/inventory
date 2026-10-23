@@ -58,6 +58,10 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
   </ListItem>;
 
   return <Stack spacing={2}>
+    {/* Applies to every unread notice up to the newest shown, including pages not loaded yet. */}
+    {notices.unreadTotal > 0 && <Button size="small" startIcon={<DoneAllIcon />} sx={{ alignSelf: 'flex-end' }}
+      disabled={notices.markAll.isPending || notices.unread.length === 0} onClick={() => notices.markAll.mutate()}>
+      {t('dialogs.actionInboxContent.markAllUnreadTotalAsRead', { unreadTotal: String(notices.unreadTotal) })}</Button>}
     <ToggleButtonGroup exclusive size="small" value={category} onChange={(_, value: Category | null) => { if (value) setCategory(value); }}
       aria-label={t('common.category')} sx={{ flexWrap: 'wrap' }}>
       <ToggleButton value="all">{t('common.all')} ({due.length + notices.unreadTotal})</ToggleButton>
@@ -88,14 +92,11 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
           </Stack>
         </ListItem>;
       })}
-      <Stack direction="row" useFlexGap sx={{ mt: 1, gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-        {notices.hasNextPage && <Button size="small" variant="outlined" disabled={notices.isFetchingNextPage} onClick={() => { void notices.fetchNextPage(); }}
+      {notices.hasNextPage && <Box sx={{ mt: 1 }}>
+        <Button size="small" variant="outlined" disabled={notices.isFetchingNextPage} onClick={() => { void notices.fetchNextPage(); }}
           aria-label={t('dialogs.actionInboxContent.loadMoreNoticesUnreadCountOfUnreadTotalShown', { unreadCount: String(notices.unread.length), unreadTotal: String(notices.unreadTotal) })}>
-          {t('dialogs.actionInboxContent.loadMoreNotices')} ({notices.unread.length}/{notices.unreadTotal})</Button>}
-        {/* Applies to every unread notice up to the newest shown, including pages not loaded yet. */}
-        {notices.unreadTotal > 1 && <Button size="small" startIcon={<DoneAllIcon />} disabled={notices.markAll.isPending} onClick={() => notices.markAll.mutate()}>
-          {t('dialogs.actionInboxContent.markAllUnreadTotalAsRead', { unreadTotal: String(notices.unreadTotal) })}</Button>}
-      </Stack>
+          {t('dialogs.actionInboxContent.loadMoreNotices')} ({notices.unread.length}/{notices.unreadTotal})</Button>
+      </Box>}
     </InboxSection>}
 
     {show('tasks') && due.length > 0 && <InboxSection title={t('common.tasks')} count={due.length}>{due.map(taskRow)}</InboxSection>}

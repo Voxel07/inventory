@@ -23,11 +23,11 @@ class ConsumableRestockApiTest {
     }
 
     private static String diesel(String location) {
-        // Litres with one decimal: 1000 steps are 100.0 L.
+        // Percentage contents: 1000 steps are ten full canisters.
         return request().body(Map.of("name", "Diesel " + UUID.randomUUID(), "category", "Fuel", "amount", 1000,
-                        "inventoryRole", "consumable", "unit", "L", "quantityDecimals", 1, "storageLocation", location))
+                        "inventoryRole", "consumable", "unit", "L", "unitCapacity", 10, "quantityDecimals", 2, "storageLocation", location))
                 .post("/api/items").then().statusCode(200)
-                .body("unit", equalTo("L")).body("quantityDecimals", equalTo(1)).extract().path("id");
+                .body("unit", equalTo("L")).body("quantityDecimals", equalTo(2)).extract().path("id");
     }
 
     @Test
@@ -60,7 +60,7 @@ class ConsumableRestockApiTest {
                 .body("status", equalTo("picked_up"))
                 .body("consumedQuantities.'" + diesel + "'", equalTo(400));
 
-        // Both canisters come back with 7.5 L unused.
+        // Both containers come back, with 75% of one full canister unused.
         request().body(Map.of("idempotencyKey", UUID.randomUUID().toString(), "lines", Map.of(canister,
                         Map.of("returned", 2, "missing", 0, "damaged", 0))))
                 .post("/api/orders/faction/" + order + "/return").then().statusCode(200).body("status", equalTo("returned"));
@@ -118,15 +118,15 @@ class ConsumableRestockApiTest {
     }
 
     @Test
-    void decimalPlacesAreFixedOnceStockExists() {
+    void quantityModeIsFixedOnceStockExists() {
         String warehouse = TestLocations.section(ConsumableRestockApiTest::request, Map.of("name", "Decimal fuel " + UUID.randomUUID()));
         String diesel = diesel(warehouse);
         var item = request().get("/api/items/" + diesel).then().statusCode(200).extract().jsonPath();
         request().body(Map.of("name", item.getString("name"), "category", "Fuel", "inventoryRole", "consumable",
-                        "unit", "L", "quantityDecimals", 2, "storageLocation", warehouse))
+                        "unit", "L", "quantityDecimals", 0, "storageLocation", warehouse))
                 .patch("/api/items/" + diesel).then().statusCode(400);
         request().body(Map.of("name", "Serialized decimal " + UUID.randomUUID(), "category", "Test", "amount", 0,
-                        "trackingMode", "serialized", "quantityDecimals", 1))
+                        "trackingMode", "serialized", "quantityDecimals", 2))
                 .post("/api/items").then().statusCode(400);
     }
 }

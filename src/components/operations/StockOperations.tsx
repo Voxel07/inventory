@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/dateFormat';
+import { formatQuantity } from '../../utils/stock';
 import { Dialog } from '../shared/ClosableDialog';
 import { CollapsibleOperationLines, OperationLines } from './OperationLines';
 import { OperationHistory, OperationListEntry } from './OperationListEntry';
@@ -34,7 +35,11 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
   const positions = useOperationList(`positions:${selectedItem}:${selectedLocation}`, operationsApi.positions({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const assets = useOperationList(`assets:${selectedItem}:${selectedLocation}`, operationsApi.assets({ itemId: selectedItem || undefined, locationId: selectedLocation || undefined }));
   const lots = useCompleteList(['operations', `stock-lot-labels:${itemId ?? ''}`], operationsApi.lots({ itemId }), { enabled: Boolean(itemId) });
-  const lookup = useStockLookups(itemId ? [] : (positions.data ?? []).map((position) => position.itemId));
+  const lookup = useStockLookups(itemId ? [itemId] : (positions.data ?? []).map((position) => position.itemId));
+  const quantityLabel = (itemId: string, quantity: number) => {
+    const item = lookup.items.find(item => item.id === itemId);
+    return item ? formatQuantity(item, quantity) : '—';
+  };
   return <Stack spacing={1}>
     <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}>
       <Typography variant="h6">{t('operations.stockOperations.stockByLocation')}</Typography>
@@ -59,8 +64,8 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
               {position.lotId ? `${!itemId ? ' · ' : ''}${t('enum.value.lot')}: ${lots.data?.find((lot) => lot.id === position.lotId)?.lotNumber ?? position.lotId}` : ''}
             </Typography>}
           </TableCell>
-          <TableCell align="right" sx={{ color: position.availableQuantity > 0 ? 'success.main' : 'text.secondary', fontWeight: 700 }}>{position.availableQuantity}</TableCell>
-          {[position.quantityOnHand, position.quantityReserved, position.quantityDamaged, position.quantityQuarantined, position.quantityInTransit].map((quantity, index) => <TableCell key={index} align="right">{quantity}</TableCell>)}
+          <TableCell align="right" sx={{ color: position.availableQuantity > 0 ? 'success.main' : 'text.secondary', fontWeight: 700 }}>{quantityLabel(position.itemId, position.availableQuantity)}</TableCell>
+          {[position.quantityOnHand, position.quantityReserved, position.quantityDamaged, position.quantityQuarantined, position.quantityInTransit].map((quantity, index) => <TableCell key={index} align="right">{quantityLabel(position.itemId, quantity)}</TableCell>)}
         </TableRow>)}</TableBody>
       </Table>
     </TableContainer>}
@@ -221,7 +226,12 @@ export function CountsPanel() {
 export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit?: boolean } = {}) {
   const t = useT();
   const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
-  const fixedItem = useItemsByIds(itemId ? [itemId] : []).data?.[0];
+  const items = useItemsByIds(itemId ? [itemId] : (lots.data ?? []).map(lot => lot.itemId));
+  const fixedItem = items.data?.find(item => item.id === itemId);
+  const quantityLabel = (itemId: string, quantity: number) => {
+    const item = items.data?.find(item => item.id === itemId);
+    return item ? formatQuantity(item, quantity) : '—';
+  };
   const [edit, setEdit] = useState<Lot | { itemId: string } | null>(null);
   const [choosing, setChoosing] = useState(false);
   const creating = edit !== null && !('id' in edit);
@@ -229,7 +239,7 @@ export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit
   return <Stack spacing={2}>
     {canEdit && <Button title={translate('operations.stockOperations.createANewInventoryLot')} variant="contained"
       onClick={() => itemId ? setEdit({ itemId }) : setChoosing(true)}>{t('operations.stockOperations.newLot')}</Button>}
-    <QueryFeedback isLoading={lots.isLoading} error={lots.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.stockOperations.noLotsYet')} />
+    <QueryFeedback isLoading={lots.isLoading || items.isLoading} error={lots.error || items.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.stockOperations.noLotsYet')} />
     {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={canEdit ? [
         { key: 'stock', label: t('operations.stockOperations.addStock'), title: translate('operations.stockOperations.bookStockForThisLot'), pinned: true,
           to: `/items/${lot.itemId}?transaction=1&lotId=${lot.id}` },
@@ -242,7 +252,7 @@ export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit
       {lot.storageRequirements || lot.notes ? <Typography>{lot.storageRequirements} {lot.notes}</Typography> : null}
       {lot.stock.length > 0 && <OperationLines label={t('operations.stockOperations.stockOfThisLot')}
         headers={[t('enum.value.location'), t('operations.stockOperations.onHand'), t('enum.itemStatus.available'), t('enum.transactionType.reserved'), t('enum.itemStatus.damaged'), t('enum.value.quarantine'), t('enum.value.in_transit')]}
-        rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('operations.stockOperations.restrictedLocation'), row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit] }))} />}
+        rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('operations.stockOperations.restrictedLocation'), ...[row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit].map(quantity => quantityLabel(lot.itemId, quantity))] }))} />}
     </OperationListEntry>)}
     <LoadMore list={lots} />
     {choosing && <OperationForm title={t('operations.stockOperations.newLot')} submitLabel={t('common.next')} onClose={() => setChoosing(false)}

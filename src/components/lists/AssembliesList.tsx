@@ -1,4 +1,3 @@
-import { locationLabel } from '../../utils/locationHierarchy';
 import { useItemsByIds } from '../../hooks/useItems';
 import { LoadMore } from '../shared/LoadMore';
 import { useAuth } from '../../hooks/useAuth';
@@ -46,8 +45,6 @@ type AssemblyRow = {
     name: string;
     category: string;
     categories: string[];
-    location: string;
-    locations: string[];
     events: string;
     stock: number;
     totalStock: number;
@@ -66,7 +63,7 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
     const compact = useCompactCatalog();
     const narrowTable = useMediaQuery(theme.breakpoints.down('lg'));
     const navigate = useNavigate();
-    // Only the components of the loaded assemblies, for availability, categories and locations.
+    // Only the components of the loaded assemblies, for availability.
     const { data: items } = useItemsByIds((assemblies ?? []).flatMap((assembly) => [...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})]));
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [selecting, setSelecting] = useState(false);
@@ -77,22 +74,14 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
         const itemById = new Map((items ?? []).map((item) => [item.id, item]));
         const stockById = new Map((items ?? []).map((item) => [item.id, getItemStock(item)]));
         return (assemblies ?? []).map((assembly) => {
-            const expandedById = new Map((assembly.expand?.itemIds ?? []).map((item) => [item.id, item]));
             const componentIds = [...new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})])];
-            const componentItems = componentIds.map((id) => itemById.get(id) ?? expandedById.get(id));
             const category = [assembly.category, assembly.subcategory].filter(Boolean).join(' · ');
-            const locations = [...new Set(componentItems.map((item) => {
-                const location = item?.expand?.storageLocation;
-                return location ? locationLabel(location) : item?.storageLocation;
-            }).filter((location): location is string => Boolean(location)))];
             return {
                 id: assembly.id,
                 assembly,
                 name: assembly.name,
                 category: category || '—',
                 categories: assembly.category ? [assembly.category] : [],
-                location: locations.join(', ') || '—',
-                locations,
                 events: assembly.eventTypes?.join(', ') || '—',
                 stockReady: componentIds.every(id => itemById.has(id)),
                 stock: assemblyAvailability(assembly, (id) => stockById.get(id)?.remaining ?? 0),
@@ -123,7 +112,6 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
             renderCell: ({ row }) => <Typography variant="body2" title={row.category} sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'normal', lineHeight: 1.43 }}>{row.category}</Typography> },
         { field: 'stock', headerName: t('enum.itemStatus.available'), type: 'number', width: 180,
             renderCell: ({ row }) => <Typography variant="body2" className="tabular" sx={{ color: availabilityColor(row), fontWeight: 600, whiteSpace: 'normal', textAlign: 'right' }}>{availabilityText(row)}</Typography> },
-        { field: 'location', headerName: t('enum.value.location'), flex: 1, minWidth: 150, ...selectFilterColumn(allRows, (row) => row.locations) },
         { field: 'events', headerName: t('nav.events'), width: 130, ...selectFilterColumn(allRows, (row) => row.assembly.eventTypes ?? []) },
         ...(canManage ? [{ field: 'actions', headerName: t('common.actions'), width: 104, sortable: false, filterable: false,
             renderCell: ({ row }: { row: AssemblyRow }) => <Stack direction="row">

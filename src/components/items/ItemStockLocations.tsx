@@ -9,6 +9,7 @@ import { locationPath } from '../../utils/locationHierarchy';
 import { useT } from '../../utils/naming';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { isAssetStored } from '../../utils/locationStock';
+import { formatQuantity } from '../../utils/stock';
 
 /** Show physical stock grouped by location when the item occupies multiple locations. */
 export function ItemStockLocations({ item }: { item: Item }) {
@@ -44,7 +45,7 @@ export function ItemStockLocations({ item }: { item: Item }) {
         <TableHead><TableRow><TableCell>{t('common.storageLocation')}</TableCell><TableCell align="right">{t('items.itemStockLocations.onHand')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map(row => <TableRow key={row.id}>
           <TableCell><Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(row.id)}`}>{row.name}</Link></TableCell>
-          <TableCell align="right">{row.quantity}</TableCell>
+          <TableCell align="right">{formatQuantity(item, row.quantity)}</TableCell>
         </TableRow>)}</TableBody>
       </Table>
     </TableContainer>}

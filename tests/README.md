@@ -93,6 +93,7 @@ Every remaining file in `tests/` has one of these roles:
 | `layout.browser.html`, `layout.browser.tsx` | Keep: grouped custody/assembly layout preview |
 | `orderPreparation.browser.html`, `orderPreparation.browser.tsx` | Keep: faction/general preparation and warehouse queue preview |
 | `ui-cleanup.browser.html`, `ui-cleanup.browser.tsx` | Keep: consolidated navigation, task tabs, catalog, inbox, returns and sharing preview |
+| `event-detail.browser.html`, `event-detail.browser.tsx` | Event item editor with the real Demo DE 2026 CSV report; cached by default, add `?cold` to fetch after mount; save shows the submitted quantities |
 | `fixtures/dto.ts`, `fixtures/api.ts` | Added: typed DTO builders and a paged mock transport (`X-Has-More`) shared by the previews |
 | `refactoring.browser.html`, `refactoring.browser.jsx` | **Removed:** older operations/catalog/inbox preview superseded by `ui-cleanup.browser.*` |
 | `refactoring.sample-smoke.ts` | Keep opt-in live REST/MCP sample import; use DB reference data, finish count posting and new-lot receipt assertions instead of leaving a browser exercise |

@@ -4,7 +4,7 @@ interface Props {
   label: string;
   value: string;
   max?: number;
-  /** 0.1 for an item booked in tenths; whole units by default. */
+  /** Whole units or integer percentages. */
   step?: number;
   onChange: (value: string) => void;
 }

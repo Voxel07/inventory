@@ -250,10 +250,11 @@ export function ItemDetail() {
                 <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
                     <XAxis dataKey="id" tickFormatter={(id: string) => historyDates.get(id) ?? ''} stroke={theme.palette.text.secondary} fontSize={11} />
-                    <YAxis stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} />
+                    <YAxis stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} tickFormatter={(value: number) => formatQuantity(item, value, false)} />
                     <ChartTooltip
                         isAnimationActive={false}
                         labelFormatter={(id) => historyDates.get(String(id)) ?? ''}
+                        formatter={(value) => formatQuantity(item, Number(value))}
                         contentStyle={{ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 8 }}
                         labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
                         itemStyle={{ color: theme.palette.primary.main }}
@@ -366,7 +367,7 @@ export function ItemDetail() {
                         <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{formatQuantity(item, damaged)}</Metric>
                         <Metric label={t('enum.value.ordered')}>{formatQuantity(item, item.stock?.ordered ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.minimumStock')}>{formatQuantity(item, item.minStock ?? 0)}</Metric>
-                        <Metric label={t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
+                        <Metric label={item.quantityDecimals === 2 ? t('forms.itemForm.fullUnitValue') : t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.totalValue')}>{formatMoney(totalValue)}</Metric>
                         {(item.containerSize ?? 0) > 0 && <>
                             <Metric label={t('pages.itemDetail.unitsPerContainer')}>{item.containerSize}</Metric>
@@ -422,8 +423,9 @@ export function ItemDetail() {
                             <Field label={t('common.returnLocation')}>{locationLabel(item.expand?.returnLocation ?? (!item.returnLocation || item.returnLocation === item.storageLocation ? location : undefined)) || '—'}</Field>
                             <Field label={t('pages.itemDetail.ownerProvider')}>{profile ? (profile.ownerName || (profile.ownershipType === 'organization' ? ownershipLabels.organization : '—')) : '—'}</Field>
                             <Field label={t('pages.itemDetail.keeperContact')}>{[profile?.keeperName, profile?.keeperContact].filter(Boolean).join(' · ') || '—'}</Field>
-                            <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{item.stock?.totalOwned ?? 0}</Field>
+                            <Field label={item.access?.privateResource ? t('pages.itemDetail.privatelyOwned') : t('pages.itemDetail.organizationOwned')}>{formatQuantity(item, item.stock?.totalOwned ?? 0)}</Field>
                             <Field label={t('pages.itemDetail.trackingMode')}>{formatStatus(item.trackingMode ?? 'bulk')}</Field>
+                            {item.quantityDecimals === 2 && <Field label={t('forms.itemForm.fullUnitContents')}>{formatQuantity(item, 100)}</Field>}
                             {item.tracksRuntime && <Field label={t('enum.value.operating_hours')}>{t('forms.itemForm.recordOperatingHoursOnReturn')}</Field>}
                             {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
                             <Field label={t('common.visibility')}>{item.access?.privateResource

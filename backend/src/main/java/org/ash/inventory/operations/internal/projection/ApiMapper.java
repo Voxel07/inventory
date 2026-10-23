@@ -238,6 +238,7 @@ public class ApiMapper {
                 value.inventoryRole.name(),
                 value.unit,
                 value.quantityDecimals,
+                value.unitCapacity,
                 canViewLocation(value.storageLocation) ? value.storageLocation.id.toString() : null,
                 canViewLocation(value.returnLocation) ? value.returnLocation.id.toString() : null,
                 value.active ? "available" : "retired",

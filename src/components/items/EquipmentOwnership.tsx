@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/dateFormat';
+import { formatQuantity } from '../../utils/stock';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Button, IconButton } from '../shared/ActionButtons';
 import { useEquipmentProfile } from '../../hooks/useEquipment';
@@ -76,7 +77,7 @@ function EquipmentLending({ item, canEdit, embedded = false, showSummary = true,
             <Box><Typography variant="subtitle2" color="text.secondary">{t('items.equipmentOwnership.ownerProvider')}</Typography><Typography variant="body2">{data.ownerName || (data.ownershipType === 'organization' ? ownership.organization : '—')}</Typography></Box>
             <Box><Typography variant="subtitle2" color="text.secondary">{t('items.equipmentOwnership.keeperContact')}</Typography><Typography variant="body2">{[data.keeperName, data.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography></Box>
           </Box>
-          <Typography variant="body2">{t('items.equipmentOwnership.physicalInventory')}: {(item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0)} · {item.access?.privateResource ? t('items.equipmentOwnership.privatelyOwned') : t('items.equipmentOwnership.organizationOwned')}: {item.stock?.totalOwned ?? 0}</Typography>
+          <Typography variant="body2">{t('items.equipmentOwnership.physicalInventory')}: {formatQuantity(item, (item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0))} · {item.access?.privateResource ? t('items.equipmentOwnership.privatelyOwned') : t('items.equipmentOwnership.organizationOwned')}: {formatQuantity(item, item.stock?.totalOwned ?? 0)}</Typography>
         </>}
         {data.availabilityPolicy !== 'available' && (embedded ? <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Typography variant="caption" color="text.secondary">{t('items.equipmentOwnership.commitmentPolicy')}</Typography><Tooltip arrow enterTouchDelay={0} title={t('items.equipmentOwnership.onlyMatchingCommitmentsCountTowardPlanningAndCheckoutStorageMovements')}><IconButton size="small" aria-label={t('items.equipmentOwnership.aboutCommitmentPolicy')}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip></Stack> : <Alert severity="info">{t('items.equipmentOwnership.onlyMatchingCommitmentsCountTowardEventPlanningAndCheckoutStorage')}</Alert>)}
         {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>

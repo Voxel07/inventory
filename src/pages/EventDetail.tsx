@@ -47,8 +47,8 @@ export function EventDetail() {
   const updateReport = useUpdateEventReport();
   const [editing, setEditing] = useState(() => canEdit && searchParams.get('edit') === '1');
   const [adding, setAdding] = useState(false);
-  const [planned, setPlanned] = useState<QuantityInputs>({});
-  const [used, setUsed] = useState<QuantityInputs>({});
+  const [planned, setPlanned] = useState<QuantityInputs>(() => toQuantityInputs(report?.plannedQuantities));
+  const [used, setUsed] = useState<QuantityInputs>(() => toQuantityInputs(report?.usedQuantities));
 
   const resetForm = () => {
     if (!report) return;

@@ -8,7 +8,7 @@ export function EventQuantities({ event }: { event?: EventReport }) {
   const t = useT();
   const [search, setSearch] = useState('');
   if (!event) return null;
-  const labels: Record<string, string> = { requested: t('events.eventQuantities.requested'), prepared: t('common.prepared'), handedOver: t('events.eventQuantities.handedOver'), returned: t('events.eventQuantities.returned'), consumed: t('enum.transactionType.consumed'), damaged: t('enum.itemStatus.damaged'), missing: t('events.eventQuantities.missing'), writtenOff: t('enum.damageStatus.written_off'), outstanding: t('events.eventQuantities.outstandingIncludesMissing') };
+  const labels: Record<string, string> = { requested: t('events.eventQuantities.requested'), returned: t('events.eventQuantities.returned'), consumed: t('enum.transactionType.consumed'), damaged: t('enum.itemStatus.damaged'), missing: t('events.eventQuantities.missing'), writtenOff: t('enum.damageStatus.written_off'), outstanding: t('events.eventQuantities.outstanding') };
   const name = (id: string) => event.itemNames?.[id] ?? id;
   const allIds = [...new Set([...Object.keys(event.plannedQuantities), ...Object.keys(event.usedQuantities), ...Object.values(event.quantities ?? {}).flatMap((values) => Object.keys(values))])];
   const query = search.trim().toLocaleLowerCase();
@@ -31,7 +31,7 @@ export function EventQuantities({ event }: { event?: EventReport }) {
           </TableCell>
           <TableCell align="right">{event.plannedQuantities[id] ?? 0}</TableCell>
           {Object.keys(labels).map((key) => {
-            const quantity = event.quantities?.[key]?.[id] ?? (key === 'handedOver' ? event.usedQuantities[id] ?? 0 : 0);
+            const quantity = event.quantities?.[key]?.[id] ?? 0;
             return <TableCell key={key} align="right" sx={key === 'outstanding' && quantity > 0 ? { color: 'warning.main', fontWeight: 700 } : undefined}>{quantity}</TableCell>;
           })}
         </TableRow>)}</TableBody>

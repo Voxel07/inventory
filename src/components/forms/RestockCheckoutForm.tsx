@@ -4,7 +4,7 @@ import { Alert, Box, MenuItem, Stack, TextField } from '@mui/material';
 import { Button } from '../shared/ActionButtons';
 import { getRestockableCheckouts } from '../../services/transactionService';
 import { formatDateTime } from '../../utils/dateFormat';
-import { formatQuantity, fromSteps, inputStep, toSteps } from '../../utils/stock';
+import { formatQuantity, fromSteps, toSteps, usesPercentage } from '../../utils/stock';
 import { useT } from '../../utils/naming';
 import type { Item } from '../../types';
 
@@ -23,7 +23,8 @@ export function RestockCheckoutForm({ item, onSubmit, isLoading }: { item: Item;
   const rows = checkouts.data ?? [];
   const selected = rows.find((row) => row.checkoutId === checkoutId) ?? rows[0];
   const limit = selected ? selected.issued - selected.restocked : 0;
-  const quantity = toSteps(item, quantityInput);
+  const percentage = usesPercentage(item);
+  const quantity = toSteps(item, quantityInput, percentage);
   const invalid = !selected || quantityInput === '' || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > limit;
 
   function submit() {
@@ -44,10 +45,10 @@ export function RestockCheckoutForm({ item, onSubmit, isLoading }: { item: Item;
             {[formatDateTime(row.occurredAt), row.person, row.event, row.faction, formatQuantity(item, row.issued)].filter(Boolean).join(' · ')}
           </MenuItem>)}
         </TextField>}
-      <TextField required fullWidth type="number" label={item.unit ? `${t('orders.restockUnused.unusedAmount')} (${item.unit})` : t('orders.restockUnused.unusedAmount')}
+      <TextField required fullWidth type="number" label={percentage ? `${t('orders.restockUnused.unusedAmount')} (%)` : item.unit ? `${t('orders.restockUnused.unusedAmount')} (${item.unit})` : t('orders.restockUnused.unusedAmount')}
         value={quantityInput} onChange={(event) => setQuantityInput(event.target.value)} error={quantityInput !== '' && invalid}
-        helperText={selected ? t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: formatQuantity(item, limit) }) : undefined}
-        slotProps={{ htmlInput: { min: inputStep(item), step: inputStep(item), max: fromSteps(item, limit) } }} />
+        helperText={[percentage && t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }), percentage && !invalid && formatQuantity(item, quantity), selected && t('forms.transactionForm.maximumQuantityLimit', { quantityLimit: formatQuantity(item, limit) })].filter(Boolean).join(' ')}
+        slotProps={{ htmlInput: { min: 1, step: 1, max: percentage ? limit : fromSteps(item, limit), inputMode: 'numeric' } }} />
       <TextField label={t('common.notes')} value={notes} onChange={(event) => setNotes(event.target.value)} multiline rows={2} fullWidth />
       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button title={t('forms.transactionForm.recordUnusedConsumablesBackToStock')} type="button" onClick={submit} variant="contained" disabled={isLoading || invalid}

@@ -27,7 +27,7 @@ export function fixtureLocation(fields: Pick<StorageLocation, 'id' | 'name'> & P
 export function fixtureItem(fields: Pick<Item, 'id' | 'name'> & Partial<Item>): Item {
   return {
     category: 'Equipment', value: 0, minStock: 0, storageLocation: null, returnLocation: null, status: 'available',
-    isConsumable: false, trackingMode: 'bulk', inventoryRole: 'returnable', maintenanceStatus: 'certified', eventTypes: [],
+    isConsumable: false, trackingMode: 'bulk', inventoryRole: 'returnable', maintenanceStatus: 'certified', blockingMaintenance: [], eventTypes: [],
     stock: null, created: FIXTURE_TIME, updated: FIXTURE_TIME, ...fields,
   };
 }

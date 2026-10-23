@@ -22,8 +22,8 @@ const position = (id: string, locationId: string, quantity: number) => ({ id, it
   quantityReserved: 0, quantityDamaged: 0, quantityQuarantined: 0, quantityInTransit: 0, availableQuantity: quantity, transferableQuantity: quantity });
 const item = fixtureItem({ id: 'screws', name: 'Screws', containerSize: 200, containerCount: 5,
   containerRemainingCount: 37, stock: fixtureStock(1037), storageLocation: location.id });
-// Diesel in litres with one decimal: 1000 steps are 100 L; one earlier 40 L checkout can take unused fuel back.
-const diesel = fixtureItem({ id: 'diesel', name: 'Diesel', isConsumable: true, inventoryRole: 'consumable', unit: 'L', quantityDecimals: 1,
+// Ten full canisters; one earlier four-canister checkout can take unused contents back in 1% steps.
+const diesel = fixtureItem({ id: 'diesel', name: 'Diesel', isConsumable: true, inventoryRole: 'consumable', unit: 'L', unitCapacity: 10, quantityDecimals: 2,
   stock: fixtureStock(1000), storageLocation: location.id });
 installFixtureApi(({ url, path, method, body }) => {
   if (path === '/api/items') return [item, diesel];
@@ -60,7 +60,7 @@ export function Preview() {
         initialData={{ itemId: 'screws', transactionType: 'checkout', quantityChanged: 1, reason: names.reason.testing, notes: '', locationId: location.id }}
         onSubmit={setResult} />
       <TransactionForm items={[diesel]} preselectedItemId="diesel"
-        initialData={{ itemId: 'diesel', transactionType: 'checkout', quantityChanged: 1, reason: names.reason.testing, notes: '' }}
+        initialData={{ itemId: 'diesel', transactionType: 'checkout', quantityChanged: 100, reason: names.reason.testing, notes: '' }}
         onSubmit={setResult} onRestock={setResult} />
       <Box component="pre" aria-label="Submitted payload" sx={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(result, null, 2)}</Box>
     </Stack>

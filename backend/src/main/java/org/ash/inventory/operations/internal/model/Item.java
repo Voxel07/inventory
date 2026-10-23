@@ -62,13 +62,16 @@ public class Item extends BaseEntity {
         return inventoryRole == DomainEnums.InventoryRole.consumable;
     }
     /**
-     * Display unit of bulk quantities ("L", "m"); {@code null} counts pieces. Stock is kept in whole steps of
-     * 10^-quantityDecimals units (7.5 L with one decimal is 75), so all stock arithmetic stays exact.
+     * Display unit (L/kg for percentage consumables); null counts pieces. Whole items use quantityDecimals=0;
+     * percentage consumables use quantityDecimals=2, with 100 integer steps per full canister/bag.
      */
     @Column(name = "unit")
     public String unit;
     @Column(name = "quantity_decimals", nullable = false)
     public int quantityDecimals;
+    /** Physical contents of one full percentage-tracked canister/bag, expressed in unit (L/kg). */
+    @Column(name = "unit_capacity", precision = 12, scale = 3)
+    public BigDecimal unitCapacity;
     @Column(name = "min_stock", nullable = false)
     public int minStock;
     @Column(name = "unit_value_cents", nullable = false)

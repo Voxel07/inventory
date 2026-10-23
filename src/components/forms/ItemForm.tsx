@@ -28,7 +28,7 @@ import { useT } from '../../utils/naming';
 import { LocationPicker } from '../shared/LocationPicker';
 import { StorageStructureDialog } from '../storage/StorageStructureDialog';
 import { buildLocationTree, holdsStock, type LocationTreeNode } from '../../utils/locationHierarchy';
-import { formatQuantity, fromSteps, inputStep, toSteps } from '../../utils/stock';
+import { formatQuantity, fromSteps, toSteps } from '../../utils/stock';
 import { MaintenanceScheduleDialog } from './MaintenanceScheduleDialog';
 import { describeScheduleDraft, toScheduleInput, type ScheduleDraft } from './maintenanceScheduleDrafts';
 
@@ -77,6 +77,7 @@ export function ItemForm({
         inventoryRole: initialData?.inventoryRole ?? 'returnable',
         unit: initialData?.unit ?? '',
         quantityDecimals: initialData?.quantityDecimals ?? 0,
+        unitCapacity: initialData?.unitCapacity,
         imageFiles: [],
         removeImages: [],
         containerSize: initialData?.containerSize ?? undefined,
@@ -93,6 +94,7 @@ export function ItemForm({
         minStock: String(fromSteps(initialData, initialData?.minStock ?? 0)),
         value: String(initialData?.value ?? 0),
         containerSize: initialData?.containerSize == null ? '' : String(initialData.containerSize),
+        unitCapacity: initialData?.unitCapacity == null ? '' : String(initialData.unitCapacity),
         containerRemainingCount: '',
         currentOperatingHours: initialData?.currentOperatingHours == null ? '' : String(initialData.currentOperatingHours),
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km == null ? '' : String(initialData.fuelConsumptionLitersPer100Km),
@@ -164,6 +166,7 @@ export function ItemForm({
             minStock: minStockSteps,
             value: Number(numericInputs.value),
             containerSize: isBulkPackage ? parseOptional(numericInputs.containerSize) : undefined,
+            unitCapacity: measured ? Number(numericInputs.unitCapacity) : null,
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
             ...(offersSchedules && schedules.length ? { maintenanceSchedules: schedules.map(toScheduleInput) } : {}),
@@ -177,11 +180,13 @@ export function ItemForm({
 
     const boxSize = Number(numericInputs.containerSize);
     const openedUnits = isBulkPackage && hasOpenedContainer ? Number(numericInputs.containerRemainingCount) : 0;
-    // Quantities are booked in whole steps of the item's unit (7.5 L with one decimal is 75).
-    const measure = { unit: formData.unit, quantityDecimals: formData.quantityDecimals ?? 0 };
+    // One full canister/bag is 100 percentage steps; opening stock is entered in whole units.
+    const capacity = Number(numericInputs.unitCapacity);
+    const measure = { unit: formData.unit, quantityDecimals: formData.quantityDecimals ?? 0, unitCapacity: capacity };
     const measured = (formData.quantityDecimals ?? 0) > 0;
-    const openingUnits = isBulkPackage ? Number(numericInputs.amount) * boxSize + openedUnits : toSteps(measure, numericInputs.amount);
-    const amountValid = !!initialData || (numericInputs.amount !== '' && (!isBulkPackage || Number.isInteger(Number(numericInputs.amount)))
+    const openedPercent = measured && hasOpenedContainer ? Number(numericInputs.containerRemainingCount) : 0;
+    const openingUnits = isBulkPackage ? Number(numericInputs.amount) * boxSize + openedUnits : toSteps(measure, numericInputs.amount) + openedPercent;
+    const amountValid = !!initialData || (numericInputs.amount !== '' && Number.isInteger(Number(numericInputs.amount))
         && Number(numericInputs.amount) >= 0 && Number.isSafeInteger(openingUnits) && openingUnits <= 2147483647);
     const minStockSteps = toSteps(measure, numericInputs.minStock);
     const generatesAssetCodes = !initialData && formData.trackingMode === 'serialized';
@@ -199,10 +204,15 @@ export function ItemForm({
         || (numericInputs.containerSize !== '' && Number.isInteger(boxSize) && boxSize > 0 && boxSize <= 999999999);
     const openedContainerValid = !!initialData || !isBulkPackage || !hasOpenedContainer
         || (numericInputs.containerRemainingCount !== '' && Number.isInteger(openedUnits) && openedUnits > 0 && openedUnits < boxSize);
+    const openedPercentValid = !!initialData || !measured || !hasOpenedContainer
+        || (numericInputs.containerRemainingCount !== '' && Number.isInteger(openedPercent) && openedPercent > 0 && openedPercent < 100);
     const requiredNumbersValid = numericInputs.minStock !== '' && minStockSteps >= 0
         && Number.isSafeInteger(minStockSteps) && numericInputs.value !== '' && Number.isFinite(Number(numericInputs.value)) && Number(numericInputs.value) >= 0;
+    const capacityValid = !measured || (Boolean(formData.unit?.trim()) && numericInputs.unitCapacity !== ''
+        && Number.isFinite(capacity) && capacity >= 0.001 && capacity <= 999999999.999
+        && Math.abs(capacity * 1000 - Math.round(capacity * 1000)) < 1e-6);
     const isDisabled = isLoading || !nameKey || !!nameError || !formData.category.trim() || !amountValid || !containerSizeValid
-        || !openedContainerValid || !requiredNumbersValid || !assetStartValid;
+        || !openedContainerValid || !openedPercentValid || !requiredNumbersValid || !assetStartValid || !capacityValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
     const isGenerator = ['generator', 'stromerzeuger', 'aggregat'].some((value) => normalizedCategory.includes(value));
@@ -324,13 +334,14 @@ export function ItemForm({
                                 setFormData((prev) => ({
                                     ...prev,
                                     inventoryRole,
+                                    quantityDecimals: inventoryRole === 'consumable' ? prev.quantityDecimals : 0,
                                     trackingMode: inventoryRole === 'consumable' && prev.trackingMode === 'serialized'
                                         ? 'bulk' : prev.trackingMode,
                                 }));
                             }}
                         >
                             <MenuItem value="consumable">{t('enum.value.consumable')}</MenuItem>
-                            <MenuItem value="returnable">{t('enum.value.returnable')}</MenuItem>
+                            <MenuItem value="returnable" disabled={hasStock && measured}>{t('enum.value.returnable')}</MenuItem>
                         </TextField>
                     </Stack>
                     {formData.trackingMode !== 'serialized' && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -339,8 +350,8 @@ export function ItemForm({
                             label={t('forms.itemForm.unit')}
                             value={formData.unit ?? ''}
                             onChange={handleChange('unit')}
-                            placeholder={t('forms.itemForm.unitPlaceholder')}
-                            helperText={t('forms.itemForm.unitHelp')}
+                            placeholder={measured ? t('forms.itemForm.fullUnitPlaceholder') : t('forms.itemForm.unitPlaceholder')}
+                            helperText={measured ? t('forms.itemForm.fullUnitHelp') : t('forms.itemForm.unitHelp')}
                             slotProps={{ htmlInput: { maxLength: 32 } }}
                         />
                         <TextField
@@ -350,13 +361,24 @@ export function ItemForm({
                             value={formData.quantityDecimals ?? 0}
                             disabled={hasStock || isBulkPackage}
                             helperText={hasStock ? t('forms.itemForm.cannotChangeWhileStockExists') : t('forms.itemForm.decimalPlacesHelp')}
-                            onChange={(event) => setFormData((prev) => ({ ...prev, quantityDecimals: Number(event.target.value) }))}
+                            onChange={(event) => {
+                                const quantityDecimals = Number(event.target.value) === 2 ? 2 : 0;
+                                setFormData((prev) => ({ ...prev, quantityDecimals,
+                                    inventoryRole: quantityDecimals === 2 ? 'consumable' : prev.inventoryRole }));
+                                setHasOpenedContainer(false);
+                            }}
                         >
-                            {[0, 1, 2, 3].map((decimals) => <MenuItem key={decimals} value={decimals}>
-                                {decimals === 0 ? t('forms.itemForm.wholeUnits') : formatQuantity({ quantityDecimals: decimals }, 1)}
-                            </MenuItem>)}
+                            <MenuItem value={0}>{t('forms.itemForm.wholeUnits')}</MenuItem>
+                            <MenuItem value={2}>{t('forms.itemForm.percentageUsage')}</MenuItem>
                         </TextField>
                     </Stack>}
+                    {measured && <TextField type="number" required fullWidth
+                        label={formData.unit ? `${t('forms.itemForm.fullUnitContents')} (${formData.unit})` : t('forms.itemForm.fullUnitContents')}
+                        value={numericInputs.unitCapacity} onChange={handleNumberChange('unitCapacity')}
+                        disabled={hasStock}
+                        helperText={hasStock ? t('forms.itemForm.cannotChangeWhileStockExists') : t('forms.itemForm.fullUnitContentsHelp')}
+                        error={numericInputs.unitCapacity !== '' && !capacityValid}
+                        slotProps={{ htmlInput: { min: 0.001, max: 999999999.999, step: 0.001, inputMode: 'decimal' } }} />}
                     {formData.trackingMode !== 'serialized' && !measured && <Box>
                         <FormControlLabel
                             control={(
@@ -407,17 +429,17 @@ export function ItemForm({
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                         {!initialData && (
                             <TextField
-                                label={isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : formData.unit ? `${t('common.quantity')} (${formData.unit})` : t('common.quantity')}
+                                label={isBulkPackage ? t('forms.itemForm.numberOfFullBoxes') : measured ? t('forms.itemForm.numberOfFullUnits') : formData.unit ? `${t('common.quantity')} (${formData.unit})` : t('common.quantity')}
                                 type="number"
                                 value={numericInputs.amount}
                                 onChange={handleNumberChange('amount')}
                                 required
                                 fullWidth
-                                helperText={formData.trackingMode === 'serialized'
+                                helperText={measured ? t('forms.itemForm.openingPhysicalQuantity', { quantity: capacityValid && amountValid ? formatQuantity(measure, openingUnits) : '—' }) : formData.trackingMode === 'serialized'
                                     ? t('forms.itemForm.createsOneAssetPerUnitEGSKU001')
                                     : formData.trackingMode === 'lot_tracked' ? t('forms.itemForm.openingStockBecomesTheFirstLot')
                                     : undefined}
-                                slotProps={{ htmlInput: { min: 0, step: isBulkPackage ? 1 : inputStep(measure), inputMode: measured ? 'decimal' : 'numeric' } }}
+                                slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
                             />
                         )}
                         {generatesAssetCodes && (<>
@@ -456,16 +478,17 @@ export function ItemForm({
                             />
                         )}
                         <TextField
-                            label={formData.unit ? `${t('forms.itemForm.minimumStock')} (${formData.unit})` : t('forms.itemForm.minimumStock')}
+                            label={measured ? `${t('forms.itemForm.minimumStock')} (${t('forms.itemForm.wholeUnits')})` : formData.unit ? `${t('forms.itemForm.minimumStock')} (${formData.unit})` : t('forms.itemForm.minimumStock')}
                             type="number"
                             value={numericInputs.minStock}
                             onChange={handleNumberChange('minStock')}
                             required
                             fullWidth
-                            slotProps={{ htmlInput: { min: 0, step: inputStep(measure), inputMode: measured ? 'decimal' : 'numeric' } }}
+                            helperText={measured && capacityValid ? formatQuantity(measure, minStockSteps) : undefined}
+                            slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric' } }}
                         />
                         <TextField
-                            label={t('forms.itemForm.unitValue')}
+                            label={measured ? t('forms.itemForm.fullUnitValue') : t('forms.itemForm.unitValue')}
                             type="number"
                             value={numericInputs.value}
                             onChange={handleNumberChange('value')}
@@ -474,6 +497,16 @@ export function ItemForm({
                             slotProps={{ htmlInput: { min: 0, step: 0.01, inputMode: 'decimal' } }}
                         />
                     </Box>
+                    {measured && !initialData && <>
+                        <FormControlLabel control={<Checkbox checked={hasOpenedContainer} onChange={(_, checked) => setHasOpenedContainer(checked)} />}
+                            label={t('forms.itemForm.addPartlyUsedUnit')} />
+                        {hasOpenedContainer && <TextField type="number" required fullWidth
+                            label={t('forms.itemForm.remainingPercentage')} value={numericInputs.containerRemainingCount}
+                            onChange={handleNumberChange('containerRemainingCount')}
+                            error={!openedPercentValid && numericInputs.containerRemainingCount !== ''}
+                            helperText={t('forms.itemForm.percentageHelp')}
+                            slotProps={{ htmlInput: { min: 1, max: 99, step: 1, inputMode: 'numeric' } }} />}
+                    </>}
                     {isBulkPackage && !initialData && <>
                         <FormControlLabel
                             control={<Checkbox checked={hasOpenedContainer} onChange={(_, checked) => setHasOpenedContainer(checked)} />}

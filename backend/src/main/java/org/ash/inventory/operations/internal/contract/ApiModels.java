@@ -30,7 +30,8 @@ public final class ApiModels {
             LocalDate batteryReplacementDue, LocalDate bestBeforeDate, Boolean privateResource, Boolean publicUse, Boolean tracksRuntime,
             @Size(max = 200) String assetCodePrefix, @Min(1) Integer assetStartNumber,
             @Size(max = 20) List<@NotNull @Valid ItemScheduleInput> maintenanceSchedules,
-            @Size(max = 32) String unit, @Min(0) @jakarta.validation.constraints.Max(3) Integer quantityDecimals) {}
+            @Size(max = 32) String unit, @Min(0) @jakarta.validation.constraints.Max(2) Integer quantityDecimals,
+            @jakarta.validation.constraints.DecimalMin("0.001") @jakarta.validation.constraints.Digits(integer = 9, fraction = 3) BigDecimal unitCapacity) {}
 
     /** Creation only: an item-wide maintenance plan created together with the item. */
     public record ItemScheduleInput(@NotNull DomainEnums.MaintenanceType maintenanceType,

@@ -300,11 +300,14 @@ public class CatalogService {
         }
         var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
         int targetDecimals = input.quantityDecimals() != null ? input.quantityDecimals() : item.quantityDecimals;
-        if (targetTrackingMode != item.trackingMode || targetDecimals != item.quantityDecimals) {
+        var targetCapacity = targetDecimals == 2 ? (input.unitCapacity() != null ? input.unitCapacity() : item.unitCapacity) : null;
+        boolean capacityChanged = item.unitCapacity == null ? targetCapacity != null
+                : targetCapacity == null || item.unitCapacity.compareTo(targetCapacity) != 0;
+        if (targetTrackingMode != item.trackingMode || targetDecimals != item.quantityDecimals || capacityChanged) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
             if (assetCount > 0 || txCount > 0) {
-                throw ApiException.badRequest("Cannot change tracking mode or decimal places for an item with existing stock or transaction history");
+                throw ApiException.badRequest("Cannot change tracking mode, percentage usage or full-unit capacity for an item with existing stock or transaction history");
             }
         }
         String previousCategory = item.category;
@@ -378,6 +381,14 @@ public class CatalogService {
         }
         item.unit = org.ash.inventory.platform.api.Inputs.blankToNull(input.unit() == null ? null : input.unit().trim());
         if (input.quantityDecimals() != null) item.quantityDecimals = input.quantityDecimals();
+        if (item.quantityDecimals != 0 && item.quantityDecimals != 2)
+            throw ApiException.badRequest("Choose whole units or percentage usage (100% is one full canister or bag)");
+        if (item.quantityDecimals == 2 && !item.consumable())
+            throw ApiException.badRequest("Percentage usage is only available for consumables");
+        if (input.unitCapacity() != null) item.unitCapacity = input.unitCapacity();
+        if (item.quantityDecimals == 0) item.unitCapacity = null;
+        if (item.quantityDecimals == 2 && (item.unit == null || item.unitCapacity == null || item.unitCapacity.signum() <= 0))
+            throw ApiException.badRequest("Percentage usage requires a physical unit (L/kg) and the contents of one full canister or bag");
         // Serialized units are counted one by one.
         if (item.trackingMode == DomainEnums.TrackingMode.serialized && item.quantityDecimals != 0)
             throw ApiException.badRequest("Serialized items are counted in whole units");
@@ -391,6 +402,8 @@ public class CatalogService {
         item.positionDetails = input.positionDetails();
         item.hint = input.hint();
         item.containerSize = input.containerSize();
+        if (item.containerSize != null && item.quantityDecimals == 2)
+            throw ApiException.badRequest("Percentage usage tracks a full canister or bag, not boxes of individual items");
         if (item.containerSize != null && item.trackingMode == DomainEnums.TrackingMode.serialized)
             throw ApiException.badRequest("Serialized items cannot be stored in bulk boxes");
         item.fuelConsumptionLitersPer100Km = input.fuelConsumptionLitersPer100Km();

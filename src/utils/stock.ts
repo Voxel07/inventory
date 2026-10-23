@@ -22,40 +22,39 @@ export function getItemStock(item: Item | null | undefined): StockCalculation {
   return { totalStock: 0, checkedOut: 0, inTransit: 0, damaged: 0, remaining: 0 };
 }
 
-type Measured = Pick<Item, 'unit' | 'quantityDecimals'> | null | undefined;
+type Measured = Pick<Item, 'unit' | 'quantityDecimals' | 'unitCapacity'> | null | undefined;
 
 /**
- * Quantities travel as whole steps of 10^-quantityDecimals of the item's unit (7.5 L with one decimal is 75), so stock
- * arithmetic stays exact; these convert at the edge, where people read and type them.
+ * Whole items use one step per unit; percentage consumables use 100 steps per full canister/bag.
  */
 export function quantityScale(item: Measured): number {
   return 10 ** (item?.quantityDecimals ?? 0);
 }
 
-/** Steps → the number people read (75 → 7.5). */
+/** Steps → full-unit equivalents (75 percentage steps → 0.75 of a full unit). */
 export function fromSteps(item: Measured, steps: number): number {
   return steps / quantityScale(item);
 }
 
-/** A typed amount → steps, or NaN when it has more decimals than the item allows. */
-export function toSteps(item: Measured, value: number | string): number {
+export function usesPercentage(item: Measured): boolean {
+  return item?.quantityDecimals === 2;
+}
+
+/** Inputs are whole units or whole percentages of one full unit; fractional inputs are rejected. */
+export function toSteps(item: Measured, value: number | string, percentage = false): number {
   const amount = typeof value === 'string' ? Number(value.replace(',', '.')) : value;
-  const steps = amount * quantityScale(item);
-  const rounded = Math.round(steps);
-  return Math.abs(steps - rounded) < 1e-6 ? rounded : Number.NaN;
+  if (!Number.isInteger(amount) || (percentage && !usesPercentage(item))) return Number.NaN;
+  return amount * (percentage ? 1 : quantityScale(item));
 }
 
-/** "7,5 L" / "7.5 L"; pieces show the bare number. */
+/** Percentage usage is displayed as physical stock: 56% of a 10 L canister is 5.6 L. */
 export function formatQuantity(item: Measured, steps: number, withUnit = true): string {
-  const decimals = item?.quantityDecimals ?? 0;
-  const text = new Intl.NumberFormat(getAppLanguage() === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: decimals })
-    .format(fromSteps(item, steps));
-  return withUnit && item?.unit ? `${text} ${item.unit}` : text;
-}
-
-/** Step attribute of a number input for this item (0.1 for one decimal). */
-export function inputStep(item: Measured): number {
-  return 1 / quantityScale(item);
+  const percentage = usesPercentage(item);
+  if (percentage && !(item?.unitCapacity && item.unitCapacity > 0)) return '—';
+  const format = new Intl.NumberFormat(getAppLanguage() === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: percentage ? 5 : 0 });
+  const amount = percentage ? fromSteps(item, steps) * item!.unitCapacity! : steps;
+  const unit = withUnit && item?.unit ? ` ${item.unit}` : '';
+  return `${format.format(amount)}${unit}`;
 }
 
 /** Compact "available/total" (4/10); consumables are used up rather than returned, so only the available count shows. */

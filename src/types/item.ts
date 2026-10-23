@@ -113,9 +113,12 @@ export interface Item {
   isConsumable: boolean;
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
-  /** Display unit ("L"); absent counts pieces. Every quantity of the item is in whole steps of 10^-quantityDecimals units. */
+  /** Physical unit (L/kg for percentage consumables); absent counts pieces. */
   unit?: string | null;
-  quantityDecimals?: number;
+  /** 0 = whole units, 2 = consumable usage in 1% steps (100% = one full unit). */
+  quantityDecimals?: 0 | 2;
+  /** Physical contents of one full canister/bag; required for percentage usage. */
+  unitCapacity?: number | null;
   containerSize?: number;
   containerCount?: number;
   containerRemainingCount?: number;
@@ -162,7 +165,8 @@ export interface ItemFormData {
   trackingMode?: 'bulk' | 'serialized' | 'lot_tracked';
   inventoryRole?: 'consumable' | 'returnable';
   unit?: string;
-  quantityDecimals?: number;
+  quantityDecimals?: 0 | 2;
+  unitCapacity?: number | null;
   imageFiles?: File[];
   imageReplacements?: Record<string, File>;
   removeImages?: string[];
