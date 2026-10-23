@@ -165,10 +165,14 @@ public final class ApiResponses {
             LocalDate batteryReplacementDue,
             LocalDate bestBeforeDate,
             String maintenanceStatus,
+            List<MaintenanceBlockResponse> blockingMaintenance,
             StockDto stock,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand,
             org.ash.inventory.operations.internal.application.InventoryAccessService.View access, boolean locationRestricted
     ) {}
+
+    public record MaintenanceBlockResponse(UUID scheduleId, String maintenanceType, String assetCode,
+            String status, String intervalType, Instant nextDueAt, BigDecimal nextDueValue) {}
 
     public record ReturnSubmissionResponse(
             UUID id,

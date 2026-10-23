@@ -73,6 +73,7 @@ import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getMaintenanceRecords } from '../services/maintenanceService';
+import { maintenanceTypeLabel } from '../components/maintenance/maintenanceSchedules';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -373,6 +374,27 @@ export function ItemDetail() {
                             <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.itemsRemainingInOpenedBox', { count: item.containerRemainingCount ?? 0 })}</Metric>
                         </>}
                     </MetricList>
+                    {remaining <= 0 && (item.blockingMaintenance.length > 0 || item.maintenanceStatus === 'in_service') && (
+                        <Alert severity="warning" sx={{ mt: 1 }}>
+                            <Typography variant="subtitle2">{t('pages.itemDetail.whyNoStockIsAvailable')}</Typography>
+                            {item.maintenanceStatus === 'in_service' && <Typography variant="body2">{t('pages.itemDetail.outOfServiceBlocksCheckout')}</Typography>}
+                            {item.blockingMaintenance.length > 0 && <>
+                                <Typography variant="body2">{t('pages.itemDetail.maintenanceBlocksCheckout')}</Typography>
+                                <Box component="ul" sx={{ my: 0.5, pl: 2.5 }}>
+                                    {item.blockingMaintenance.map(block => <Box component="li" key={block.scheduleId}>
+                                        <Typography variant="body2">
+                                            {maintenanceTypeLabel(block.maintenanceType)}{block.assetCode ? ` · ${block.assetCode}` : ''}
+                                            {' — '}{block.status === 'unknown'
+                                                ? t('pages.itemDetail.maintenanceDataIncomplete')
+                                                : block.intervalType === 'date'
+                                                    ? t('pages.itemDetail.maintenanceOverdueSince', { date: formatDateTime(block.nextDueAt) })
+                                                    : t('pages.itemDetail.maintenanceMeterDue', { value: block.nextDueValue ?? '—', unit: formatStatus(block.intervalType) })}
+                                        </Typography>
+                                    </Box>)}
+                                </Box>
+                            </>}
+                        </Alert>
+                    )}
                     <ItemStockLocations key={item.id} item={item} />
                     {item.trackingMode === 'serialized' && (
                         <Box sx={{ mt: 1.5 }}>

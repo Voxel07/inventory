@@ -4,6 +4,7 @@ import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
+import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.platform.api.BusinessTime;
 
 import jakarta.enterprise.context.RequestScoped;
@@ -32,6 +33,17 @@ public class MaintenanceProjectionService {
     public LocalDate due(Item item,AssetInstance asset) {
         return applicable(item,asset).stream().filter(s->s.intervalType==DomainEnums.MaintenanceIntervalType.date)
                 .map(s->s.nextDueAt).filter(Objects::nonNull).min(Comparator.naturalOrder()).map(org.ash.inventory.platform.api.BusinessTime::date).orElse(null);
+    }
+    /** Only schedules that currently prevent checkout; warning-only and non-blocking plans are excluded. */
+    public List<ApiResponses.MaintenanceBlockResponse> blocking(Item item) {
+        return applicable(item, null).stream()
+                .filter(s -> s.checkoutBlocking && MaintenancePolicy.blocksCheckout(statuses.get(s.id)))
+                .sorted(Comparator.comparing((MaintenanceSchedule s) -> s.nextDueAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(s -> s.id))
+                .map(s -> new ApiResponses.MaintenanceBlockResponse(s.id, s.maintenanceType.name(),
+                        s.assetInstance == null ? null : s.assetInstance.assetCode,
+                        statuses.get(s.id).name(), s.intervalType.name(), s.nextDueAt, s.nextDueValue))
+                .toList();
     }
     public String status(Item item,AssetInstance asset) {
         if(item.outOfService || asset!=null && asset.outOfService)return "in_service";

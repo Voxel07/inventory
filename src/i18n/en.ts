@@ -2388,6 +2388,12 @@ export default {
       couldNotCreateList: 'Could not create list',
     },
     itemDetail: {
+      whyNoStockIsAvailable: 'Why no stock is available',
+      maintenanceBlocksCheckout: 'Required maintenance blocks checkout. Complete and record the inspection to release the affected stock.',
+      outOfServiceBlocksCheckout: 'This item is out of service and blocked from checkout until it is returned to service.',
+      maintenanceDataIncomplete: 'Maintenance data is incomplete; checkout is blocked until it is reviewed.',
+      maintenanceOverdueSince: 'Inspection due on {{date}}; checkout blocked.',
+      maintenanceMeterDue: 'Maintenance due at {{value}} {{unit}}; checkout blocked.',
       eventUseHelp: 'Event tags describe intended use. Public availability and usable stock determine whether an item can be ordered.',
       itemUpdatedSuccessfully: 'Item updated successfully',
       couldNotUpdateItem: 'Could not update item',

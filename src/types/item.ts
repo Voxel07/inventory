@@ -78,6 +78,16 @@ export interface ItemStock {
   ordered: number;
 }
 
+export interface MaintenanceBlock {
+  scheduleId: string;
+  maintenanceType: MaintenanceType;
+  assetCode: string | null;
+  status: 'due' | 'unknown';
+  intervalType: ScheduleIntervalType;
+  nextDueAt: string | null;
+  nextDueValue: number | null;
+}
+
 export interface Item {
   access?: InventoryAccess;
   locationRestricted?: boolean;
@@ -118,6 +128,8 @@ export interface Item {
   bestBeforeDate?: string;
   /** Derived by the server from the out-of-service flag and the item calendar. */
   maintenanceStatus: MaintenanceStatus;
+  /** Active schedules the server currently considers blocking for item or unit checkout. */
+  blockingMaintenance: MaintenanceBlock[];
   created: string;
   updated: string;
   /** Null when no stock projection was computed for this response. */

@@ -43,6 +43,7 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
           isConsumable: p.data.inventoryRole === 'consumable',
           status: 'available',
           maintenanceStatus: 'certified',
+          blockingMaintenance: [],
           stock: null,
           created: '',
           updated: '',

@@ -2390,6 +2390,12 @@ export default {
       couldNotCreateList: 'Liste konnte nicht erstellt werden',
     },
     itemDetail: {
+      whyNoStockIsAvailable: 'Warum kein Bestand verfügbar ist',
+      maintenanceBlocksCheckout: 'Eine erforderliche Wartung sperrt die Ausgabe. Die Prüfung durchführen und dokumentieren, um den betroffenen Bestand freizugeben.',
+      outOfServiceBlocksCheckout: 'Dieser Artikel ist außer Betrieb und bis zur erneuten Freigabe für die Ausgabe gesperrt.',
+      maintenanceDataIncomplete: 'Wartungsdaten sind unvollständig. Die Ausgabe bleibt bis zur Prüfung gesperrt.',
+      maintenanceOverdueSince: 'Prüfung fällig am {{date}}; Ausgabe gesperrt.',
+      maintenanceMeterDue: 'Wartung fällig bei {{value}} {{unit}}; Ausgabe gesperrt.',
       eventUseHelp: 'Veranstaltungskennzeichen beschreiben den Verwendungszweck. Öffentliche Verfügbarkeit und nutzbarer Bestand bestimmen, ob ein Artikel bestellt werden kann.',
       itemUpdatedSuccessfully: 'Artikel erfolgreich aktualisiert',
       couldNotUpdateItem: 'Fehler beim Aktualisieren des Artikels',

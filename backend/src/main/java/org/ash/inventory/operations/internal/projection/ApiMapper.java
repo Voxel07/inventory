@@ -254,6 +254,7 @@ public class ApiMapper {
                 value.batteryReplacementDue,
                 value.bestBeforeDate,
                 maintenance.status(value, null),
+                maintenance.blocking(value),
                 stockDto,
                 expand, accessPolicies.projection(value.accessPolicy), !canViewLocation(value.storageLocation) && value.storageLocation != null
         );
