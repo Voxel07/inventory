@@ -3,6 +3,14 @@ type DateValue = string | number | Date | null | undefined;
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const pad = (value: number) => String(value).padStart(2, '0');
 
+/** Local calendar-day boundary as an API instant; nextDay handles DST without adding 24 hours. */
+export function calendarDayInstant(value: string | undefined, nextDay = false): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00`);
+  if (nextDay) date.setDate(date.getDate() + 1);
+  return date.toISOString();
+}
+
 /** Date-only ISO strings are calendar days; parsing them as UTC would shift them west of Greenwich. */
 function toDate(value: DateValue): Date | null {
   if (value == null || value === '') return null;

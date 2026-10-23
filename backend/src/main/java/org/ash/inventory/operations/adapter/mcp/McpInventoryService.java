@@ -61,7 +61,7 @@ public class McpInventoryService {
 
     public com.fasterxml.jackson.databind.JsonNode movements(UUID itemId, UUID assetId, UUID personId, String type, Integer page, Integer limit) {
         var bounds = bounds(page, limit);
-        return privacy.filter(queries.transactions(itemId, assetId, personId, type, null, null, null, bounds.offset() / bounds.limit(), bounds.limit()), false).value();
+        return privacy.filter(queries.transactions(itemId, assetId, personId, null, type, null, null, null, bounds.offset() / bounds.limit(), bounds.limit()), false).value();
     }
 
     public com.fasterxml.jackson.databind.JsonNode order(UUID id) { return privacy.filter(queries.orderDetail(id), true).value(); }

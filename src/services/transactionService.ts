@@ -1,6 +1,7 @@
 import type { StockTransaction, TransactionFormData } from '../types';
 import { apiRequest } from './apiClient';
 import { createCreateResourceApi } from './resourceFactory';
+import { calendarDayInstant } from '../utils/dateFormat';
 
 export const transactionApi = createCreateResourceApi<StockTransaction, TransactionFormData>(
   '/api/transactions',
@@ -17,8 +18,13 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
   },
 );
 
-export type TransactionFilters = { itemId?: string; assetInstanceId?: string; userId?: string; transactionType?: string; startDate?: string; endDate?: string; search?: string };
-export const getTransactions = (filters: TransactionFilters | undefined, page: number, size: number) => transactionApi.getPage(filters, page, size);
+export type TransactionFilters = { itemId?: string; assetInstanceId?: string; userId?: string; eventOccurrenceId?: string; transactionType?: string; startDate?: string; endDate?: string; search?: string };
+export const getTransactions = (filters: TransactionFilters | undefined, page: number, size: number) => transactionApi.getPage({
+  ...filters,
+  startDate: calendarDayInstant(filters?.startDate),
+  // The API uses an exclusive end bound so even sub-millisecond movements on the last day are included.
+  endDate: calendarDayInstant(filters?.endDate, true),
+}, page, size);
 export const createTransaction = transactionApi.create;
 export async function assemblyCheckout(itemQuantities: Record<string, number>, assemblyName: string, reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string, eventOccurrenceId: string) {
   const body = Object.entries(itemQuantities).filter(([, quantity]) => quantity > 0).map(([itemId, quantityChanged]) => ({ itemId, transactionType: 'checkout', quantityChanged, reason: reason || `Assembly checkout: ${assemblyName}`, notes, eventType, faction, eventOccurrenceId, idempotencyKey: crypto.randomUUID() }));

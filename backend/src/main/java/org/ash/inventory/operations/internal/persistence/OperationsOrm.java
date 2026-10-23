@@ -24,24 +24,27 @@ import java.util.UUID;
 public class OperationsOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
-    /** {@code search}: item name, person, reason, notes, event type or faction. */
-    public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type, Instant start, Instant end,
+    /** Start is inclusive, end is exclusive; search also covers the related order and event. */
+    public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, UUID eventOccurrenceId, String type, Instant start, Instant end,
             String search, int offset, int limit) {
-        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.reversedBy left join tx.sourceLocation source left join tx.destinationLocation destination left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.order o left join fetch o.eventOccurrence left join fetch o.faction where 1=1" + InventoryAccessOrm.transactionScope("tx", "source", "destination"));
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.reversedBy left join tx.sourceLocation source left join tx.destinationLocation destination left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.eventOccurrence e left join fetch tx.order o left join fetch o.eventOccurrence oe left join fetch o.faction where 1=1" + InventoryAccessOrm.transactionScope("tx", "source", "destination"));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
+        if (eventOccurrenceId != null) jpql.append(" and coalesce(e.id, oe.id) = :eventOccurrenceId");
         if (type != null && !type.isBlank()) jpql.append(" and tx.type = :type");
         if (start != null) jpql.append(" and tx.occurredAt >= :start");
-        if (end != null) jpql.append(" and tx.occurredAt <= :end");
+        if (end != null) jpql.append(" and tx.occurredAt < :end");
         boolean searching = search != null && !search.isBlank();
         if (searching) jpql.append(" and (lower(tx.item.name) like :search or lower(tx.user.name) like :search or lower(coalesce(tx.reason, '')) like :search"
-                + " or lower(coalesce(tx.notes, '')) like :search or lower(coalesce(tx.eventType, '')) like :search or lower(coalesce(tx.faction, '')) like :search)");
+                + " or lower(coalesce(tx.notes, '')) like :search or lower(coalesce(tx.eventType, '')) like :search or lower(coalesce(tx.faction, '')) like :search"
+                + " or lower(coalesce(e.name, oe.name, '')) like :search or lower(coalesce(o.orderCode, o.name, '')) like :search)");
         jpql.append(" order by tx.occurredAt desc, tx.id desc");
         var query = entityManager.createQuery(jpql.toString(), StockTransaction.class);
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (userId != null) query.setParameter("userId", userId);
+        if (eventOccurrenceId != null) query.setParameter("eventOccurrenceId", eventOccurrenceId);
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);

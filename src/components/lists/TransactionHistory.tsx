@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import type { StockTransaction, User } from '../../types';
 import { formatStatus } from '../../utils/formatters';
-import { formatDateTime } from '../../utils/dateFormat';
+import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { useT } from '../../utils/naming';
 import { Link } from 'react-router-dom';
 
@@ -115,6 +115,19 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
         );
     }
 
+    function orderEvent(tx: StockTransaction) {
+        const event = tx.expand?.eventOccurrence;
+        const order = orderChip(tx, true);
+        if (!event && !order) return null;
+        return <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 160 }}>
+            {order}
+            {event && <Box>
+                <Typography component={Link} to={`/events/${event.id}`} variant="body2" sx={{ color: 'primary.main', display: 'block' }}>{event.name}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>{event.eventType} · {formatDate(event.startDate)}</Typography>
+            </Box>}
+        </Stack>;
+    }
+
     if (isMobile) return (
         <Stack spacing={1.25}>
             {transactions.map((tx) => (
@@ -133,7 +146,10 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <Box><Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>{reversalActor(tx)}</Box><MovementReversalButton movement={tx} />
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
-                    {(tx.orderId || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>{orderChip(tx)}</Box>}
+                    {(tx.orderId || tx.expand?.eventOccurrence || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">{t('lists.transactionHistory.orderEvent')}</Typography>
+                        {orderEvent(tx)}
+                    </Box>}
                 </Paper>
             ))}
         </Stack>
@@ -150,13 +166,14 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <TableCell>{t('common.user')}</TableCell>
                         <TableCell align="right">{t('common.quantity')}</TableCell>
                         <TableCell>{t('common.reason')}</TableCell>
+                        <TableCell>{t('lists.transactionHistory.orderEvent')}</TableCell>
                         <TableCell>{t('common.notes')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {transactions.map((tx) => (
                         <TableRow key={tx.id} hover>
-                            <TableCell>{formatDateTime(tx.timestamp)}</TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(tx.timestamp)}</TableCell>
                             <TableCell>
                                 <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
                                     <span>{tx.itemName}</span>
@@ -172,12 +189,8 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                             </TableCell>
                             <TableCell>{getUserName(tx)}</TableCell>
                             <TableCell align="right">{tx.quantityChanged}</TableCell>
-                            <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, whiteSpace: 'nowrap' }}>
-                                    <span>{tx.reason}</span>
-                                    {orderChip(tx, true)}
-                                </Box>
-                            </TableCell>
+                            <TableCell>{tx.reason}</TableCell>
+                            <TableCell>{orderEvent(tx) ?? '—'}</TableCell>
                             <TableCell>{tx.notes}{reversalActor(tx)}<MovementReversalButton movement={tx} /></TableCell>
                         </TableRow>
                     ))}

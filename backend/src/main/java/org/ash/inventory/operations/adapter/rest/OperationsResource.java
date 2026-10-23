@@ -64,11 +64,12 @@ public class OperationsResource {
     @Path("/transactions")
     public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("userId") UUID userId,
+            @QueryParam("eventOccurrenceId") UUID eventOccurrenceId,
             @QueryParam("transactionType") String type, @QueryParam("startDate") Instant start,
             @QueryParam("endDate") Instant end, @QueryParam("search") String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.transactions(itemId, assetInstanceId, userId, type, start, end, search, page, size);
+        return queries.transactions(itemId, assetInstanceId, userId, eventOccurrenceId, type, start, end, search, page, size);
     }
 
     @POST @Path("/transactions/batch") @Transactional

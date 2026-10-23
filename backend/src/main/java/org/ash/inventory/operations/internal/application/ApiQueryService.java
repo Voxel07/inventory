@@ -224,11 +224,13 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.TransactionResponse> transactions(UUID itemId, UUID assetInstanceId, UUID userId, String type,
+    public List<ApiResponses.TransactionResponse> transactions(UUID itemId, UUID assetInstanceId, UUID userId, UUID eventOccurrenceId, String type,
             Instant start, Instant end, String search, int page, int size) {
         requireHistory(itemId != null || assetInstanceId != null, userId, DomainEnums.UserRole.warehouse_crew);
+        if (start != null && end != null && !start.isBefore(end))
+            throw ApiException.badRequest("Start date must precede the exclusive end date");
         var bounds = bounds(page, size);
-        var values = operations.transactions(itemId, assetInstanceId, userId, type, start, end, search, bounds.offset(), bounds.limit());
+        var values = operations.transactions(itemId, assetInstanceId, userId, eventOccurrenceId, type, start, end, search, bounds.offset(), bounds.limit());
         mapper.prepareLocations(values.stream().filter(t -> t.assetInstance != null).map(t -> t.assetInstance.currentLocation).toList());
         return mapper.transactions(values);
     }

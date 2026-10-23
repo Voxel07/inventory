@@ -282,6 +282,7 @@ public final class ApiResponses {
             Integer availabilityBefore,
             Integer availabilityAfter,
             String orderId,
+            String eventOccurrenceId,
             String eventType,
             String faction,
             String damageReportId,

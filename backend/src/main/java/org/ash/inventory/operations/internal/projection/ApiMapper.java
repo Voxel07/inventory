@@ -368,6 +368,10 @@ public class ApiMapper {
 
     private ApiResponses.TransactionResponse transaction(StockTransaction value, ApiResponses.AssetInstanceResponse assetView) {
         var expand = new LinkedHashMap<String, Object>();
+        var event = value.eventOccurrence != null ? value.eventOccurrence
+                : value.order == null ? null : value.order.eventOccurrence;
+        if (event != null) expand.put("eventOccurrence", Map.of("id", event.id, "name", event.name,
+                "eventType", event.eventType, "startDate", event.startDate, "endDate", event.endDate));
         expand.put("userId", actor(value.user));
         if (value.assetInstance != null)
             expand.put("assetInstanceId", assetView);
@@ -389,6 +393,7 @@ public class ApiMapper {
                 value.availabilityBefore,
                 value.availabilityAfter,
                 value.order == null ? null : value.order.id.toString(),
+                event == null ? null : event.id.toString(),
                 value.eventType,
                 value.faction,
                 value.damageReport == null ? null : value.damageReport.id.toString(),

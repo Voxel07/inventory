@@ -1172,6 +1172,7 @@ export default {
     transactionHistory: {
       noTransactionsFound: 'No transactions found',
       factionList: 'Faction list',
+      orderEvent: 'Order / event',
     },
   },
   maintenance: {
@@ -2814,6 +2815,7 @@ export default {
     },
     transactionHistory: {
       searchTransactions: 'Search transactions',
+      eventsCouldNotBeLoaded: 'Events could not be loaded.',
       allUsers: 'All users',
       resetAllFilters: 'Reset all filters',
       loadAgain: 'Load again',

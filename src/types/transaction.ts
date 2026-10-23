@@ -14,6 +14,7 @@ export interface StockTransaction {
   userId: string;
   damageReportId?: string;
   orderId?: string;
+  eventOccurrenceId?: string;
   eventType?: EventType;
   faction?: string;
   clientCommandId?: string;
@@ -25,6 +26,7 @@ export interface StockTransaction {
   created: string;
   updated: string;
   expand?: {
+    eventOccurrence?: { id: string; name: string; eventType: string; startDate: string; endDate: string };
     userId?: ActorSummary;
     assetInstanceId?: AssetInstance;
     order?: {
@@ -38,7 +40,8 @@ export interface StockTransaction {
 }
 
 
-export type TransactionType = 'received' | 'adjusted' | 'reserved' | 'reservation_released' | 'transfer_out' | 'transfer_in' | 'staged' | 'checkout' | 'checkin' | 'added' | 'consumed' | 'damaged' | 'missing' | 'repaired' | 'written_off';
+export const TRANSACTION_TYPES = ['received', 'adjusted', 'reserved', 'reservation_released', 'transfer_out', 'transfer_in', 'staged', 'checkout', 'checkin', 'added', 'consumed', 'damaged', 'missing', 'repaired', 'written_off'] as const;
+export type TransactionType = typeof TRANSACTION_TYPES[number];
 
 export interface TransactionFormData {
   occurredAt?: string;

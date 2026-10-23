@@ -13,7 +13,7 @@ const RESULT_SIZE = 25;
  * Item picker backed by server search, so selecting an item never downloads the catalog. The selected item is
  * resolved by id; `filter` narrows the returned matches (e.g. serialized items only).
  */
-export function ItemAutocomplete({ value, onChange, label, required, disabled, helperText, filter, size, getOptionLabel }: {
+export function ItemAutocomplete({ value, onChange, label, required, disabled, helperText, filter, size, getOptionLabel, showMoreHint = true }: {
   value: string | null | undefined;
   onChange: (item: Item | null) => void;
   label: string;
@@ -23,6 +23,7 @@ export function ItemAutocomplete({ value, onChange, label, required, disabled, h
   filter?: (item: Item) => boolean;
   size?: 'small' | 'medium';
   getOptionLabel?: (item: Item) => string;
+  showMoreHint?: boolean;
 }) {
   const t = useT();
   const [input, setInput] = useState('');
@@ -54,6 +55,6 @@ export function ItemAutocomplete({ value, onChange, label, required, disabled, h
     renderInput={(params) => <TextField {...params} label={label} required={required}
       error={results.isError}
       helperText={results.isError ? t('shared.itemAutocomplete.itemSearchFailed')
-        : results.data?.more ? t('shared.itemAutocomplete.moreMatchesRefineTheSearch') : helperText} />}
+        : showMoreHint && results.data?.more ? t('shared.itemAutocomplete.moreMatchesRefineTheSearch') : helperText} />}
   />;
 }

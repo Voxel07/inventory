@@ -72,6 +72,7 @@ interface UIState {
   transactionFilters: {
     itemId: string;
     userId: string;
+    eventOccurrenceId: string;
     transactionType: string;
     startDate: string;
     endDate: string;
@@ -83,6 +84,7 @@ interface UIState {
 const defaultFilters = {
   itemId: '',
   userId: '',
+  eventOccurrenceId: '',
   transactionType: '',
   startDate: '',
   endDate: '',

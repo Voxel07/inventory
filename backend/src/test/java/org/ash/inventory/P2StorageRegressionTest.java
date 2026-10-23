@@ -139,9 +139,43 @@ class P2StorageRegressionTest {
             tx(item, person(), DomainEnums.TransactionType.checkout, 1, false).assetInstance = asset;
         }
         UUID id = item.id; em.flush(); em.clear(); actors.current(); stats().clear();
-        var rows = operations.transactions(id, null, null, null, null, null, null, 0, 100);
+        var rows = operations.transactions(id, null, null, null, null, null, null, null, 0, 100);
         assertEquals(1, stats().getPrepareStatementCount());
         mapper.transactions(rows); assertEquals(2, stats().getPrepareStatementCount()); assertEquals(25, rows.size());
+    }
+    @Test @TestTransaction
+    void transactionHistoryFiltersWholeDaysAndDistinctEventsIncludingOrderEvents() {
+        var user = actors.current(); var item = item();
+        var selected = new org.ash.inventory.operations.internal.model.EventOccurrence();
+        selected.name = "History event"; selected.eventType = "DE";
+        selected.startDate = java.time.LocalDate.of(2026, 10, 1); selected.endDate = selected.startDate;
+        em.persist(selected);
+        var other = new org.ash.inventory.operations.internal.model.EventOccurrence();
+        other.name = selected.name; other.eventType = "DE";
+        other.startDate = selected.startDate.plusDays(1); other.endDate = other.startDate; em.persist(other);
+        var start = java.time.Instant.parse("2026-09-30T22:00:00Z");
+        var end = java.time.Instant.parse("2026-10-24T22:00:00Z");
+        var first = tx(item, user, DomainEnums.TransactionType.added, 1, false);
+        first.eventOccurrence = selected; first.occurredAt = start;
+        var parent = order(item, user, 0); parent.eventOccurrence = selected;
+        var last = tx(item, user, DomainEnums.TransactionType.checkout, 1, false);
+        last.order = parent; last.occurredAt = end.minusNanos(1000);
+        var before = tx(item, user, DomainEnums.TransactionType.added, 1, false);
+        before.eventOccurrence = selected; before.occurredAt = start.minusNanos(1000);
+        var after = tx(item, user, DomainEnums.TransactionType.added, 1, false);
+        after.eventOccurrence = selected; after.occurredAt = end;
+        var unrelated = tx(item, user, DomainEnums.TransactionType.added, 1, false);
+        unrelated.eventOccurrence = other; unrelated.occurredAt = start;
+        UUID itemId = item.id, eventId = selected.id, firstId = first.id, lastId = last.id;
+        em.flush(); em.clear();
+        var rows = operations.transactions(itemId, null, null, eventId, null, start, end, null, 0, 100);
+        assertEquals(List.of(lastId, firstId), rows.stream().map(t -> t.id).toList());
+        var views = mapper.transactions(rows);
+        assertTrue(views.stream().allMatch(v -> eventId.toString().equals(v.eventOccurrenceId())));
+        assertTrue(views.stream().allMatch(v -> v.expand().containsKey("eventOccurrence")));
+        assertEquals(List.of(lastId), operations.transactions(itemId, null, null, eventId, "checkout", start, end, null, 0, 1)
+                .stream().map(t -> t.id).toList());
+        assertEquals(2, operations.transactions(itemId, null, null, eventId, null, start, end, "history event", 0, 100).size());
     }
     @Test @TestTransaction
     void custodyAggregatesHistoryAndFiltersRecipientIncludingNullEvents() {
