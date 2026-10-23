@@ -1,10 +1,10 @@
+import { dateFieldValue, formatDate } from '../../utils/dateFormat';
 import { useQuery } from '@tanstack/react-query';
 import { itemApi, getItemCategories } from '../../services/inventoryService';
 import { useItemsByIds } from '../../hooks/useItems';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { getPreviousFactionOrder } from '../../services/factionOrderService';
-import { formatDate } from '../../utils/dateFormat';
 import { Button, ToggleButton, IconButton } from '../shared/ActionButtons';
 import { MediaImage } from '../common/MediaImage';
 import { useState } from 'react';
@@ -106,9 +106,9 @@ export function FactionOrderForm({
   // Closed events take no new orders.
   const eventOptions = events.filter((event) => event.eventType === eventType && event.status !== 'completed');
   const selectedEvent = eventOptions.find((event) => event.id === eventOccurrenceId) ?? eventOptions[0];
-  const eventDate = selectedEvent?.startDate?.slice(0, 10) ?? selectedEvent?.eventDate?.slice(0, 10) ?? '';
-  const [requestedPickupDate, setRequestedPickupDate] = useState(
-    initialData?.requestedPickupDate?.slice(0, 10) ?? '',
+  const eventDate = selectedEvent?.startDate ?? selectedEvent?.eventDate ?? '';
+  const [requestedPickupDate, setRequestedPickupDate] = useState<number | ''>(
+    initialData?.requestedPickupDate ?? '',
   );
   const [notes, setNotes] = useState(initialData?.notes ?? '');
   const [quantities, setQuantities] = useState<Record<string, string>>(
@@ -257,7 +257,7 @@ export function FactionOrderForm({
       eventOccurrenceId: selectedEvent.id,
       faction,
       eventDate,
-      requestedPickupDate: requestedPickupDate || undefined,
+      requestedPickupDate: requestedPickupDate === '' ? undefined : requestedPickupDate,
       itemIds: Object.keys(requestedQuantities),
       requestedQuantities,
       assemblyIds: Object.keys(requestedAssemblyQuantities),
@@ -305,7 +305,7 @@ export function FactionOrderForm({
             type="date"
             label={t('forms.factionOrderForm.requestedPickupDateOptional')}
             value={requestedPickupDate}
-            onChange={(event) => setRequestedPickupDate(event.target.value)}
+            onChange={(event) => setRequestedPickupDate(dateFieldValue(event.target.value))}
             slotProps={{ inputLabel: { shrink: true } }}
             helperText={t('forms.factionOrderForm.whenWouldYouLikeToCollectTheOrder')}
           />

@@ -36,7 +36,7 @@ class RuntimeReturnApiTest {
     }
 
     private String event() {
-        return admin().body(Map.of("eventType", "DE", "name", "Runtime event " + UUID.randomUUID(), "startDate", "2039-05-01", "status", "active"))
+        return admin().body(Map.of("eventType", "DE", "name", "Runtime event " + UUID.randomUUID(), "startDate", 2187820800000L, "status", "active"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
     }
 
@@ -88,7 +88,7 @@ class RuntimeReturnApiTest {
         String item = trackedItem();
         String asset = admin().get("/api/items/" + item + "/assets").then().statusCode(200).extract().path("[0].id");
         String order = admin().body(Map.of("eventType", "DE", "faction", "Runtime " + UUID.randomUUID(),
-                "eventDate", "2039-09-10", "requestedQuantities", Map.of(item, 1)))
+                "eventDate", 2199225600000L, "requestedQuantities", Map.of(item, 1)))
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
         String event = admin().get("/api/orders/faction/" + order).then().statusCode(200).extract().path("eventOccurrenceId");
         admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);

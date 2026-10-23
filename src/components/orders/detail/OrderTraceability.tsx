@@ -101,7 +101,7 @@ export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOp
   const pickupHistory = latestHistory('picked_up');
   const returnedHistory = latestHistory('returned', 'partially_returned', 'closed');
 
-  const metadata = [
+  const metadata: [string, string, number | undefined][] = [
     [t('orders.detail.orderTraceability.createdBy'), relationName(order.expand?.createdBy, createdHistory?.userName), createdHistory?.timestamp ?? order.created],
     [t('orders.detail.orderTraceability.preparedBy'), relationName(order.expand?.preparedBy, preparedHistory?.userName), preparedHistory?.timestamp],
     [t('orders.detail.orderTraceability.madeReadyBy'), relationName(order.expand?.readyBy, readyHistory?.userName), readyHistory?.timestamp],

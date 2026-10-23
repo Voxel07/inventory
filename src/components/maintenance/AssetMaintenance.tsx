@@ -1,3 +1,4 @@
+import { calendarDate, dateFieldValue, formatDate } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -7,7 +8,6 @@ import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import { useCompleteList } from '../../hooks/usePagedList';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
-import { formatDate } from '../../utils/dateFormat';
 import { translate, useT } from '../../utils/naming';
 import type { AssetInstance, Item } from '../../types';
 import type { Schedule, ScheduleInput } from '../../types/operations';
@@ -16,13 +16,13 @@ import { MAINTENANCE_TYPES, type MaintenanceType } from '../../types/operations'
 import { oneOf } from '../../utils/operationForm';
 
 type IntervalType = ScheduleInput['intervalType'];
-type Draft = { id?: string; type: MaintenanceType; intervalType: IntervalType; intervalValue: string; nextDueDate: string; nextDueValue: string; checkoutBlocking: boolean };
+type Draft = { id?: string; type: MaintenanceType; intervalType: IntervalType; intervalValue: string; nextDueDate: number | ''; nextDueValue: string; checkoutBlocking: boolean };
 
-function dateInputValue(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function dateInputValue(date: Date): number {
+  return calendarDate(date);
 }
 
-function daysFromToday(days: number): string {
+function daysFromToday(days: number): number {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return dateInputValue(date);
@@ -60,7 +60,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
       type: from?.maintenanceType ?? 'dguv_v3',
       intervalType,
       intervalValue,
-      nextDueDate: from?.nextDueAt ? dateInputValue(new Date(from.nextDueAt)) : daysFromToday(Number(intervalValue) || 0),
+      nextDueDate: from?.nextDueAt != null ? dateInputValue(new Date(from.nextDueAt)) : daysFromToday(Number(intervalValue) || 0),
       nextDueValue: ownSchedule && from?.nextDueValue != null ? String(from.nextDueValue) : String(hours + (Number(intervalValue) || 0)),
       checkoutBlocking: from?.checkoutBlocking ?? true,
     });
@@ -95,7 +95,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
         maintenanceType: value.type,
         intervalType: value.intervalType,
         intervalValue: Number(value.intervalValue),
-        nextDueAt: value.intervalType === 'date' ? new Date(`${value.nextDueDate}T12:00:00`).toISOString() : null,
+        nextDueAt: value.intervalType === 'date' ? Number(value.nextDueDate) : null,
         nextDueValue: value.intervalType === 'date' ? null : Number(value.nextDueValue),
         warningWindow: existing?.warningWindow ?? (value.intervalType === 'date' ? 30 : 10),
         responsiblePersonId: existing?.responsiblePersonId ?? null,
@@ -184,7 +184,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
               slotProps={{ htmlInput: { min: 1, step: draft.intervalType === 'operating_hours' ? 0.5 : 1 } }} />
             {draft.intervalType === 'date'
               ? <TextField fullWidth type="date" label={t('common.nextDueDate')} value={draft.nextDueDate}
-                onChange={(event) => setDraft({ ...draft, nextDueDate: event.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+                onChange={(event) => setDraft({ ...draft, nextDueDate: dateFieldValue(event.target.value) })} slotProps={{ inputLabel: { shrink: true } }} />
               : <TextField fullWidth type="number" label={`${t('maintenance.assetMaintenance.dueAt2')} (${unit(draft.intervalType)})`} value={draft.nextDueValue}
                 onChange={(event) => setDraft({ ...draft, nextDueValue: event.target.value })}
                 helperText={draft.intervalType === 'operating_hours' ? t('maintenance.assetMaintenance.currentlyHoursH', { hours: hours }) : undefined}

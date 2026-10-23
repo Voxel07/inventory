@@ -46,18 +46,18 @@ const items: Item[] = [7, 3].map((quantity, index) => fixtureItem({
 items[0].hint = 'Charge radios before use. Return them to the labelled storage shelves.';
 const assemblies = [fixtureAssembly({ id: 'assembly-1', name: 'Radio kit', description: 'Two radios and a cable', hint: 'Connect before use',
   itemQuantities: { 'item-1': 2, 'item-2': 1 }, eventTypes: ['DE'] })];
-const transaction = (id: string, transactionType: StockTransaction['transactionType'], quantityChanged: number, reason: string, timestamp: string): StockTransaction => ({
+const transaction = (id: string, transactionType: StockTransaction['transactionType'], quantityChanged: number, reason: string, timestamp: number): StockTransaction => ({
   id, itemId: 'item-1', itemName: 'Radio', transactionType, quantityChanged, userId: 'preview', reason, notes: '', timestamp, created: now, updated: now,
 });
-const transactions = [transaction('tx-initial', 'added', 2, 'Initial stock', '2026-10-01T10:00:00Z'), transaction('tx-receipt', 'received', 5, 'Goods receipt', now)];
+const transactions = [transaction('tx-initial', 'added', 2, 'Initial stock', 1790848800000), transaction('tx-receipt', 'received', 5, 'Goods receipt', now)];
 const counts: Count[] = [{ id: 'count-1', sessionNumber: 'COUNT-PREVIEW', status: 'counting', blindCount: false,
   lines: items.map((item, index) => ({ id: `count-line-${index + 1}`, itemId: item.id, itemName: item.name, locationId: locations[index].id, expectedQuantity: item.stock?.onHand })) }];
-const purchases: PurchaseOrder[] = [{ id: 'purchase-1', orderNumber: 'PO-PREVIEW', vendorName: 'Preview supplier', vendorId: 'vendor-1', orderDate: '2026-10-01', status: 'ordered',
+const purchases: PurchaseOrder[] = [{ id: 'purchase-1', orderNumber: 'PO-PREVIEW', vendorName: 'Preview supplier', vendorId: 'vendor-1', orderDate: 1790812800000, status: 'ordered',
   createdById: 'preview', createdByName: 'Preview user', lines: [{ id: 'purchase-line-1', itemId: 'item-1', itemName: 'Radio', orderedQuantity: 5, receivedQuantity: 0, remainingQuantity: 5, unitPriceCents: 1000 }] }];
 const position = (id: string, item: Item, locationId: string, quantity: number): Position => ({ id, itemId: item.id, itemName: item.name, locationId, quantityOnHand: quantity,
   quantityReserved: 0, quantityDamaged: 0, quantityQuarantined: 0, quantityInTransit: 0, availableQuantity: quantity, transferableQuantity: quantity });
 const positions = [position('position-0', items[0], 'location-a', 5), position('position-1', items[1], 'location-b', 3), position('position-radio-b', items[0], 'location-b', 2)];
-const inbox: InboxAction[] = [{ key: 'receipt:preview', kind: 'receipt', title: 'Receive radios', detail: 'Five radios from Preview supplier', path: '/operations?tab=purchases', due: '2026-10-02' },
+const inbox: InboxAction[] = [{ key: 'receipt:preview', kind: 'receipt', title: 'Receive radios', detail: 'Five radios from Preview supplier', path: '/operations?tab=purchases', due: 1790899200000 },
   { key: 'count:preview', kind: 'maintenance', title: 'Check radio kit', detail: 'Shelf A · Radio kit', path: '/assemblies/assembly-1' }];
 const transfers: Transfer[] = [{ id: 'transfer-demo', transferNumber: 'TR-002', status: 'in_transit', sourceLocationId: 'location-a', destinationLocationId: 'location-b',
   lines: [{ id: 'transfer-line', itemId: 'item-1', itemName: 'Radio', requestedQuantity: 4, pickedQuantity: 4, receivedQuantity: 0, discrepancyQuantity: 0 }] }];
@@ -86,11 +86,11 @@ if (query.has('storagePreview')) {
     asset('camera-b', 'camera', 'available', { currentLocationId: 'location-b' }), asset('offsite-a', 'offsite', 'in_custody'),
     asset('inactive-a', 'inactive', 'available', { active: false }));
 }
-const lots: Lot[] = [{ id: 'lot-1', itemId: 'item-1', itemName: 'Radio', itemActive: true, lotNumber: 'LOT-PREVIEW', status: 'available', expiryDate: '2027-01-01',
-  bestBeforeDate: '2026-12-31', storageRequirements: 'Dry storage', notes: 'Fixture lot', empty: false,
+const lots: Lot[] = [{ id: 'lot-1', itemId: 'item-1', itemName: 'Radio', itemActive: true, lotNumber: 'LOT-PREVIEW', status: 'available', expiryDate: 1798761600000,
+  bestBeforeDate: 1798675200000, storageRequirements: 'Dry storage', notes: 'Fixture lot', empty: false,
   stock: [{ locationId: 'location-a', locationName: 'Shelf A', onHand: 5, available: 5, reserved: 0, damaged: 0, quarantined: 0, inTransit: 0 }] }];
 const schedules: Schedule[] = [{ id: 'schedule-1', itemId: 'item-1', itemName: 'Radio', maintenanceType: 'battery_test', intervalType: 'date', intervalValue: 30,
-  nextDueAt: '2026-10-15', active: true, checkoutBlocking: true }];
+  nextDueAt: 1792022400000, active: true, checkoutBlocking: true }];
 const damage: DamageReport[] = [{ id: 'damage-1', itemId: 'item-1', itemName: 'Radio', amount: 1, reportedBy: 'preview', description: 'Battery connector damaged',
   severity: 'medium', status: 'reported', timestamp: now, created: now, updated: now }];
 if (query.has('damagePreview')) {
@@ -108,7 +108,7 @@ if (query.has('damagePreview')) {
 const repairs: Repair[] = [{ id: 'repair-1', damageReportId: 'damage-1', itemId: 'item-1', itemName: 'Radio', damageDescription: 'Battery connector damaged',
   status: 'awaiting_repair', safetyImpact: true, partsAndCostNotes: 'Replacement connector', notes: 'Awaiting workshop' }];
 const loans: Loan[] = [{ id: 'loan-1', itemId: 'rental-1', item: 'My checked-out rental', commitmentId: 'commitment-1', providerLocationId: 'location-b', provider: 'Preview supplier',
-  contact: 'preview@example.test', kind: 'rental', quantity: 4, collected: 4, returned: 1, collectionDate: '2026-10-01', availableUntil: '2026-10-10', returnDue: '2026-10-12',
+  contact: 'preview@example.test', kind: 'rental', quantity: 4, collected: 4, returned: 1, collectionDate: 1790812800000, availableUntil: 1791590400000, returnDue: 1791763200000,
   status: 'collected', terms: 'Return to supplier', assetCodes: [], history: [], revision: 0 }];
 const receipts: Receipt[] = [{ id: 'receipt-1', receiptNumber: 'GR-PREVIEW', purchaseOrderId: 'purchase-1', receivingLocationId: 'location-a', status: 'accepted', receivedAt: now,
   lines: [{ id: 'receipt-line', itemName: 'Radio', acceptedQuantity: 5, damagedQuantity: 0, rejectedQuantity: 0 }] }];

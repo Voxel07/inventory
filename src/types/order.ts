@@ -25,8 +25,8 @@ export interface GeneralOrder {
   assetAssignments: Record<string, string[]>;
   itemNames?: Record<string, string>;
   createdBy: string;
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
   expand?: { createdBy?: ActorSummary };
 }
 

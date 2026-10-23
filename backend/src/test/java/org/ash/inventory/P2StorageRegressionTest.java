@@ -82,6 +82,10 @@ class P2StorageRegressionTest {
     private StockTransaction tx(Item i, UserAccount u, DomainEnums.TransactionType type, int quantity, boolean loss) {
         var t = new StockTransaction(); t.item = i; t.user = u; t.type = type; t.quantity = quantity; t.custodyWriteOff = loss; em.persist(t); return t;
     }
+    /** occurred_at is not updatable, so it must be set before the entity is persisted. */
+    private StockTransaction txAt(Item i, UserAccount u, DomainEnums.TransactionType type, java.time.Instant at) {
+        var t = new StockTransaction(); t.item = i; t.user = u; t.type = type; t.quantity = 1; t.occurredAt = at; em.persist(t); return t;
+    }
     private InventoryOrder order(Item i, UserAccount u, int reserved) {
         var o = new InventoryOrder(); o.kind = InventoryOrder.Kind.general; o.name = "P2 order"; o.purpose = "P2"; o.createdBy = u; o.status = DomainEnums.OrderStatus.ready;
         var line = new org.ash.inventory.operations.internal.model.OrderLine(); line.order = o; line.item = i; line.lineNumber = 1;
@@ -155,17 +159,17 @@ class P2StorageRegressionTest {
         other.startDate = selected.startDate.plusDays(1); other.endDate = other.startDate; em.persist(other);
         var start = java.time.Instant.parse("2026-09-30T22:00:00Z");
         var end = java.time.Instant.parse("2026-10-24T22:00:00Z");
-        var first = tx(item, user, DomainEnums.TransactionType.added, 1, false);
-        first.eventOccurrence = selected; first.occurredAt = start;
+        var first = txAt(item, user, DomainEnums.TransactionType.added, start);
+        first.eventOccurrence = selected;
         var parent = order(item, user, 0); parent.eventOccurrence = selected;
-        var last = tx(item, user, DomainEnums.TransactionType.checkout, 1, false);
-        last.order = parent; last.occurredAt = end.minusNanos(1000);
-        var before = tx(item, user, DomainEnums.TransactionType.added, 1, false);
-        before.eventOccurrence = selected; before.occurredAt = start.minusNanos(1000);
-        var after = tx(item, user, DomainEnums.TransactionType.added, 1, false);
-        after.eventOccurrence = selected; after.occurredAt = end;
-        var unrelated = tx(item, user, DomainEnums.TransactionType.added, 1, false);
-        unrelated.eventOccurrence = other; unrelated.occurredAt = start;
+        var last = txAt(item, user, DomainEnums.TransactionType.checkout, end.minusMillis(1));
+        last.order = parent;
+        var before = txAt(item, user, DomainEnums.TransactionType.added, start.minusMillis(1));
+        before.eventOccurrence = selected;
+        var after = txAt(item, user, DomainEnums.TransactionType.added, end);
+        after.eventOccurrence = selected;
+        var unrelated = txAt(item, user, DomainEnums.TransactionType.added, start);
+        unrelated.eventOccurrence = other;
         UUID itemId = item.id, eventId = selected.id, firstId = first.id, lastId = last.id;
         em.flush(); em.clear();
         var rows = operations.transactions(itemId, null, null, eventId, null, start, end, null, 0, 100);

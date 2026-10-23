@@ -74,8 +74,8 @@ interface UIState {
     userId: string;
     eventOccurrenceId: string;
     transactionType: string;
-    startDate: string;
-    endDate: string;
+    startDate: number | '';
+    endDate: number | '';
   };
   setTransactionFilters: (filters: Partial<UIState['transactionFilters']>) => void;
   resetTransactionFilters: () => void;
@@ -86,8 +86,8 @@ const defaultFilters = {
   userId: '',
   eventOccurrenceId: '',
   transactionType: '',
-  startDate: '',
-  endDate: '',
+  startDate: '' as const,
+  endDate: '' as const,
 };
 
 export const useUIStore = create<UIState>((set) => ({

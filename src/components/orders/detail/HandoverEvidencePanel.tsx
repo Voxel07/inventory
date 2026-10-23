@@ -8,8 +8,8 @@ import { useAuth } from '../../../hooks/useAuth';
 import { atLeast } from '../../../utils/access';
 import { useT } from '../../../utils/naming';
 import { formatDateTime } from '../../../utils/dateFormat';
-type Evidence = { id: string; recordedAt: string; conditionConfirmed: boolean; conditionNotes: string; acknowledgementObjectKey?: string };
-type Handover = { id: string; code: string; type: string; occurredAt: string; collector: string; evidence: Evidence[] };
+type Evidence = { id: string; recordedAt: number; conditionConfirmed: boolean; conditionNotes: string; acknowledgementObjectKey?: string };
+type Handover = { id: string; code: string; type: string; occurredAt: number; collector: string; evidence: Evidence[] };
 export function HandoverEvidencePanel({ orderId }: { orderId: string }) {
   const t = useT(); const { user } = useAuth(); const client = useQueryClient();
   const [selected, setSelected] = useState(''); const [notes, setNotes] = useState(''); const [confirmed, setConfirmed] = useState(false); const [file, setFile] = useState<File>();

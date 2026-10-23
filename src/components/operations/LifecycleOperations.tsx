@@ -26,7 +26,7 @@ export function SchedulesPanel() {
   const [chooseItem, setChooseItem] = useState(false);
   const [edit, setEdit] = useState<{ itemId: string; schedule?: Schedule } | null>(null);
   const assets = useItemAssets(edit?.itemId);
-  const [performedAt, setPerformedAt] = useState('');
+  const [performedAt, setPerformedAt] = useState<number | ''>('');
   const [complete, setComplete] = useState<Schedule | null>(null);
   const [retire, setRetire] = useState<Schedule | null>(null);
   return <Stack spacing={2}>
@@ -35,7 +35,7 @@ export function SchedulesPanel() {
     {schedules.data?.map((schedule) => <OperationListEntry key={schedule.id} actions={[
         schedule.active && { key: 'complete', label: t('operations.lifecycleOperations.recordMaintenance'), title: translate('operations.lifecycleOperations.recordCompletedMaintenance'),
           variant: 'contained', pinned: true,
-          onClick: () => { setPerformedAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); setComplete(schedule); } },
+          onClick: () => { setPerformedAt(Date.now()); setComplete(schedule); } },
         { key: 'edit', label: t('common.edit'), title: translate('operations.lifecycleOperations.editThisMaintenanceScheduleSIntervalAndChecklist'),
           onClick: () => setEdit({ itemId: schedule.itemId, schedule }) },
         { key: 'records', label: t('operations.lifecycleOperations.assetMaintenanceRecords'), title: translate('operations.lifecycleOperations.openAssetDetailsAndMaintenanceRecords'),
@@ -43,14 +43,14 @@ export function SchedulesPanel() {
         schedule.active && { key: 'retire', label: t('common.retire'), title: translate('common.retireThisMaintenanceSchedule'), onClick: () => setRetire(schedule) },
       ]} title={schedule.itemName} status={schedule.active ? t('enum.value.active') : t('operations.lifecycleOperations.retired')}>
       <Typography color="text.secondary">{formatStatus(schedule.maintenanceType)}</Typography>
-      <Typography>{formatStatus(schedule.intervalType)} · {schedule.intervalValue} · {t('operations.lifecycleOperations.nextDue')}: {schedule.nextDueAt ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}</Typography>
+      <Typography>{formatStatus(schedule.intervalType)} · {schedule.intervalValue} · {t('operations.lifecycleOperations.nextDue')}: {schedule.nextDueAt != null ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}</Typography>
       <Typography>{schedule.active ? t('enum.value.active') : t('operations.lifecycleOperations.retired')} · {schedule.checkoutBlocking ? t('operations.lifecycleOperations.blocksCheckoutWhenDue') : t('enum.value.advisory')}</Typography>
       {schedule.requiredChecklist && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{schedule.requiredChecklist}</Typography>}
 
     </OperationListEntry>)}
     <LoadMore list={schedules} />
     {chooseItem && <OperationForm title={t('operations.lifecycleOperations.scheduleMaintenance')} fields={[{ key: 'itemId', label: t('common.item'), type: 'item', required: true }]} onClose={() => setChooseItem(false)} submitLabel={t('common.next')} onSave={async (values) => setEdit({ itemId: String(values.itemId) })} />}
-    {edit && <OperationForm title={t('operations.lifecycleOperations.maintenanceSchedule')} initial={edit.schedule ? Object.fromEntries(Object.entries(edit.schedule).filter(([, value]) => value != null).map(([key, value]) => [key, key === 'nextDueAt' ? String(value).slice(0, 16) : value])) as Values : { maintenanceType: 'generator_service', intervalType: 'date', intervalValue: 365, warningWindow: 14, active: true, checkoutBlocking: true }} onClose={() => setEdit(null)} fields={(values) => [
+    {edit && <OperationForm title={t('operations.lifecycleOperations.maintenanceSchedule')} initial={edit.schedule ? Object.fromEntries(Object.entries(edit.schedule).filter(([, value]) => value != null)) as Values : { maintenanceType: 'generator_service', intervalType: 'date', intervalValue: 365, warningWindow: 14, active: true, checkoutBlocking: true }} onClose={() => setEdit(null)} fields={(values) => [
       { key: 'assetInstanceId', label: t('operations.lifecycleOperations.assetEmptyEntireItem'), options: (assets.data ?? []).map((asset) => ({ value: asset.id, label: asset.assetCode })) },
       { key: 'responsiblePersonId', label: t('operations.lifecycleOperations.responsiblePerson'), pagedOptions: { queryKey: ['users', 'assignable'], getPage: personOptions } },
       { key: 'maintenanceType', label: t('operations.lifecycleOperations.maintenanceType'), required: true, options: ['dguv_v3', 'generator_service', 'battery_test', 'chrono_fps'].map((value) => ({ value, label: value })) },
@@ -60,14 +60,14 @@ export function SchedulesPanel() {
       { key: 'warningWindow', label: t('operations.lifecycleOperations.warningWindowIntervalUnits'), type: 'number', min: 0, step: 0.01 },
       { key: 'requiredChecklist', label: t('operations.lifecycleOperations.requiredChecklist'), multiline: true },
       { key: 'checkoutBlocking', label: t('operations.lifecycleOperations.blockCheckoutWhenDue'), type: 'checkbox' }, { key: 'active', label: t('enum.value.active'), type: 'checkbox' },
-    ]} onSave={(values) => operationsApi.saveSchedule(scheduleInput({ ...optionalValues(values), itemId: edit.itemId, nextDueAt: values.intervalType === 'date' ? new Date(String(values.nextDueAt)).toISOString() : null, nextDueValue: values.intervalType === 'date' ? null : values.nextDueValue }), edit.schedule?.id)} />}
+    ]} onSave={(values) => operationsApi.saveSchedule(scheduleInput({ ...optionalValues(values), itemId: edit.itemId, nextDueAt: values.intervalType === 'date' ? Number(values.nextDueAt) : null, nextDueValue: values.intervalType === 'date' ? null : values.nextDueValue }), edit.schedule?.id)} />}
     {complete && <OperationForm title={t('operations.lifecycleOperations.recordMaintenance')} initial={{ result: 'passed', performedAt }} onClose={() => setComplete(null)} fields={[
       { key: 'performedAt', label: t('operations.lifecycleOperations.performedAt'), type: 'datetime-local', required: true },
       { key: 'result', label: t('operations.lifecycleOperations.result'), required: true, options: [{ value: 'passed', label: t('enum.value.passed') }, { value: 'failed', label: t('operations.lifecycleOperations.failed') }, { value: 'advisory', label: t('operations.lifecycleOperations.advisory') }] },
       { key: 'operatingHours', label: t('enum.value.operating_hours'), type: 'number', min: 0, step: 0.1, required: complete.intervalType === 'operating_hours' },
       { key: 'certificateNumber', label: t('operations.lifecycleOperations.certificateNumber') },
       { key: 'notes', label: t('operations.lifecycleOperations.checklistObservationsAndResults'), required: Boolean(complete.requiredChecklist), multiline: true, help: complete.requiredChecklist },
-    ]} onSave={(values) => createMaintenanceRecord({ itemId: complete.itemId, assetInstanceId: complete.assetInstanceId, scheduleId: complete.id, type: complete.maintenanceType, performedAt: new Date(String(values.performedAt)).toISOString(), result: oneOf(values.result, MAINTENANCE_RESULTS), operatingHours: values.operatingHours === undefined || values.operatingHours === '' ? undefined : Number(values.operatingHours), certificateNumber: String(values.certificateNumber || ''), notes: String(values.notes || '') })} />}
+    ]} onSave={(values) => createMaintenanceRecord({ itemId: complete.itemId, assetInstanceId: complete.assetInstanceId, scheduleId: complete.id, type: complete.maintenanceType, performedAt: Number(values.performedAt), result: oneOf(values.result, MAINTENANCE_RESULTS), operatingHours: values.operatingHours === undefined || values.operatingHours === '' ? undefined : Number(values.operatingHours), certificateNumber: String(values.certificateNumber || ''), notes: String(values.notes || '') })} />}
     {retire && <OperationForm title={t('operations.lifecycleOperations.retireMaintenanceSchedule')} fields={[]} onClose={() => setRetire(null)} onSave={() => operationsApi.retireSchedule(retire.id)}><Alert severity="warning">{t('operations.lifecycleOperations.thisScheduleWillNoLongerBeCheckedAtCheckout')}</Alert></OperationForm>}
   </Stack>;
 }

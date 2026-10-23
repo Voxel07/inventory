@@ -28,7 +28,7 @@ public class AuthSessionService {
 
     @Transactional
     public boolean revoked(JsonWebToken token) {
-        return !em.createNativeQuery("select 1 from revoked_sessions where token_hash = :hash and expires_at > now()")
+        return !em.createNativeQuery("select 1 from revoked_sessions where token_hash = :hash and expires_at > (extract(epoch from now()) * 1000)::bigint")
                 .setParameter("hash", fingerprint(token)).setMaxResults(1).getResultList().isEmpty();
     }
 
@@ -37,7 +37,7 @@ public class AuthSessionService {
         if (!(identity.getPrincipal() instanceof JsonWebToken token)) return;
         em.createNativeQuery("insert into revoked_sessions(token_hash, user_id, expires_at) values (:hash,:actor,:expires) on conflict do nothing")
                 .setParameter("hash", fingerprint(token)).setParameter("actor", actorId)
-                .setParameter("expires", Instant.ofEpochSecond(token.getExpirationTime())).executeUpdate();
+                .setParameter("expires", Math.multiplyExact(token.getExpirationTime(), 1000L)).executeUpdate();
     }
 
     public static String fingerprint(JsonWebToken token) {
@@ -47,12 +47,12 @@ public class AuthSessionService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean streamAllowed(java.util.UUID actorId, String tokenHash) {
-        return !em.createNativeQuery("select 1 from app_users u where u.id=:id and u.active=true and not exists(select 1 from revoked_sessions r where r.token_hash=:hash and r.expires_at>now())")
+        return !em.createNativeQuery("select 1 from app_users u where u.id=:id and u.active=true and not exists(select 1 from revoked_sessions r where r.token_hash=:hash and r.expires_at>(extract(epoch from now()) * 1000)::bigint)")
                 .setParameter("id",actorId).setParameter("hash",tokenHash == null ? "" : tokenHash).getResultList().isEmpty();
     }
 
     @io.quarkus.scheduler.Scheduled(every = "1h", concurrentExecution = io.quarkus.scheduler.Scheduled.ConcurrentExecution.SKIP)
     @Transactional
     void purge() {
-        if (!workers.enabled("sessions")) return; em.createNativeQuery("delete from revoked_sessions where expires_at < now()").executeUpdate(); }
+        if (!workers.enabled("sessions")) return; em.createNativeQuery("delete from revoked_sessions where expires_at < (extract(epoch from now()) * 1000)::bigint").executeUpdate(); }
 }

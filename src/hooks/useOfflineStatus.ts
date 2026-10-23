@@ -8,7 +8,7 @@ export function useOfflineStatus() {
   const [online, setOnline] = useState(navigator.onLine);
   const [queued, setQueued] = useState(0);
   const [syncIssues, setSyncIssues] = useState(0);
-  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [sync, setSync] = useState<SyncState>(getSyncState);
   useEffect(() => {
     const refresh = () => void Promise.all([getOfflineQueueCount(), getSyncFailureCount()])
@@ -26,7 +26,7 @@ export function useOfflineStatus() {
       setSync(detail.sync ?? getSyncState());
     };
     refresh();
-    const cacheChanged = () => setCachedAt(getCatalogFallbacks().map((entry) => entry.cachedAt).sort()[0] ?? null);
+    const cacheChanged = () => setCachedAt(getCatalogFallbacks().map((entry) => entry.cachedAt).sort((a, b) => a - b)[0] ?? null);
     cacheChanged();
     const unsubscribeAuth = subscribeAuth(() => { refresh(); cacheChanged(); });
     window.addEventListener('ash-offline-cache', cacheChanged);

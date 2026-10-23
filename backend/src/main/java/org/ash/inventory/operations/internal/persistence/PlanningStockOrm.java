@@ -5,7 +5,7 @@ import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import org.ash.inventory.platform.api.EpochTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,7 +26,7 @@ public class PlanningStockOrm {
                 quantity3, quantity4, decimal, date1, date2, timestamp, json1, json2, json3,
                 flag1, flag2, providerId, loanId};
         String[] types = {"uuid", "uuid", "uuid", "varchar", "varchar", "varchar", "bigint", "bigint",
-                "bigint", "bigint", "numeric(38,2)", "date", "date", "timestamp with time zone", "varchar",
+                "bigint", "bigint", "numeric(38,2)", "bigint", "bigint", "bigint", "varchar",
                 "varchar", "varchar", "boolean", "boolean", "uuid", "uuid"};
         String[] aliases = {"item_id", "entity_id", "reference_id", "text1", "text2", "text3",
                 "quantity1", "quantity2", "quantity3", "quantity4", "decimal_value", "date1", "date2",
@@ -99,10 +99,11 @@ public class PlanningStockOrm {
         private static SnapshotRow of(Object[] row) {
             return new SnapshotRow((String) row[0], (UUID) row[1], (UUID) row[2], (UUID) row[3], (String) row[4],
                     (String) row[5], count(row[7]), count(row[8]), count(row[9]), count(row[10]), (BigDecimal) row[11],
-                    (LocalDate) row[12], (LocalDate) row[13], row[14] == null ? null : ((OffsetDateTime) row[14]).toInstant(),
+                    date(row[12]), date(row[13]), row[14] == null ? null : Instant.ofEpochMilli(((Number) row[14]).longValue()),
                     (String) row[15], (String) row[16], (String) row[17], Boolean.TRUE.equals(row[18]),
                     Boolean.TRUE.equals(row[19]), (UUID) row[20], (UUID) row[21]);
         }
+        private static LocalDate date(Object value) { return value == null ? null : EpochTime.date(((Number) value).longValue()); }
         private static long count(Object value) { return value == null ? 0 : ((Number) value).longValue(); }
     }
 
@@ -114,10 +115,10 @@ public class PlanningStockOrm {
         // Register in SELECT order; JDBC drivers otherwise infer UUIDs as binary values.
         String[] columns = {"kind", "item_id", "entity_id", "reference_id", "text1", "text2", "text3", "quantity1", "quantity2", "quantity3", "quantity4", "decimal_value", "date1", "date2", "timestamp_value", "json1", "json2", "json3", "flag1", "flag2", "provider_id", "loan_id"};
         Class<?>[] types = {String.class, UUID.class, UUID.class, UUID.class, String.class, String.class, String.class,
-                Long.class, Long.class, Long.class, Long.class, BigDecimal.class, LocalDate.class, LocalDate.class,
-                OffsetDateTime.class, String.class, String.class, String.class, Boolean.class, Boolean.class, UUID.class, UUID.class};
+                Long.class, Long.class, Long.class, Long.class, BigDecimal.class, Long.class, Long.class,
+                Long.class, String.class, String.class, String.class, Boolean.class, Boolean.class, UUID.class, UUID.class};
         for (int i = 0; i < columns.length; i++) query.addScalar(columns[i], types[i]);
-        List<Object[]> rows = query.setParameter("itemIds", itemIds).setParameter("today", today).getResultList();
+        List<Object[]> rows = query.setParameter("itemIds", itemIds).setParameter("today", EpochTime.millis(today)).getResultList();
         return rows.stream().map(SnapshotRow::of).toList();
     }
 }

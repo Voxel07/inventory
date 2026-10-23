@@ -34,7 +34,7 @@ public class IntegrationFeed {
                 .setParameter("name",consumer).getResultList();
         if(!existing.isEmpty())throw ApiException.conflict("Consumer already registered; use a new consumer name to change its replay scope");
         em.createNativeQuery("insert into integration_subscriptions(name,prefixes,since) values(:name,cast(:prefixes as jsonb),:since)")
-                .setParameter("name",consumer).setParameter("prefixes",encoded).setParameter("since",input.since()).executeUpdate();
+                .setParameter("name",consumer).setParameter("prefixes",encoded).setParameter("since",input.since().toEpochMilli()).executeUpdate();
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -48,7 +48,7 @@ public class IntegrationFeed {
             where s.enabled=true and e.occurred_at>=s.since
               and exists(select 1 from jsonb_array_elements_text(s.prefixes) as prefixes(prefix) where left(e.event_type,length(prefix))=prefix)
               and not exists(select 1 from integration_deliveries d where d.consumer=s.name and d.event_id=e.event_id
-                and (d.state in ('acknowledged','dead_letter') or d.lease_until>now()))
+                and (d.state in ('acknowledged','dead_letter') or d.lease_until>(extract(epoch from now()) * 1000)::bigint))
             order by e.occurred_at,e.id for update of e skip locked limit :limit
             """).setParameter("consumer",consumer).setParameter("limit",limit).getResultList();
         var deliveries=new ArrayList<Delivery>();
@@ -56,7 +56,7 @@ public class IntegrationFeed {
             var event=em.find(DomainEvent.class,id);var lease=UUID.randomUUID();
             var attempts=em.createNativeQuery("""
                 insert into integration_deliveries(consumer,event_id,state,attempts,lease,lease_until)
-                values(:consumer,:event,'leased',1,:lease,now()+interval '2 minutes')
+                values(:consumer,:event,'leased',1,:lease,(extract(epoch from now()) * 1000)::bigint + 120000)
                 on conflict(consumer,event_id) do update set state='leased',attempts=integration_deliveries.attempts+1,
                   lease=excluded.lease,lease_until=excluded.lease_until returning attempts
                 """).setParameter("consumer",consumer).setParameter("event",event.eventId).setParameter("lease",lease).getSingleResult();
@@ -75,7 +75,7 @@ public class IntegrationFeed {
     public void acknowledge(String consumer,Receipt receipt){
         validate(consumer);
         if(receipt==null || receipt.eventId()==null || receipt.lease()==null)throw ApiException.badRequest("Event and lease are required");
-        int changed=em.createNativeQuery("update integration_deliveries set state='acknowledged',acknowledged_at=now(),lease_until=null where consumer=:consumer and event_id=:event and lease=:lease and state in ('leased','acknowledged')")
+        int changed=em.createNativeQuery("update integration_deliveries set state='acknowledged',acknowledged_at=(extract(epoch from now()) * 1000)::bigint,lease_until=null where consumer=:consumer and event_id=:event and lease=:lease and state in ('leased','acknowledged')")
                 .setParameter("consumer",consumer).setParameter("event",receipt.eventId()).setParameter("lease",receipt.lease()).executeUpdate();
         if(changed==0)throw ApiException.conflict("Consumer delivery lease changed; poll again");
     }

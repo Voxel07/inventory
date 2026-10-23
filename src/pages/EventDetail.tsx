@@ -107,8 +107,8 @@ export function EventDetail() {
       data: {
         eventType: report.eventType,
         eventDate: report.eventDate,
-        startDate: report.startDate.slice(0, 10),
-        endDate: (report.endDate ?? report.startDate).slice(0, 10),
+        startDate: report.startDate,
+        endDate: (report.endDate ?? report.startDate),
         name: report.name,
         status: report.status,
         itemIds: [],

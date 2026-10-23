@@ -1,4 +1,4 @@
-import { formatDate, formatDateTime } from '../../utils/dateFormat';
+import { calendarDate, formatDate, formatDateTime } from '../../utils/dateFormat';
 import { Dialog } from '../shared/ClosableDialog';
 import { formatCents } from '../../utils/money';
 import { OperationLines } from './OperationLines';
@@ -66,12 +66,12 @@ export function PurchasingPanel() {
 
 export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose }: { order?: PurchaseOrder; selected?: ProcurementDeficit; selectedRows?: ProcurementDeficit[]; eventId: string; onClose: () => void }) {
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
-  const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
+  const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? selectedRows?.map((row) => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock), price: 0 })) ?? [{ itemId: selected?.itemId ?? '', orderedQuantity: selected ? Math.max(1, selected.netDeficit - selected.orderedStock) : 1, price: 0 }]);
   const [newVendor, setNewVendor] = useState(false);
   return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" onSubmit={(event) => {
     event.preventDefault();
-    const data = { ...optionalValues(header), vendorId: String(header.vendorId), orderDate: String(header.orderDate), lines: lines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
+    const data = { ...optionalValues(header), vendorId: String(header.vendorId), orderDate: Number(header.orderDate), lines: lines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
     command.mutate(() => order ? updatePurchaseOrder(order.id, data) : createPurchaseOrder(data), { onSuccess: onClose });
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
@@ -110,7 +110,7 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     queryFn: async () => (await Promise.all(lotItemIds.map(itemId => loadAllPages(operationsApi.lots({ itemId }))))).flat() });
   const [key] = useState(() => crypto.randomUUID());
   const createdLots = useRef(new Map<string, string>());
-  const [receivedAt] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
+  const [receivedAt] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
   if (!ready && !lookup.error && !lots.error && lookup.complete && lots.isSuccess) setReady(true);
   if (!ready) return <Dialog open fullWidth onClose={onClose}><DialogTitle>{t('operations.purchasingOperations.receiveDelivery2')}</DialogTitle><DialogContent><QueryFeedback isLoading={!lookup.error && !lots.error} error={lookup.error || lots.error} /></DialogContent><DialogActions><Button onClick={onClose}>{t('common.cancel')}</Button></DialogActions></Dialog>;
@@ -179,7 +179,7 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
       }
       line.lotId = lotId;
     }
-    return operationsApi.receive(receiptInput({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber, receivedAt: new Date(String(values.receivedAt)).toISOString(), notes: values.notes || null, idempotencyKey: key, lines: receiptLines.filter(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) }));
+    return operationsApi.receive(receiptInput({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber, receivedAt: Number(values.receivedAt), notes: values.notes || null, idempotencyKey: key, lines: receiptLines.filter(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) }));
   }}>
     <Typography variant="body2" color="text.secondary">{t('operations.purchasingOperations.allOutstandingQuantitiesDefaultToAcceptedAdjustQuantitiesAssetCodes')}</Typography>
   </OperationForm>;

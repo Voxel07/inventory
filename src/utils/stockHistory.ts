@@ -15,7 +15,7 @@ export function stockDelta(transaction: StockTransaction): number {
 
 /** One point per transaction, keyed by id: formatted times repeat within a minute and would collide on a category axis. */
 export function buildStockHistory(transactions: StockTransaction[], currentOnHand: number) {
-  const sorted = [...transactions].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  const sorted = [...transactions].sort((a, b) => a.timestamp - b.timestamp);
   // Anchor the final point to the current snapshot, including stock predating the ledger.
   let stock = currentOnHand - sorted.reduce((sum, transaction) => sum + stockDelta(transaction), 0);
   return sorted.map(transaction => {

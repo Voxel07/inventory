@@ -1,3 +1,4 @@
+import { parseDateInput } from '../../utils/dateFormat';
 import { ATTENDEE_ROLES, FACTION_ROLES, type AttendeeRoleKind, type EventAttendeeInput, type EventTimelineInput } from '../../types/eventLogistics';
 import type { CsvReference } from './reference';
 
@@ -21,24 +22,23 @@ function text(value: unknown, required = false, max = 255): string {
   return value.trim();
 }
 
-export function isCsvDate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
-    && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
-    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+export function csvDate(value: string): number {
+  const parsed = parseDateInput(value, false);
+  return typeof parsed === 'number' ? parsed : NaN;
 }
 
-function time(value: unknown, required = false): string | null {
+export function isCsvDate(value: string): boolean { return Number.isFinite(csvDate(value)); }
+
+function time(value: unknown, required = false): number | null {
   if ((value == null || value === '') && !required) return null;
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value)
-    || !isCsvDate(value.slice(0, 10)) || Number(value.slice(11, 13)) > 23
-    || Number(value.slice(14, 16)) > 59 || Number(value.slice(17, 19)) > 59) {
-    throw new Error('Zeit muss im Format JJJJ-MM-TTTHH:mm[:ss] ohne Zeitzone angegeben werden');
-  }
-  return value.length === 16 ? `${value}:00` : value;
+  if (typeof value !== 'string') throw new Error('Zeit muss im Format DD-MM-YYYY HH:mm angegeben werden');
+  const parsed = parseDateInput(value, true);
+  if (typeof parsed !== 'number') throw new Error('Zeit muss im Format DD-MM-YYYY HH:mm angegeben werden');
+  return parsed;
 }
 
-function range(start: string | null, end: string | null) {
-  if (start && end && end < start) throw new Error('Endzeit darf nicht vor der Startzeit liegen');
+function range(start: number | null, end: number | null) {
+  if (start != null && end != null && end < start) throw new Error('Endzeit darf nicht vor der Startzeit liegen');
 }
 
 export function parseEventAttendees(value: string | undefined, eventType: string, reference: CsvReference): EventAttendeeInput[] {

@@ -1,4 +1,4 @@
-import { formatDate } from '../../utils/dateFormat';
+import { formatDateTime, formatDate } from '../../utils/dateFormat';
 import { formatMoney } from '../../utils/money';
 import { Box, Typography, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Tooltip, TextField } from '@mui/material';
 import { useT, type Translator } from '../../utils/naming';
@@ -260,8 +260,8 @@ export function CsvImportPreview({ tabType, updateExistingItems, importedCounts,
                           <TableCell>{formatDate(row.data.startDate ?? row.data.eventDate)}{row.data.endDate !== row.data.startDate && ` – ${formatDate(row.data.endDate)}`}</TableCell>
                           <TableCell>{row.plannedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
                           <TableCell>{row.usedItems.map((item) => `${item.itemName}: ${item.quantity}`).join(', ') || '—'}</TableCell>
-                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.attendees.map((person) => `${person.personName}: ${person.arrivesAt?.replace('T', ' ') ?? '—'} – ${person.leavesAt?.replace('T', ' ') ?? '—'}`).join('\n') || '—'}</TableCell>
-                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.timeline.map((entry) => `${entry.title}: ${entry.startsAt.replace('T', ' ')}${entry.endsAt ? ` – ${entry.endsAt.replace('T', ' ')}` : ''}`).join('\n') || '—'}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.attendees.map((person) => `${person.personName}: ${formatDateTime(person.arrivesAt)} – ${formatDateTime(person.leavesAt)}`).join('\n') || '—'}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'pre-line', minWidth: 220 }}>{row.timeline.map((entry) => `${entry.title}: ${formatDateTime(entry.startsAt)}${entry.endsAt != null ? ` – ${formatDateTime(entry.endsAt)}` : ''}`).join('\n') || '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

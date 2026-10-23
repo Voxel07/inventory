@@ -24,7 +24,7 @@ public final class FoodStampCalculator {
         periods.add(new Period(event.startDate, event.endDate));
         if (attendee.roles.stream().anyMatch(role -> "event_crew".equals(role.role))) {
             timeline.stream().filter(entry -> "catering".equals(entry.category)).forEach(entry -> periods.add(
-                    new Period(entry.startsAt.toLocalDate(), (entry.endsAt == null ? entry.startsAt : entry.endsAt).toLocalDate())));
+                    new Period(org.ash.inventory.platform.api.BusinessTime.date(entry.startsAt), org.ash.inventory.platform.api.BusinessTime.date(entry.endsAt == null ? entry.startsAt : entry.endsAt))));
         }
         periods.sort(Comparator.comparing(Period::start));
         var merged = new ArrayList<Period>();
@@ -34,7 +34,7 @@ public final class FoodStampCalculator {
                 merged.add(new Period(previous.start(), previous.end().isAfter(period.end()) ? previous.end() : period.end()));
             } else merged.add(period);
         }
-        LocalDate arrival = attendee.arrivesAt.toLocalDate(), departure = attendee.leavesAt.toLocalDate();
+        LocalDate arrival = org.ash.inventory.platform.api.BusinessTime.date(attendee.arrivesAt), departure = org.ash.inventory.platform.api.BusinessTime.date(attendee.leavesAt);
         long mainMeals = 0, breakfasts = 0;
         for (var period : merged) {
             LocalDate start = arrival.isAfter(period.start()) ? arrival : period.start();

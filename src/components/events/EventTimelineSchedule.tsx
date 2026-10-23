@@ -1,3 +1,4 @@
+import { calendarDate, dateAtTime, formatTime, formatDate, formatDateTime } from '../../utils/dateFormat';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Box, Chip, MenuItem, Paper, Stack, Tabs, Typography } from '@mui/material';
@@ -20,7 +21,6 @@ import { timelineHooks } from '../../hooks/useEventLogistics';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditEvents } from '../../utils/access';
 import { useT } from '../../utils/naming';
-import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { useUIStore } from '../../store/uiStore';
 import type { EventTimelineEntry, EventTimelineInput, TimelineCategory, TimelineStatus } from '../../types/eventLogistics';
 
@@ -31,7 +31,7 @@ function useStatusLabels(): Record<TimelineStatus, string> {
   return { planned: t('common.planned'), in_progress: t('pages.eventTimeline.inProgress'), completed: t('common.completed') };
 }
 
-export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }: { eventId: string; startDate: string; endDate: string; fixedCategory?: TimelineCategory }) {
+export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }: { eventId: string; startDate: number; endDate: number; fixedCategory?: TimelineCategory }) {
   const t = useT();
   const statusLabels = useStatusLabels();
   const { user } = useAuth();
@@ -47,11 +47,11 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
   const [deleting, setDeleting] = useState<EventTimelineEntry | null>(null);
   const entries = query.data ?? [];
   const schedule = entries.filter((entry) => entry.category === category)
-    .sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.title.localeCompare(right.title));
-  const days = [...new Set(schedule.map((entry) => entry.startsAt.slice(0, 10)))];
+    .sort((left, right) => (left.startsAt - right.startsAt) || left.title.localeCompare(right.title));
+  const days = [...new Set(schedule.map((entry) => calendarDate(new Date(entry.startsAt))))];
   const completed = schedule.filter((entry) => entry.status === 'completed').length;
   const ready = !query.isLoading && !query.error;
-  const lastEnd = schedule.reduce((latest, entry) => (entry.endsAt ?? entry.startsAt) > latest ? (entry.endsAt ?? entry.startsAt) : latest, '');
+  const lastEnd = schedule.reduce((latest, entry) => (entry.endsAt ?? entry.startsAt) > latest ? (entry.endsAt ?? entry.startsAt) : latest, -Infinity);
 
   function changeCategory(value: TimelineCategory) {
     setParams((current) => {
@@ -98,7 +98,7 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
         {!!schedule.length && category !== 'catering' && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 3 }}>
           <EventMetric label={t('pages.eventTimeline.scheduledEntries')} value={schedule.length} detail={t('pages.eventTimeline.acrossDayCountDays', { dayCount: String(days.length) })} />
           <EventMetric label={t('pages.eventTimeline.progress')} value={`${completed} / ${schedule.length}`} detail={t('pages.eventTimeline.entriesCompleted')} />
-          <EventMetric label={t('pages.eventTimeline.firstScheduledDay')} value={formatDate(schedule[0].startsAt)} detail={t('pages.eventTimeline.throughLastEnd', { lastEnd: String(formatDate(lastEnd)) })} />
+          <EventMetric label={t('pages.eventTimeline.firstScheduledDay')} value={formatDate(calendarDate(new Date(schedule[0].startsAt)))} detail={t('pages.eventTimeline.throughLastEnd', { lastEnd: String(formatDate(calendarDate(new Date(lastEnd)))) })} />
         </Box>}
         {!schedule.length ? <Paper sx={{ p: { xs: 3, sm: 5 }, textAlign: 'center', borderStyle: 'dashed' }}>
           {category === 'catering' ? <RestaurantOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} /> : category === 'in_game' ? <SportsEsportsOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} /> : <ConstructionOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} />}
@@ -112,11 +112,11 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
             <Box sx={{ flex: 1, borderTop: 1, borderColor: 'divider' }} />
           </Stack>
           <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-            {schedule.filter((entry) => entry.startsAt.startsWith(day)).map((entry) => <Box component="li" key={entry.id}
+            {schedule.filter((entry) => calendarDate(new Date(entry.startsAt)) === day).map((entry) => <Box component="li" key={entry.id}
               sx={{ display: 'grid', gridTemplateColumns: { xs: '16px minmax(0, 1fr)', sm: '92px 20px minmax(0, 1fr)' }, columnGap: { xs: 1, sm: 2 } }}>
               <Box sx={{ display: { xs: 'none', sm: 'block' }, textAlign: 'right', pt: 2 }}>
-                <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{entry.startsAt.slice(11, 16)}</Typography>
-                {entry.endsAt && <Typography variant="caption" color="text.secondary">{entry.endsAt.slice(0, 10) === day ? entry.endsAt.slice(11, 16) : formatDateTime(entry.endsAt)}</Typography>}
+                <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatTime(entry.startsAt)}</Typography>
+                {entry.endsAt != null && <Typography variant="caption" color="text.secondary">{calendarDate(new Date(entry.endsAt)) === day ? formatTime(entry.endsAt) : formatDateTime(entry.endsAt)}</Typography>}
               </Box>
               <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                 <Box sx={{ position: 'absolute', top: 0, bottom: 0, width: 2, bgcolor: 'divider' }} />
@@ -125,7 +125,7 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
               <Paper component="article" sx={{ p: 2, mb: 2, minWidth: 0, borderLeft: 3, borderLeftColor: entry.status === 'completed' ? 'success.main' : entry.status === 'in_progress' ? 'info.main' : 'primary.main' }}>
                 <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' }, mb: 0.5 }}>{entry.startsAt.slice(11, 16)}{entry.endsAt ? ` – ${entry.endsAt.slice(0, 10) === day ? entry.endsAt.slice(11, 16) : formatDateTime(entry.endsAt)}` : ''}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' }, mb: 0.5 }}>{formatTime(entry.startsAt)}{entry.endsAt != null ? ` – ${calendarDate(new Date(entry.endsAt)) === day ? formatTime(entry.endsAt) : formatDateTime(entry.endsAt)}` : ''}</Typography>
                     <Typography variant="h6" component="h3" sx={{ overflowWrap: 'anywhere' }}>{entry.title}</Typography>
                   </Box>
                   {canEdit && <Stack direction="row" sx={{ flexShrink: 0 }}>
@@ -160,22 +160,22 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
 }
 
 function TimelineForm({ entry, category, startDate, endDate, pending, error, onSubmit, onCancel }: {
-  entry?: EventTimelineEntry; category: TimelineCategory; startDate: string; endDate: string; pending: boolean; error?: string;
+  entry?: EventTimelineEntry; category: TimelineCategory; startDate: number; endDate: number; pending: boolean; error?: string;
   onSubmit: (data: EventTimelineInput) => void; onCancel: () => void;
 }) {
   const t = useT();
   const statusLabels = useStatusLabels();
   const [title, setTitle] = useState(entry?.title ?? '');
-  const [startsAt, setStartsAt] = useState(entry?.startsAt.slice(0, 16) ?? `${startDate.slice(0, 10)}T${category === 'catering' ? '00:00' : '09:00'}`);
-  const [endsAt, setEndsAt] = useState(entry ? entry.endsAt?.slice(0, 16) ?? '' : category === 'catering' ? `${endDate.slice(0, 10)}T23:59` : '');
+  const [startsAt, setStartsAt] = useState<number | ''>(entry?.startsAt ?? dateAtTime(startDate, category === 'catering' ? 0 : 9));
+  const [endsAt, setEndsAt] = useState<number | ''>(entry ? entry.endsAt ?? '' : category === 'catering' ? dateAtTime(endDate, 23, 59) : '');
   const [owner, setOwner] = useState(entry?.owner ?? '');
   const [location, setLocation] = useState(entry?.location ?? '');
   const [status, setStatus] = useState<TimelineStatus>(entry?.status ?? 'planned');
   const [description, setDescription] = useState(entry?.description ?? '');
-  const invalidRange = Boolean(startsAt && endsAt && endsAt < startsAt);
+  const invalidRange = Boolean(startsAt !== '' && endsAt !== '' && endsAt < startsAt);
   return <DialogForm title={entry ? t('pages.eventTimeline.editTimelineEntry') : category === 'catering' ? t('pages.eventTimeline.addCateringPeriod') : category === 'in_game' ? t('pages.eventTimeline.addGameAction') : t('pages.eventTimeline.addPreparationTask')}
-    pending={pending} error={error} onCancel={onCancel} submitDisabled={!title.trim() || !startsAt || invalidRange}
-    onSubmit={() => onSubmit({ category: entry?.category ?? category, title: title.trim(), startsAt, endsAt: endsAt || null, owner: owner.trim(), location: location.trim(), status, description: description.trim() })}>
+    pending={pending} error={error} onCancel={onCancel} submitDisabled={!title.trim() || startsAt === '' || invalidRange}
+    onSubmit={() => onSubmit({ category: entry?.category ?? category, title: title.trim(), startsAt: Number(startsAt), endsAt: endsAt === '' ? null : endsAt, owner: owner.trim(), location: location.trim(), status, description: description.trim() })}>
     <Stack spacing={2}>
       <TextField autoFocus fullWidth required label={t('pages.eventTimeline.title')} value={title} onChange={(e) => setTitle(e.target.value)}
         placeholder={category === 'catering' ? t('pages.eventTimeline.crewCatering') : category === 'in_game' ? t('pages.eventTimeline.eGMissionBriefing') : t('pages.eventTimeline.eGSetUpRadioNetwork')}

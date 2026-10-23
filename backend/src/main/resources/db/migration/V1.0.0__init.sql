@@ -6,8 +6,8 @@
 create extension if not exists pg_trgm with schema public;
 
 create table app_users (
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     email varchar(255),
     issuer varchar(255) not null,
@@ -23,8 +23,8 @@ create table app_users (
 
 create table assemblies (
     active boolean not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     image_object_key varchar(1024),
     category varchar(255),
@@ -46,11 +46,11 @@ create table assembly_items (
 create table asset_instances (
     active boolean not null,
     operating_hours numeric(38,2) not null,
-    purchase_date date,
+    purchase_date bigint,
     purchase_price_cents integer,
     replacement_value_cents integer,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     version bigint not null,
     current_custodian_id uuid,
     current_location_id uuid,
@@ -69,8 +69,8 @@ create table asset_instances (
 
 create table custody_handover_lines (
     quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     handover_id uuid not null,
     id uuid not null,
@@ -82,9 +82,9 @@ create table custody_handover_lines (
 
 create table custody_handovers (
     condition_confirmed boolean not null,
-    created_at timestamp(6) with time zone not null,
-    occurred_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    occurred_at bigint not null,
+    updated_at bigint not null,
     collector_id uuid,
     order_id uuid not null,
     id uuid not null,
@@ -106,8 +106,8 @@ create table damage_reports (
     repaired_quantity integer not null,
     safety_impact boolean not null,
     written_off_quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     order_id uuid,
     handler_id uuid,
@@ -130,11 +130,11 @@ create table damage_reports (
 create table domain_event_outbox (
     aggregate_revision bigint not null default 0,
     attempt_count integer not null,
-    available_at timestamp(6) with time zone not null,
-    created_at timestamp(6) with time zone not null,
-    occurred_at timestamp(6) with time zone not null,
-    published_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    available_at bigint not null,
+    created_at bigint not null,
+    occurred_at bigint not null,
+    published_at bigint,
+    updated_at bigint not null,
     actor_id uuid,
     aggregate_id uuid not null,
     event_id uuid not null unique,
@@ -153,10 +153,10 @@ create table event_occurrences (
     daily_main_meal_stamps integer not null default 4 check (daily_main_meal_stamps between 0 and 1000),
     daily_breakfast_stamps integer not null default 1 check (daily_breakfast_stamps between 0 and 1000),
     first_day_main_meal_stamps integer not null default 2 check (first_day_main_meal_stamps between 0 and 1000),
-    end_date date not null,
-    start_date date not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    end_date bigint not null,
+    start_date bigint not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     event_type varchar(255) not null,
     name varchar(255) not null,
@@ -170,8 +170,8 @@ create table event_occurrences (
 -- People attending events; an Authentik account link is optional (event crew usually has none).
 create table event_people (
     id uuid primary key,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     name varchar(255) not null check (length(trim(name)) > 0),
     user_id uuid unique references app_users(id) on delete set null
 );
@@ -181,10 +181,10 @@ create table event_attendees (
     id uuid primary key,
     event_id uuid not null references event_occurrences(id) on delete cascade,
     person_id uuid not null references event_people(id),
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
-    arrives_at timestamp(6),
-    leaves_at timestamp(6),
+    created_at bigint not null,
+    updated_at bigint not null,
+    arrives_at bigint,
+    leaves_at bigint,
     food_stamps_issued boolean not null default false,
     notes varchar(2000),
     constraint uq_event_attendees_person unique (event_id, person_id),
@@ -207,12 +207,12 @@ create index idx_event_attendee_roles_faction on event_attendee_roles(faction_id
 create table event_timeline_entries (
     id uuid primary key,
     event_id uuid not null references event_occurrences(id) on delete cascade,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     category varchar(255) not null check (category in ('in_game', 'preparation', 'catering')),
     title varchar(255) not null check (length(trim(title)) > 0),
-    starts_at timestamp(6) not null,
-    ends_at timestamp(6),
+    starts_at bigint not null,
+    ends_at bigint,
     owner varchar(255),
     location varchar(255),
     status varchar(255) not null check (status in ('planned', 'in_progress', 'completed')),
@@ -223,7 +223,7 @@ create index idx_event_timeline_event_start on event_timeline_entries(event_id, 
 
 create table order_history (
     id bigint generated by default as identity,
-    occurred_at timestamp(6) with time zone not null,
+    occurred_at bigint not null,
     actor_id uuid not null,
     order_id uuid not null,
     idempotency_key uuid unique,
@@ -248,8 +248,8 @@ create table order_lines (
     reserved_quantity integer not null,
     returned_quantity integer not null,
     written_off_quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     order_id uuid not null,
     id uuid not null,
     item_id uuid not null,
@@ -264,9 +264,9 @@ create table orders (
     purpose varchar(4000),
     pickup_latitude float(53),
     pickup_longitude float(53),
-    requested_pickup_date date,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    requested_pickup_date bigint,
+    created_at bigint not null,
+    updated_at bigint not null,
     created_by uuid not null,
     event_occurrence_id uuid,
     faction_id uuid,
@@ -288,8 +288,8 @@ create table orders (
 
 create table factions (
     is_active boolean not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     event_type varchar(255) not null,
     name varchar(255) not null,
@@ -307,8 +307,8 @@ create table goods_receipt_lines (
     expected_quantity integer not null,
     received_quantity integer not null,
     rejected_quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     goods_receipt_id uuid not null,
     id uuid not null,
     item_id uuid not null,
@@ -319,9 +319,9 @@ create table goods_receipt_lines (
 );
 
 create table goods_receipts (
-    created_at timestamp(6) with time zone not null,
-    received_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    received_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     idempotency_key uuid unique,
     purchase_order_id uuid not null,
@@ -341,8 +341,8 @@ create table inventory_count_lines (
     expected_quantity integer not null,
     recounted_quantity integer,
     variance_quantity integer,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     count_session_id uuid not null,
     counted_by uuid,
@@ -356,11 +356,11 @@ create table inventory_count_lines (
 
 create table inventory_count_sessions (
     blind_count boolean not null,
-    approved_at timestamp(6) with time zone,
-    completed_at timestamp(6) with time zone,
-    created_at timestamp(6) with time zone not null,
-    started_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    approved_at bigint,
+    completed_at bigint,
+    created_at bigint not null,
+    started_at bigint,
+    updated_at bigint not null,
     approved_by uuid,
     created_by uuid not null,
     id uuid not null,
@@ -374,11 +374,11 @@ create table inventory_count_sessions (
 );
 
 create table inventory_lots (
-    best_before_date date,
-    expiry_date date,
-    manufacture_date date,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    best_before_date bigint,
+    expiry_date bigint,
+    manufacture_date bigint,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     item_id uuid not null,
     lot_number varchar(255) not null,
@@ -397,9 +397,9 @@ create table inventory_positions (
     quantity_in_transit integer not null,
     quantity_on_hand integer not null,
     quantity_quarantined integer not null,
-    created_at timestamp(6) with time zone not null,
-    last_counted_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    last_counted_at bigint,
+    updated_at bigint not null,
     version bigint not null,
     id uuid not null,
     item_id uuid not null,
@@ -415,8 +415,8 @@ create table inventory_transfer_lines (
     picked_quantity integer not null,
     received_quantity integer not null,
     requested_quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     id uuid not null,
     item_id uuid not null,
@@ -427,10 +427,10 @@ create table inventory_transfer_lines (
 );
 
 create table inventory_transfers (
-    created_at timestamp(6) with time zone not null,
-    dispatched_at timestamp(6) with time zone,
-    received_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    dispatched_at bigint,
+    received_at bigint,
+    updated_at bigint not null,
     destination_location_id uuid not null,
     id uuid not null,
     idempotency_key uuid unique,
@@ -445,7 +445,7 @@ create table inventory_transfers (
 
 create table item_images (
     display_order integer not null,
-    created_at timestamp(6) with time zone not null,
+    created_at bigint not null,
     id uuid not null,
     item_id uuid not null,
     object_key varchar(1000) not null,
@@ -460,8 +460,8 @@ create table items (
     owner_name varchar(255),
     ownership_type varchar(255) not null default 'organization',
     active boolean not null,
-    battery_replacement_due date,
-    best_before_date date,
+    battery_replacement_due bigint,
+    best_before_date bigint,
     container_size numeric(9,0) check (container_size >= 1),
     current_operating_hours numeric(38,2) not null,
     tracks_runtime boolean not null default false,
@@ -471,8 +471,8 @@ create table items (
     quantity_decimals integer not null default 0 check (quantity_decimals in (0, 2)),
     unit_capacity numeric(12,3) check (unit_capacity > 0),
     unit_value_cents integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     return_location_id uuid,
     storage_location_id uuid,
@@ -495,9 +495,9 @@ create table items (
 
 create table maintenance_records (
     operating_hours numeric(38,2),
-    created_at timestamp(6) with time zone not null,
-    next_due_at timestamp(6) with time zone,
-    performed_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    next_due_at bigint,
+    performed_at bigint not null,
     asset_instance_id uuid,
     id uuid not null,
     inspector_user_id uuid not null,
@@ -517,9 +517,9 @@ create table maintenance_schedules (
     interval_value numeric(38,2) not null,
     next_due_value numeric(38,2),
     warning_window numeric(38,2) not null,
-    created_at timestamp(6) with time zone not null,
-    next_due_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    next_due_at bigint,
+    updated_at bigint not null,
     asset_instance_id uuid,
     id uuid not null,
     item_id uuid not null,
@@ -532,10 +532,10 @@ create table maintenance_schedules (
 
 create table notifications (
     delivery_attempts integer not null,
-    created_at timestamp(6) with time zone not null,
-    delivered_at timestamp(6) with time zone,
-    read_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    delivered_at bigint,
+    read_at bigint,
+    updated_at bigint not null,
     order_id uuid,
     id uuid not null,
     recipient_id uuid not null,
@@ -550,8 +550,8 @@ create unique index notifications_dedupe on notifications(recipient_id, type, de
 
 create table order_line_asset_assignments (
     reconciled boolean not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid not null,
     order_id uuid not null,
     id uuid not null,
@@ -564,8 +564,8 @@ create table purchase_order_lines (
     ordered_quantity integer not null,
     received_quantity integer not null,
     unit_price_cents integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     item_id uuid not null,
     purchase_order_id uuid not null,
@@ -575,10 +575,10 @@ create table purchase_order_lines (
 );
 
 create table purchase_orders (
-    expected_delivery_date date,
-    order_date date not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    expected_delivery_date bigint,
+    order_date bigint not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     created_by uuid not null,
     event_occurrence_id uuid,
     id uuid not null,
@@ -592,10 +592,10 @@ create table purchase_orders (
 create table repair_cases (
     repaired_pending_quantity INTEGER NOT NULL DEFAULT 0,
     safety_impact boolean not null,
-    completed_at timestamp(6) with time zone,
-    created_at timestamp(6) with time zone not null,
-    started_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    completed_at bigint,
+    created_at bigint not null,
+    started_at bigint,
+    updated_at bigint not null,
     approved_by uuid,
     asset_instance_id uuid,
     damage_report_id uuid not null unique,
@@ -612,8 +612,8 @@ create table repair_cases (
 
 create table return_reconciliations (
     quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     order_id uuid not null,
     id uuid not null,
@@ -633,9 +633,9 @@ create table return_submissions (
     event_occurrence_id UUID,
     member_command_id uuid unique,
     quantity integer not null,
-    acknowledged_at timestamp(6) with time zone,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    acknowledged_at bigint,
+    created_at bigint not null,
+    updated_at bigint not null,
     acknowledged_by_id uuid,
     asset_instance_id uuid,
     expected_return_location_id uuid,
@@ -657,9 +657,9 @@ create table stock_reservations (
     released_quantity integer not null,
     requested_quantity integer not null,
     reserved_quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    released_at timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    released_at bigint,
+    updated_at bigint not null,
     version bigint not null,
     asset_instance_id uuid,
     created_by uuid not null,
@@ -682,9 +682,9 @@ create table stock_transactions (
     availability_after integer,
     availability_before integer,
     quantity integer not null,
-    created_at timestamp(6) with time zone not null,
-    occurred_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    occurred_at bigint not null,
+    updated_at bigint not null,
     asset_instance_id uuid,
     client_command_id uuid,
     damage_report_id uuid,
@@ -712,8 +712,8 @@ create table storage_locations (
     latitude float(53),
     longitude float(53),
     map_zoom integer not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     map_overlay_url varchar(1000),
     code varchar(32) not null,
@@ -727,8 +727,8 @@ create table storage_locations (
 
 create table runtime_entries (
     id uuid not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     item_id uuid not null references items(id),
     asset_instance_id uuid references asset_instances(id),
     event_occurrence_id uuid references event_occurrences(id),
@@ -737,7 +737,7 @@ create table runtime_entries (
     hours numeric(12,2) not null,
     reading_after numeric(12,2) not null check (reading_after >= 0),
     source varchar(255) not null check ((source in ('manual','return_check','maintenance','correction'))),
-    recorded_at timestamp(6) with time zone not null,
+    recorded_at bigint not null,
     notes varchar(255),
     primary key (id)
 );
@@ -747,9 +747,9 @@ create table sync_command_audit (
     resolution_root uuid,
     supersedes uuid,
     retry_count integer not null,
-    created_at timestamp(6) with time zone not null,
-    local_timestamp timestamp(6) with time zone,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    local_timestamp bigint,
+    updated_at bigint not null,
     command_id uuid not null unique,
     id uuid not null,
     user_id uuid not null,
@@ -764,13 +764,13 @@ create table sync_command_audit (
 
 create table vendor_documents (
     currency varchar(3),
-    document_date date,
-    retention_until date,
-    created_at timestamp(6) with time zone not null,
+    document_date bigint,
+    retention_until bigint,
+    created_at bigint not null,
     file_size bigint not null,
     total_amount_cents bigint,
-    updated_at timestamp(6) with time zone not null,
-    uploaded_at timestamp(6) with time zone not null,
+    updated_at bigint not null,
+    uploaded_at bigint not null,
     goods_receipt_id uuid,
     id uuid not null,
     purchase_order_id uuid,
@@ -789,8 +789,8 @@ create table vendor_documents (
 create table vendors (
     active boolean not null,
     preferred_vendor boolean not null,
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     id uuid not null,
     address varchar(255),
     contact_person varchar(255),
@@ -805,8 +805,8 @@ create table vendors (
 
 create table member_requests (
     id uuid primary key,
-    created_at timestamptz not null,
-    updated_at timestamptz not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     requester_id uuid not null,
     item_id uuid not null,
     asset_id uuid,
@@ -818,18 +818,18 @@ create table member_requests (
     status varchar(255) not null,
     response varchar(2000),
     handled_by_id uuid,
-    handled_at timestamptz,
+    handled_at bigint,
     command_id uuid not null unique,
     revision bigint not null default 0
 );
 
 create table action_reminders (
     id uuid primary key,
-    created_at timestamptz not null,
-    updated_at timestamptz not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     user_id uuid not null,
     action_key varchar(255) not null,
-    remind_at timestamptz,
+    remind_at bigint,
     unique(user_id, action_key)
 );
 
@@ -837,15 +837,15 @@ create table category_maintenance_policies (
     id uuid not null primary key,
     category varchar(255) not null unique,
     interval_days integer not null check (interval_days > 0),
-    created_at timestamp(6) with time zone not null,
-    updated_at timestamp(6) with time zone not null
+    created_at bigint not null,
+    updated_at bigint not null
 );
 
 
 create table planning_overrides (
     id uuid primary key,
-    created_at timestamp with time zone not null,
-    updated_at timestamp with time zone not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     event_id uuid not null,
     item_id uuid not null,
     actor_id uuid not null,
@@ -856,24 +856,24 @@ create table planning_overrides (
 create table operational_reports (
     name varchar(255) primary key,
     version bigint not null default 0,
-    started_at timestamptz,
-    generated_at timestamptz,
+    started_at bigint,
+    generated_at bigint,
     source_token varchar(8000),
     report_rows jsonb not null default '[]'
 );
 
 create table equipment_commitments (
     id uuid primary key,
-    created_at timestamptz not null,
-    updated_at timestamptz not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     item_id uuid not null,
     event_id uuid,
     quantity integer not null check (quantity > 0),
     asset_ids jsonb not null default '[]',
-    available_from date not null,
-    available_until date not null,
+    available_from bigint not null,
+    available_until bigint not null,
     pickup_details varchar(255) not null,
-    return_due date,
+    return_due bigint,
     return_details varchar(255),
     notes varchar(255) not null,
     cancelled boolean not null default false,
@@ -885,8 +885,8 @@ create table equipment_commitments (
 
 create table loan_arrangements (
     id uuid primary key,
-    created_at timestamptz not null,
-    updated_at timestamptz not null,
+    created_at bigint not null,
+    updated_at bigint not null,
     commitment_id uuid not null unique,
     provider_location_id uuid not null,
     kind varchar(255) not null,
@@ -1089,12 +1089,12 @@ alter table loan_arrangements add constraint loan_arrangements_provider_location
 
 -- Private resource policies and user-owned or administrator-managed sharing groups.
 create table inventory_access_policies (
-    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    id uuid primary key, created_at bigint not null, updated_at bigint not null,
     owner_user_id uuid not null references app_users(id), revision bigint not null,
     public_use boolean not null default false
 );
 create table inventory_access_groups (
-    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    id uuid primary key, created_at bigint not null, updated_at bigint not null,
     name varchar(255) not null, revision bigint not null,
     owner_user_id uuid references app_users(id)
 );
@@ -1102,7 +1102,7 @@ create unique index inventory_access_group_owner_name on inventory_access_groups
     (coalesce(owner_user_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name));
 create index inventory_access_groups_owner on inventory_access_groups(owner_user_id);
 create table inventory_access_links (
-    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    id uuid primary key, created_at bigint not null, updated_at bigint not null,
     policy_id uuid not null references inventory_access_policies(id) on delete cascade,
     ancestor_policy_id uuid not null references inventory_access_policies(id) on delete cascade,
     unique (policy_id, ancestor_policy_id), check (policy_id <> ancestor_policy_id)
@@ -1114,7 +1114,7 @@ create table inventory_access_group_members (
 );
 create index inventory_access_members_user on inventory_access_group_members(user_id, group_id);
 create table inventory_access_grants (
-    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    id uuid primary key, created_at bigint not null, updated_at bigint not null,
     policy_id uuid not null references inventory_access_policies(id), user_id uuid references app_users(id),
     group_id uuid references inventory_access_groups(id), can_edit boolean not null,
     check ((user_id is null) <> (group_id is null)), unique (policy_id, user_id), unique (policy_id, group_id)
@@ -1129,9 +1129,9 @@ alter table items add column responsible_person_name varchar(255);
 create index ix_items_responsible_person on items (responsible_person_id);
 alter table orders add column pickup_assignments jsonb not null default '{}';
 create table inventory_media_objects (
-    purge_lease_until timestamptz,
+    purge_lease_until bigint,
     purge_lease uuid,
-    id uuid primary key, created_at timestamp(6) with time zone not null, updated_at timestamp(6) with time zone not null,
+    id uuid primary key, created_at bigint not null, updated_at bigint not null,
     object_key varchar(1024) not null unique, uploader_id uuid not null references app_users(id),
     resource_type varchar(255), resource_id uuid,
     check ((resource_type is null) = (resource_id is null))
@@ -1212,7 +1212,7 @@ CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON f
 
 -- Reference data: event types and their factions. Planners add more through /api/factions.
 INSERT INTO factions (id, created_at, updated_at, is_active, event_type, name, slug)
-SELECT gen_random_uuid(), now(), now(), true, event_type, name, slug FROM (VALUES
+SELECT gen_random_uuid(), (extract(epoch from now()) * 1000)::bigint, (extract(epoch from now()) * 1000)::bigint, true, event_type, name, slug FROM (VALUES
     ('DE', 'KGG', 'kgg'),
     ('DE', 'GOF', 'gof'),
     ('DE', 'Enklave', 'enklave'),
@@ -1295,22 +1295,22 @@ end;
 $resource$;
 
 alter table app_users add column active boolean not null default true;
-alter table app_users add column deactivated_at timestamp with time zone;
+alter table app_users add column deactivated_at bigint;
 alter table app_users add column offboarding_reason varchar(1000);
 create table revoked_sessions (
- token_hash varchar(64) primary key, user_id uuid not null references app_users(id), expires_at timestamp with time zone not null
+ token_hash varchar(64) primary key, user_id uuid not null references app_users(id), expires_at bigint not null
 );
 create index ix_revoked_sessions_expiry on revoked_sessions(expires_at);
 
 create table handover_evidence (
- id uuid primary key default gen_random_uuid(), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+ id uuid primary key default gen_random_uuid(), created_at bigint not null default (extract(epoch from now()) * 1000)::bigint, updated_at bigint not null default (extract(epoch from now()) * 1000)::bigint,
  handover_id uuid not null references custody_handovers(id), recorded_by_id uuid not null references app_users(id),
  condition_confirmed boolean not null, condition_notes varchar(2000) not null, acknowledgement_object_key varchar(255), command_id uuid not null unique, input_hash varchar(64) not null
 );
 create index ix_handover_evidence_handover on handover_evidence(handover_id, created_at);
 
-alter table notifications add column next_delivery_at timestamptz;
-alter table notifications add column delivery_lease_until timestamptz;
+alter table notifications add column next_delivery_at bigint;
+alter table notifications add column delivery_lease_until bigint;
 alter table notifications add column delivery_lease uuid;
 create index ix_notification_delivery on notifications(delivery_status, next_delivery_at, created_at);
 
@@ -1325,7 +1325,7 @@ do $$ declare history_table text; begin
  end loop;
 end $$;
 
-alter table event_occurrences add column order_deadline timestamptz;
+alter table event_occurrences add column order_deadline bigint;
 
 alter table maintenance_schedules add column category_template varchar(255);
 
@@ -1349,7 +1349,7 @@ create function inventory_maintenance_attention(target_item uuid) returns boolea
   where s.item_id=target_item and s.active and (s.asset_instance_id is null or a.active) and
   case s.interval_type
    when 'date' then s.next_due_at is null or s.warning_window is null
-    or s.next_due_at <= now() + s.warning_window * interval '1 day'
+    or s.next_due_at <= (extract(epoch from now()) * 1000)::bigint + s.warning_window * 86400000::bigint
    when 'operating_hours' then s.next_due_value is null or s.warning_window is null
     or (case when s.asset_instance_id is null then i.current_operating_hours else a.operating_hours end) is null
     or (case when s.asset_instance_id is null then i.current_operating_hours else a.operating_hours end) + s.warning_window >= s.next_due_value
@@ -1366,11 +1366,11 @@ create table report_rebuild_jobs (
     name varchar(255) primary key,
     status varchar(32) not null check (status in ('pending','running','retry','completed','failed')),
     requested_by uuid not null,
-    requested_at timestamptz not null,
-    available_at timestamptz not null,
+    requested_at bigint not null,
+    available_at bigint not null,
     attempts integer not null default 0,
     lease uuid,
-    lease_until timestamptz,
+    lease_until bigint,
     last_error varchar(2000)
 );
 create index report_rebuild_jobs_pending on report_rebuild_jobs(available_at,requested_at) where status in ('pending','retry','running');
@@ -1379,9 +1379,9 @@ CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON o
 
 create table media_cleanup_jobs (
     object_key varchar(1024) primary key,
-    available_at timestamptz not null,
+    available_at bigint not null,
     lease uuid,
-    lease_until timestamptz
+    lease_until bigint
 );
 create index media_cleanup_jobs_pending on media_cleanup_jobs(available_at);
 
@@ -1394,9 +1394,9 @@ create table integration_aggregate_sequences (
 create table integration_subscriptions (
     name varchar(128) primary key,
     prefixes jsonb not null,
-    since timestamptz not null,
+    since bigint not null,
     enabled boolean not null default true,
-    created_at timestamptz not null default now()
+    created_at bigint not null default (extract(epoch from now()) * 1000)::bigint
 );
 create table integration_deliveries (
     consumer varchar(128) not null references integration_subscriptions(name) on delete cascade,
@@ -1404,8 +1404,8 @@ create table integration_deliveries (
     state varchar(32) not null check(state in ('leased','acknowledged','dead_letter')),
     attempts integer not null default 0,
     lease uuid,
-    lease_until timestamptz,
-    acknowledged_at timestamptz,
+    lease_until bigint,
+    acknowledged_at bigint,
     primary key(consumer,event_id)
 );
 create index integration_deliveries_pending on integration_deliveries(consumer,state,lease_until);

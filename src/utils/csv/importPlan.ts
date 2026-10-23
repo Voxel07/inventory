@@ -45,8 +45,8 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
           maintenanceStatus: 'certified',
           blockingMaintenance: [],
           stock: null,
-          created: '',
-          updated: '',
+          created: 0,
+          updated: 0,
         };
         map.set(p.data.name.toLowerCase().trim(), planned);
       }

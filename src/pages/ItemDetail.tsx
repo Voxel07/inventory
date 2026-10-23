@@ -433,11 +433,11 @@ export function ItemDetail() {
                                 : t('enum.value.organization')}</Field>
                             <Field label={t('pages.itemDetail.created')}>{formatDate(item.created)}</Field>
                             {isVehicle && <Field label={t('pages.itemDetail.fuelConsumption')}>{item.fuelConsumptionLitersPer100Km == null ? '—' : `${item.fuelConsumptionLitersPer100Km} l/100 km`}</Field>}
-                            {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
+                            {isVehicle && <Field label={t('pages.itemDetail.batteryReplacementDue')}>{item.batteryReplacementDue != null ? formatDate(item.batteryReplacementDue) : '—'}</Field>}
                             {/* Serialized units carry their own meters (see each unit's runtime log). */}
                             {isGenerator && item.trackingMode !== 'serialized' && <Field label={t('pages.itemDetail.runningHours')}>{item.currentOperatingHours ?? 0}</Field>}
-                            {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
-                            {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate ? formatDate(item.bestBeforeDate) : '—'}</Field>}
+                            {isGenerator && <Field label={t('pages.itemDetail.nextMaintenance')}>{item.nextMaintenanceDue != null ? formatDate(item.nextMaintenanceDue) : '—'}</Field>}
+                            {isFood && <Field label={t('pages.itemDetail.bestBeforeDate')}>{item.bestBeforeDate != null ? formatDate(item.bestBeforeDate) : '—'}</Field>}
                             <Field label={t('pages.itemDetail.itemID')}><span className="mono">{item.id}</span></Field>
                             <Field wide label={t('pages.itemDetail.approvedEventUse')}>
                                 <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>

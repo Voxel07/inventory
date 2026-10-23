@@ -21,7 +21,7 @@ public class MediaCleanupService {
     /** Commit this intent before copying: even a crash before the resource transaction commits leaves cleanup work. */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void protectDestination(String key) {
-        em.createNativeQuery("insert into media_cleanup_jobs(object_key,available_at) values(:key,now()+interval '1 hour') on conflict(object_key) do nothing")
+        em.createNativeQuery("insert into media_cleanup_jobs(object_key,available_at) values(:key,(extract(epoch from now()) * 1000)::bigint+3600000) on conflict(object_key) do nothing")
                 .setParameter("key",key).executeUpdate();
     }
 
@@ -36,21 +36,21 @@ public class MediaCleanupService {
 
     @Transactional(Transactional.TxType.MANDATORY)
     public void deleteAfterCommit(String key) {
-        em.createNativeQuery("insert into media_cleanup_jobs(object_key,available_at) values(:key,now()) on conflict(object_key) do update set available_at=least(media_cleanup_jobs.available_at,excluded.available_at)")
+        em.createNativeQuery("insert into media_cleanup_jobs(object_key,available_at) values(:key,(extract(epoch from now()) * 1000)::bigint) on conflict(object_key) do update set available_at=least(media_cleanup_jobs.available_at,excluded.available_at)")
                 .setParameter("key",key).executeUpdate();
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Claim claim() {
         var keys=em.createNativeQuery("""
-            select j.object_key from media_cleanup_jobs j where j.available_at<=now()
-              and (j.lease_until is null or j.lease_until<now())
+            select j.object_key from media_cleanup_jobs j where j.available_at<=(extract(epoch from now()) * 1000)::bigint
+              and (j.lease_until is null or j.lease_until<(extract(epoch from now()) * 1000)::bigint)
               and not exists(select 1 from inventory_media_objects m where m.object_key=j.object_key)
             order by j.available_at,j.object_key for update of j skip locked limit 1
             """).getResultList();
         if(keys.isEmpty())return null;
         String key=keys.getFirst().toString();var lease=UUID.randomUUID();
-        em.createNativeQuery("update media_cleanup_jobs set lease=:lease,lease_until=now()+interval '5 minutes' where object_key=:key")
+        em.createNativeQuery("update media_cleanup_jobs set lease=:lease,lease_until=(extract(epoch from now()) * 1000)::bigint+300000 where object_key=:key")
                 .setParameter("lease",lease).setParameter("key",key).executeUpdate();
         return new Claim(key,lease);
     }

@@ -109,7 +109,7 @@ public class EventBroadcaster {
     private Map<String, Object> payload(String type, Map<String, Object> data) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("type", type);
-        payload.put("timestamp", Instant.now().toString());
+        payload.put("timestamp", Instant.now().toEpochMilli());
         if (data != null) {
             payload.putAll(data);
         }

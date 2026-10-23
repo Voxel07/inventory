@@ -240,7 +240,7 @@ public class McpInventoryService {
                 reserved.getOrDefault(p.id, 0),
                 usable ? Math.max(0, p.availableQuantity() - reserved.getOrDefault(p.id, 0)) : 0,
                 p.quantityDamaged, p.quantityQuarantined, p.quantityInTransit,
-                p.lot == null ? null : p.lot.lotNumber, p.lot == null || p.lot.expiryDate == null ? null : p.lot.expiryDate.toString())).toList();
+                p.lot == null ? null : p.lot.lotNumber, p.lot == null || p.lot.expiryDate == null ? null : org.ash.inventory.platform.api.EpochTime.millis(p.lot.expiryDate))).toList();
     }
 
     /** Evaluates one bounded page of the visible catalog; continue while {@code hasMore}. */
@@ -288,7 +288,7 @@ public class McpInventoryService {
                 alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("schedule", schedule.id,
                         schedule.assetInstance == null ? item.sku : schedule.assetInstance.assetCode, item.name,
                         schedule.maintenanceType + " (" + schedule.intervalType + ")", status.name(),
-                        schedule.nextDueAt == null ? null : schedule.nextDueAt.toString()));
+                        schedule.nextDueAt == null ? null : schedule.nextDueAt.toEpochMilli()));
             }
             var itemStatus = MaintenancePolicy.itemStatus(item, today);
             boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.in_service;

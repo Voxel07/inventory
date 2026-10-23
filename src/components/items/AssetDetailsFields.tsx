@@ -14,7 +14,7 @@ export function AssetDetailsFields({ value, onChange }: { value: AssetInstanceIn
             <TextField label={t('items.assetDetailsFields.manufacturer')} value={value.manufacturer ?? ''} onChange={(e) => onChange({ manufacturer: e.target.value })} fullWidth />
             <TextField label={t('items.assetDetailsFields.model')} value={value.model ?? ''} onChange={(e) => onChange({ model: e.target.value })} fullWidth />
         </Stack>
-        <TextField label={t('items.assetDetailsFields.purchaseDate')} type="date" value={value.purchaseDate ?? ''} onChange={(e) => onChange({ purchaseDate: e.target.value || undefined })}
+        <TextField label={t('items.assetDetailsFields.purchaseDate')} type="date" value={value.purchaseDate ?? ''} onChange={(e) => onChange({ purchaseDate: e.target.value === '' ? undefined : Number(e.target.value) })}
             slotProps={{ inputLabel: { shrink: true } }} fullWidth />
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField label={t('items.assetDetailsFields.purchasePrice')} type="number" value={value.purchasePrice ?? ''} onChange={(e) => onChange({ purchasePrice: optionalNumber(e.target.value) })}

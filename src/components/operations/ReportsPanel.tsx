@@ -1,4 +1,4 @@
-import { formatDateTime } from '../../utils/dateFormat';
+import { formatDate, formatReportValue, formatDateTime } from '../../utils/dateFormat';
 import { ActionBar } from '../shared/ActionBar';
 import { useState } from 'react';
 import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
@@ -38,7 +38,7 @@ export function ReportsPanel() {
       [t('operations.reportsPanel.site'), sites.find((site) => site.id === filters.siteId)?.name ?? filters.siteId],
       [t('enum.value.location'), locations.data?.find((l) => l.id === filters.locationId)?.name ?? filters.locationId],
       [t('operations.reportsPanel.search'), filters.search], [t('common.status'), filters.status], [t('common.category'), filters.category],
-      [t('operations.reportsPanel.from'), filters.from], [t('operations.reportsPanel.to'), filters.to],
+      [t('operations.reportsPanel.from'), formatDate(filters.from, '')], [t('operations.reportsPanel.to'), formatDate(filters.to, '')],
     ];
     return named.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`);
   }
@@ -50,16 +50,16 @@ export function ReportsPanel() {
     setExporting(true); setExportError('');
     try {
       const { rows, generation, stale, definition } = await reportApi.exportRows(name, filters, t('operations.reportsPanel.reportRebuiltDuringExportPleaseRetry'), t('operations.reportsPanel.generationPending'));
-      const fileName = `${name}-${generation?.slice(0, 10) ?? 'unbuilt'}.${format}`;
+      const fileName = `${name}-${generation == null ? 'unbuilt' : formatDate(generation)}.${format}`;
       if (format === 'pdf') {
         const label = labels[name as keyof typeof labels];
         save(await reportPdf({ title: label ? t(label) : title(name), definition: definition ?? definitions.data?.[name],
-          generatedAt: generation ?? '', stale, filters: filterLabels(), rows, heading: title, t }), fileName);
+          generatedAt: generation ?? 0, stale, filters: filterLabels(), rows, heading: title, t }), fileName);
         return;
       }
       const keys = [...new Set(rows.flatMap(Object.keys))];
       const cell = (value: unknown) => { let s = String(value ?? ''); if (/^[=+@\-\t\r]/.test(s)) s = `'${s}`; return `"${s.replaceAll('"', '""')}"`; };
-      const csv = [keys.map(cell).join(','), ...rows.map((row) => keys.map((key) => cell(row[key])).join(','))].join('\r\n');
+      const csv = [keys.map(cell).join(','), ...rows.map((row) => keys.map((key) => cell(formatReportValue(key, row[key], ''))).join(','))].join('\r\n');
       save(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }), fileName);
     } catch (e) { setExportError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
   }
@@ -92,7 +92,7 @@ export function ReportsPanel() {
       <TextField fullWidth label={t('operations.reportsPanel.categoryExact')} value={filters.category ?? ''} onChange={(e) => change('category', e.target.value)} />
       <Box sx={{ flex: '2 1 0', minWidth: { md: 340 } }}>
         <DateRangeField startLabel={t('operations.reportsPanel.from')} endLabel={t('operations.reportsPanel.to')} start={filters.from ?? ''} end={filters.to ?? ''}
-          onChange={(range) => { setFilters({ ...filters, from: range.start, to: range.end }); setPage(0); }} />
+          onChange={(range) => { setFilters({ ...filters, from: range.start === '' ? undefined : range.start, to: range.end === '' ? undefined : range.end }); setPage(0); }} />
       </Box>
     </Stack>
     {(filters.from || filters.to) && <Typography variant="caption">{t('operations.reportsPanel.dateFiltersExcludeRowsWithNoDateTheDefinitionAbove')}</Typography>}
@@ -101,8 +101,8 @@ export function ReportsPanel() {
     {(report.isFetching || command.isPending || exporting || ['pending', 'running', 'retry'].includes(report.data?.job.state ?? '')) && <LinearProgress />}
     {(report.error || definitions.error || command.error || exportError) && <Alert severity="error">{(report.error || definitions.error || command.error)?.message || exportError}</Alert>}
     {['purchases', 'movements'].includes(name) && <Typography variant="body2">{t('operations.reportsPanel.selectOneItemToSeeMonthlyTotalsByStatusAcross')}</Typography>}
-    {!!report.data?.monthlyTotals.length && <TableContainer><Table size="small"><TableHead><TableRow>{Object.keys(report.data.monthlyTotals[0]).map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data.monthlyTotals.map((row, i) => <TableRow key={i}>{Object.entries(row).map(([key, value]) => <TableCell key={key}>{String(value ?? '—')}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>}
-    <TableContainer component={Box} sx={{ maxHeight: 600 }}><Table size="small" stickyHeader><TableHead><TableRow>{columns.map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data?.rows.map((row, index) => <TableRow key={String(row.id ?? index)}>{columns.map((key) => <TableCell key={key} sx={{ minWidth: 90, overflowWrap: 'anywhere' }}>{key === 'item' && row.itemId ? <Link to={`/items/${row.itemId}`}>{String(row[key])}</Link> : key === 'event' && row.eventId ? <Link to={`/events/${row.eventId}`}>{String(row[key])}</Link> : String(row[key] ?? '—')}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>
+    {!!report.data?.monthlyTotals.length && <TableContainer><Table size="small"><TableHead><TableRow>{Object.keys(report.data.monthlyTotals[0]).map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data.monthlyTotals.map((row, i) => <TableRow key={i}>{Object.entries(row).map(([key, value]) => <TableCell key={key}>{formatReportValue(key, value)}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>}
+    <TableContainer component={Box} sx={{ maxHeight: 600 }}><Table size="small" stickyHeader><TableHead><TableRow>{columns.map((key) => <TableCell key={key}>{title(key)}</TableCell>)}</TableRow></TableHead><TableBody>{report.data?.rows.map((row, index) => <TableRow key={String(row.id ?? index)}>{columns.map((key) => <TableCell key={key} sx={{ minWidth: 90, overflowWrap: 'anywhere' }}>{key === 'item' && row.itemId ? <Link to={`/items/${row.itemId}`}>{String(row[key])}</Link> : key === 'event' && row.eventId ? <Link to={`/events/${row.eventId}`}>{String(row[key])}</Link> : formatReportValue(key, row[key])}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer>
     {!report.isLoading && report.data?.generatedAt && !report.data.total && <Alert severity="info">{t('operations.reportsPanel.noMatchingRecords')}</Alert>}
     <TablePagination component="div" count={report.data?.total ?? 0} page={page} rowsPerPage={50} rowsPerPageOptions={[50]} onPageChange={(_, value) => setPage(value)} />
   </Stack>;

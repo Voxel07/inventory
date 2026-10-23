@@ -3,7 +3,7 @@ import type { ActorSummary } from './user';
 export interface DamageStatusHistoryEntry {
   status: DamageStatus;
   userId: string;
-  timestamp: string;
+  timestamp: number;
   amount?: number;
 }
 
@@ -21,15 +21,15 @@ export interface DamageReport {
   writtenOffAmount?: number;
   reportedBy: string;
   handledBy?: string;
-  handledAt?: string;
+  handledAt?: number;
   resolutionNotes?: string;
   statusHistory?: DamageStatusHistoryEntry[];
   description: string;
   severity: DamageSeverity;
   status: DamageStatus;
-  timestamp: string;
-  created: string;
-  updated: string;
+  timestamp: number;
+  created: number;
+  updated: number;
   expand?: {
     reportedBy?: ActorSummary;
     handledBy?: ActorSummary;
@@ -45,7 +45,7 @@ export const OPEN_DAMAGE_STATUSES: readonly DamageStatus[] = ['reported', 'triag
 export const CLOSED_DAMAGE_STATUSES: readonly DamageStatus[] = ['repaired', 'verified', 'returned_to_service', 'written_off', 'resolved'];
 
 export interface DamageReportFormData {
-  occurredAt?: string;
+  occurredAt?: number;
   itemId?: string;
   assemblyId?: string;
   assetInstanceId?: string;

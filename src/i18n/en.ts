@@ -3008,7 +3008,7 @@ export default {
       invalidRepairStatus: 'Invalid repair status',
       theRepairWriteOffQuantityIsMissing: 'The repair/write-off quantity is missing',
       theInspectionResultIsMissing: 'The inspection result is missing',
-      occurredAtMustBeAValidISOTimestampWithTimeZone: 'occurredAt must be a valid ISO timestamp with time zone in the past',
+      occurredAtMustBeEpochMillisecondsInThePast: 'occurredAt must be integer epoch milliseconds in the past',
       actionMustComeFirstValue: 'Action must come first: {{value}}',
       unknownItemValue: 'Unknown item: {{value}}',
       invalidRelativeDateValue: 'Invalid relative date: {{value}}',

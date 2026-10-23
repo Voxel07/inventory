@@ -26,7 +26,7 @@ class OrderPickupApiTest {
         admin().body(Map.of("responsiblePersonId", person)).patch("/api/items/" + item + "/responsibility").then().statusCode(200).body("responsiblePersonId", equalTo(person));
     }
     private String faction(Map<String, Integer> items, Map<String, Integer> assemblies) {
-        return admin().body(Map.of("eventType", "DE", "faction", "Pickup " + UUID.randomUUID(), "eventDate", "2041-06-12", "requestedQuantities", items, "requestedAssemblyQuantities", assemblies))
+        return admin().body(Map.of("eventType", "DE", "faction", "Pickup " + UUID.randomUUID(), "eventDate", 2254608000000L, "requestedQuantities", items, "requestedAssemblyQuantities", assemblies))
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
     }
     private Map<String, Object> assignment(String person, String name, String location) {
@@ -111,7 +111,7 @@ class OrderPickupApiTest {
         String subject = "general-keeper-" + UUID.randomUUID(), keeper = user(subject), first = location("Lighting"), second = location("Furniture");
         String light = item("Light", "Event equipment", first), table = item("Table", "Event equipment", second), outside = item("Other", "Other", first);
         responsible(light, keeper); responsible(table, keeper);
-        String event = admin().body(Map.of("name", "Pickup event", "eventType", "DE", "startDate", "2042-06-01", "endDate", "2042-06-02"))
+        String event = admin().body(Map.of("name", "Pickup event", "eventType", "DE", "startDate", 2285193600000L, "endDate", 2285280000000L))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         String order = admin().body(Map.of("name", "General pickup", "purpose", "Event setup", "eventOccurrenceId", event, "requestedQuantities", Map.of(light, 2, table, 1)))
                 .post("/api/orders/general").then().statusCode(200).extract().path("id"), path = "/api/orders/general/" + order;

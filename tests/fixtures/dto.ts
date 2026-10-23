@@ -7,7 +7,7 @@
 import type { Assembly, Item, StorageLocation, User, UserRole } from '../../src/types';
 import type { ItemStock } from '../../src/types/item';
 
-export const FIXTURE_TIME = '2026-10-02T10:00:00Z';
+export const FIXTURE_TIME = 1790935200000;
 
 /** The signed-in preview user; previews call `setDevelopmentSession('dev:preview', fixtureUser(role))`. */
 export function fixtureUser(role: UserRole): User {

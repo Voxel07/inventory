@@ -27,7 +27,7 @@ function decodeUser(value: unknown): User | null | undefined {
     || !Array.isArray(roles) || !roles.every(isRole)
     || (faction !== undefined && !(Array.isArray(faction) && faction.every((entry) => typeof entry === 'string')))
     || !isOptionalString(username) || (revision !== undefined && typeof revision !== 'number')
-    || typeof active !== 'boolean' || typeof created !== 'string' || typeof updated !== 'string') return undefined;
+    || typeof active !== 'boolean' || typeof created !== 'number' || !Number.isSafeInteger(created) || typeof updated !== 'number' || !Number.isSafeInteger(updated)) return undefined;
   return { id, name, email, role, roles, faction, username, revision, active, created, updated };
 }
 

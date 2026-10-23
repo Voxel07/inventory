@@ -33,8 +33,8 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
   const [category, setCategory] = useState<Category>('all'); const [reminder, setReminder] = useState<InboxAction | null>(null);
   const labels: Record<string, string> = { pickup: t('common.pickup'), overdue_return: t('dialogs.actionInboxContent.overdueReturn'), acknowledgement: t('dialogs.actionInboxContent.returnReview'), receipt: t('dialogs.actionInboxContent.receipt'), expiring_lot: t('dialogs.actionInboxContent.expiringLot'), maintenance: t('enum.reason.maintenance'), damage: t('common.damageReport'), collection: t('dialogs.actionInboxContent.providerCollection'), provider_return: t('dialogs.actionInboxContent.providerReturn') };
   const now = query.dataUpdatedAt;
-  const due = (query.data ?? []).filter(a => !a.remindAt || Date.parse(a.remindAt) <= now);
-  const later = (query.data ?? []).filter(a => a.remindAt && Date.parse(a.remindAt) > now);
+  const due = (query.data ?? []).filter(a => a.remindAt == null || a.remindAt <= now);
+  const later = (query.data ?? []).filter(a => a.remindAt != null && a.remindAt > now);
   const show = (value: Category) => category === 'all' ? value !== 'later' : category === value;
   const loading = query.isLoading || notices.isLoading;
   const failed = query.isError || notices.isError;
@@ -48,12 +48,12 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
         {a.due && <Typography variant="caption" color="text.secondary">{t('common.due')}: {a.due}</Typography>}
       </Stack>
       {a.detail && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.25 }}>{a.detail}</Typography>}
-      {a.remindAt && <Typography variant="caption" color="text.secondary">{t('dialogs.actionInboxContent.reminder')}: {formatDateTime(a.remindAt)}</Typography>}
+      {a.remindAt != null && <Typography variant="caption" color="text.secondary">{t('dialogs.actionInboxContent.reminder')}: {formatDateTime(a.remindAt)}</Typography>}
     </Box>
     <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>
       <Button size="small" variant="outlined" component={Link} to={a.path} onClick={onOpenTask}>{t('common.open')}</Button>
       <IconButton title={t('dialogs.actionInboxContent.remindLater')} onClick={() => setReminder(a)}><SnoozeIcon fontSize="small" /></IconButton>
-      {a.remindAt && <IconButton title={t('dialogs.actionInboxContent.showNow')} disabled={command.isPending} onClick={() => command.mutate(() => actionInboxApi.remind({ key: a.key, remindAt: null }))}><NotificationsActiveOutlinedIcon fontSize="small" /></IconButton>}
+      {a.remindAt != null && <IconButton title={t('dialogs.actionInboxContent.showNow')} disabled={command.isPending} onClick={() => command.mutate(() => actionInboxApi.remind({ key: a.key, remindAt: null }))}><NotificationsActiveOutlinedIcon fontSize="small" /></IconButton>}
     </Stack>
   </ListItem>;
 
@@ -102,6 +102,6 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
     {show('tasks') && due.length > 0 && <InboxSection title={t('common.tasks')} count={due.length}>{due.map(taskRow)}</InboxSection>}
     {show('later') && later.length > 0 && <InboxSection title={t('dialogs.actionInboxContent.snoozed2')} count={later.length}>{later.map(taskRow)}</InboxSection>}
 
-    {reminder && <OperationForm title={t('dialogs.actionInboxContent.scheduleReminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('dialogs.actionInboxContent.timeWithin30Days'), type: 'datetime-local', required: true }]} onSave={v => actionInboxApi.remind({ key: reminder.key, remindAt: new Date(String(v.at)).toISOString() })} />}
+    {reminder && <OperationForm title={t('dialogs.actionInboxContent.scheduleReminder')} onClose={() => setReminder(null)} fields={[{ key: 'at', label: t('dialogs.actionInboxContent.timeWithin30Days'), type: 'datetime-local', required: true }]} onSave={v => actionInboxApi.remind({ key: reminder.key, remindAt: Number(v.at) })} />}
   </Stack>;
 }

@@ -93,7 +93,7 @@ public class LifecycleService {
         if (schedule.assetInstance != null) payload.put("assetInstanceId", schedule.assetInstance.id.toString());
         payload.put("active", schedule.active);
         payload.put("checkoutBlocking", schedule.checkoutBlocking);
-        if (schedule.nextDueAt != null) payload.put("nextDueAt", schedule.nextDueAt.toString());
+        if (schedule.nextDueAt != null) payload.put("nextDueAt", schedule.nextDueAt.toEpochMilli());
         if (schedule.nextDueValue != null) payload.put("nextDueValue", schedule.nextDueValue.toPlainString());
         return payload;
     }

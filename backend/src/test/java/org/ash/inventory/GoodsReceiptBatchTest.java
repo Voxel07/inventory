@@ -23,7 +23,7 @@ class GoodsReceiptBatchTest {
     private record Order(String id, String firstLine, String secondLine) {}
     private Order order(String first, String second) {
         String vendor = admin().body(Map.of("name", "Receipt batch vendor " + UUID.randomUUID())).post("/api/vendors").then().statusCode(201).extract().path("id");
-        var created = admin().body(Map.of("vendorId", vendor, "orderDate", "2026-10-21", "lines", List.of(
+        var created = admin().body(Map.of("vendorId", vendor, "orderDate", 1792540800000L, "lines", List.of(
                         Map.of("itemId", first, "orderedQuantity", 2, "unitPriceCents", 100),
                         Map.of("itemId", second, "orderedQuantity", 2, "unitPriceCents", 100))))
                 .post("/api/purchase-orders").then().statusCode(201).extract().jsonPath();

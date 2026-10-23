@@ -1,3 +1,4 @@
+import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item, type StorageLocation } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedReturnRow, type ParsedCheckoutRow } from '../../types/csvImport';
@@ -63,7 +64,10 @@ export function parseReturnsFromCsv(
     let validationStatus: ParsedReturnRow['status'] = 'valid';
     let statusMessage: string | undefined;
 
-    if (!itemName) {
+    if (date && !isCsvDate(date)) {
+      validationStatus = 'error';
+      statusMessage = 'Datum muss im Format TT-MM-JJJJ angegeben werden';
+    } else if (!itemName) {
       validationStatus = 'error';
       statusMessage = 'Fehlender Artikelname für Rückgabe';
     } else if (!item) {
@@ -87,7 +91,7 @@ export function parseReturnsFromCsv(
       eventType,
       faction,
       person,
-      date,
+      date: date ? csvDate(date) : undefined,
       generalOrderName,
       notes,
       targetStatus,

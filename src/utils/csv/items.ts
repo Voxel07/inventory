@@ -1,3 +1,4 @@
+import { csvDate } from './eventLogistics';
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
 import type { CsvReference } from './reference';
@@ -138,7 +139,7 @@ export function parseItemsFromCsv(
     const currentOperatingHoursStr = getField(raw, CURRENT_OPERATING_HOURS_ALIASES);
     const fuelConsumptionStr = getField(raw, FUEL_CONSUMPTION_ALIASES);
     const batteryReplacementDue = getField(raw, BATTERY_REPLACEMENT_DUE_ALIASES) || undefined;
-    const bestBeforeDate = getField(raw, BEST_BEFORE_DATE_ALIASES) || undefined;
+    const bestBeforeDate = getField(raw, BEST_BEFORE_DATE_ALIASES);
 
     const data: ItemFormData = {
       name,
@@ -161,15 +162,18 @@ export function parseItemsFromCsv(
       // A meter column implies runtime tracking unless the row says otherwise.
       tracksRuntime: getField(raw, TRACKS_RUNTIME_ALIASES) ? parseBoolean(getField(raw, TRACKS_RUNTIME_ALIASES)) : Boolean(currentOperatingHoursStr),
       fuelConsumptionLitersPer100Km: fuelConsumptionStr ? parseNumber(fuelConsumptionStr, 0) : undefined,
-      batteryReplacementDue,
-      bestBeforeDate,
+      batteryReplacementDue: batteryReplacementDue ? csvDate(batteryReplacementDue) : undefined,
+      bestBeforeDate: bestBeforeDate ? csvDate(bestBeforeDate) : undefined,
     };
 
     const existing = existingMap.get(name.toLowerCase().trim());
     let status: ParsedItemRow['status'] = 'valid';
     let statusMessage: string | undefined = undefined;
 
-    if (lotError || locationError) {
+    if ([batteryReplacementDue, bestBeforeDate].some(value => value && !Number.isFinite(csvDate(value)))) {
+      status = 'error';
+      statusMessage = 'Datum muss im Format TT-MM-JJJJ angegeben werden';
+    } else if (lotError || locationError) {
       status = 'error';
       statusMessage = lotError || locationError;
     } else if (existing) {

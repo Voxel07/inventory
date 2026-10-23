@@ -1,4 +1,4 @@
-import { formatDate } from '../utils/dateFormat';
+import { calendarDate, dateFieldValue, formatDate } from '../utils/dateFormat';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
@@ -48,7 +48,7 @@ import { translate, useAppLanguage, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { catalogGridSx } from '../components/lists/catalogGrid';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => calendarDate();
 
 type UsageRow = { id: string; name: string };
 
@@ -69,13 +69,13 @@ export function Events() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
-  const [newDate, setNewDate] = useState(today());
-  const [newEndDate, setNewEndDate] = useState(today());
+  const [newDate, setNewDate] = useState<number | ''>(today());
+  const [newEndDate, setNewEndDate] = useState<number | ''>(today());
   const [editName, setEditName] = useState('');
-  const [editStart, setEditStart] = useState('');
-  const [editEnd, setEditEnd] = useState('');
+  const [editStart, setEditStart] = useState<number | ''>('');
+  const [editEnd, setEditEnd] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [deadline, setDeadline] = useState<number | ''>('');
   const [usageSearch, setUsageSearch] = useState('');
   // Planning an event type needs every item tagged for it: an explicit complete read of that subset only.
   const { data: items, isLoading: itemsLoading } = useQuery({ queryKey: ['items', 'all', 'event-type', eventType],
@@ -101,9 +101,9 @@ export function Events() {
   const lastCompleted = completedReports[0];
   const selectedEvent = reports?.find((report) => report.id === selectedEventId) ?? reports?.find((report) => report.status === 'planned') ?? reports?.[0];
   const eventItems = items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [];
-  const usageReports = [...completedReports].sort((left, right) => left.eventDate.localeCompare(right.eventDate));
+  const usageReports = [...completedReports].sort((left, right) => (left.eventDate - right.eventDate));
   // A planned event can be closed from its last day on; closing locks its report.
-  const eventOver = Boolean(selectedEvent && (selectedEvent.endDate ?? selectedEvent.startDate).slice(0, 10) <= today());
+  const eventOver = Boolean(selectedEvent && (selectedEvent.endDate ?? selectedEvent.startDate) <= today());
 
   function itemName(itemId: string): string {
     return items?.find((item) => item.id === itemId)?.name ?? usageReports.find((entry) => entry.itemNames?.[itemId])?.itemNames?.[itemId] ?? itemId;
@@ -140,11 +140,11 @@ export function Events() {
   }
 
   function createEvent() {
-    if (!newName.trim() || !newDate || !newEndDate || newEndDate < newDate) return;
+    if (!newName.trim() || newDate === '' || newEndDate === '' || newEndDate < newDate) return;
     createReport.mutate({
       eventType,
       name: newName.trim(),
-      eventDate: `${newDate}T12:00:00.000Z`,
+      eventDate: newDate,
       startDate: newDate,
       endDate: newEndDate,
       status: 'planned',
@@ -164,19 +164,19 @@ export function Events() {
   /** Event details only; item quantities are corrected on the event's own page. */
   function openEdit(event: EventReport) {
     setEditName(event.name);
-    setEditStart(event.startDate.slice(0, 10));
-    setEditEnd((event.endDate ?? event.startDate).slice(0, 10));
+    setEditStart(event.startDate);
+    setEditEnd((event.endDate ?? event.startDate));
     setNotes(event.notes ?? '');
-    setDeadline(event.orderDeadline ? (() => { const value = new Date(event.orderDeadline); return new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })() : '');
+    setDeadline(event.orderDeadline ?? '');
     setEditOpen(true);
   }
 
   // usedQuantities is omitted so updates keep the usage recorded through orders.
-  function update(event: EventReport, changes: { name: string; startDate: string; endDate: string; status: EventReport['status']; plannedQuantities: Record<string, number>; notes: string; orderDeadline?: string | null }, onSuccess: () => void) {
+  function update(event: EventReport, changes: { name: string; startDate: number; endDate: number; status: EventReport['status']; plannedQuantities: Record<string, number>; notes: string; orderDeadline?: number | null }, onSuccess: () => void) {
     updateReport.mutate({ id: event.id, data: {
       eventType: event.eventType,
       orderDeadline: event.orderDeadline ?? null,
-      eventDate: new Date(`${changes.startDate}T12:00:00.000Z`).toISOString(),
+      eventDate: changes.startDate,
       itemIds: [],
       ...changes,
     } }, {
@@ -186,8 +186,8 @@ export function Events() {
   }
 
   function saveEdit() {
-    if (!selectedEvent || !editName.trim() || !editStart || !editEnd || editEnd < editStart) return;
-    update(selectedEvent, { name: editName.trim(), startDate: editStart, endDate: editEnd, status: 'planned', plannedQuantities: selectedEvent.plannedQuantities, notes: notes.trim(), orderDeadline: deadline ? new Date(deadline).toISOString() : null }, () => {
+    if (!selectedEvent || !editName.trim() || editStart === '' || editEnd === '' || editEnd < editStart) return;
+    update(selectedEvent, { name: editName.trim(), startDate: editStart, endDate: editEnd, status: 'planned', plannedQuantities: selectedEvent.plannedQuantities, notes: notes.trim(), orderDeadline: deadline === '' ? null : deadline }, () => {
       setEditOpen(false);
       showSnackbar(t('pages.events.eventPlanSaved'), 'success');
     });
@@ -197,8 +197,8 @@ export function Events() {
     if (!selectedEvent) return;
     update(selectedEvent, {
       name: selectedEvent.name,
-      startDate: selectedEvent.startDate.slice(0, 10),
-      endDate: (selectedEvent.endDate ?? selectedEvent.startDate).slice(0, 10),
+      startDate: selectedEvent.startDate,
+      endDate: (selectedEvent.endDate ?? selectedEvent.startDate),
       status: 'completed',
       plannedQuantities: selectedEvent.plannedQuantities,
       notes: selectedEvent.notes ?? '',
@@ -209,7 +209,7 @@ export function Events() {
   }
 
   const isLoading = itemsLoading || reportsLoading;
-  const editInvalid = !editName.trim() || !editStart || !editEnd || editEnd < editStart;
+  const editInvalid = !editName.trim() || editStart === '' || editEnd === '' || editEnd < editStart;
 
   return (
     <Box>
@@ -232,7 +232,7 @@ export function Events() {
         <TextField select label={t('pages.events.selectEvent')} value={selectedEvent?.id ?? ''}
           onChange={(event) => setSelectedEventId(event.target.value)} sx={{ minWidth: { sm: 260 }, maxWidth: '100%' }}>
           {reports?.map((report) => <MenuItem key={report.id} value={report.id}>
-            {report.name || `${report.eventType} ${report.eventDate.slice(0, 4)}`} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}
+            {report.name || `${report.eventType} ${new Date(report.eventDate).getUTCFullYear()}`} · {formatDate(report.startDate)}{report.endDate !== report.startDate ? ` – ${formatDate(report.endDate)}` : ''}
           </MenuItem>)}
         </TextField>
         {canEdit && selectedEvent && <ActionBar align="start" actions={[
@@ -371,7 +371,7 @@ export function Events() {
               onChange={(range) => { setNewDate(range.start); setNewEndDate(range.end); }} />
           </Stack>
         </DialogContent>
-        <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheNewEvent')} variant="contained" disabled={!newName.trim() || !newDate || !newEndDate || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('pages.events.create')}</Button></DialogActions>
+        <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheNewEvent')} variant="contained" disabled={!newName.trim() || newDate === '' || newEndDate === '' || newEndDate < newDate || createReport.isPending} onClick={createEvent}>{t('pages.events.create')}</Button></DialogActions>
       </Dialog>
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('pages.events.editEvent')}: {selectedEvent?.name}</DialogTitle>
@@ -379,7 +379,7 @@ export function Events() {
           <TextField required label={t('pages.events.eventName')} value={editName} onChange={(event) => setEditName(event.target.value)} />
           <DateRangeField required startLabel={t('common.startDate')} endLabel={t('common.endDate')} start={editStart} end={editEnd}
             onChange={(range) => { setEditStart(range.start); setEditEnd(range.end); }} />
-          <TextField label={t('review.orderDeadline')} type="datetime-local" value={deadline ? deadline.slice(0,16) : ''} onChange={(event) => setDeadline(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label={t('review.orderDeadline')} type="datetime-local" value={deadline} onChange={(event) => setDeadline(dateFieldValue(event.target.value))} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label={t('common.notes')} value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} />
         </Stack></DialogContent>
         <DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button><Button title={translate('pages.events.saveTheEventChanges')} variant="contained" disabled={editInvalid || updateReport.isPending} onClick={saveEdit}>{t('common.save')}</Button></DialogActions>

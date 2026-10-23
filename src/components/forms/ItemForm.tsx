@@ -84,8 +84,8 @@ export function ItemForm({
         currentOperatingHours: initialData?.currentOperatingHours,
         tracksRuntime: initialData?.tracksRuntime ?? false,
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
-        batteryReplacementDue: initialData?.batteryReplacementDue ?? '',
-        bestBeforeDate: initialData?.bestBeforeDate ?? '',
+        batteryReplacementDue: initialData?.batteryReplacementDue,
+        bestBeforeDate: initialData?.bestBeforeDate,
     });
     const [isBulkPackage, setIsBulkPackage] = useState((initialData?.containerSize ?? 0) > 0);
     const [hasOpenedContainer, setHasOpenedContainer] = useState(false);
@@ -119,7 +119,7 @@ export function ItemForm({
 
     function handleChange(field: keyof ItemFormData) {
         return (e: React.ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
+            const value = ['batteryReplacementDue', 'bestBeforeDate'].includes(field) ? (e.target.value === '' ? undefined : Number(e.target.value)) : e.target.value;
             setFormData((prev) => ({ ...prev, [field]: value }));
         };
     }

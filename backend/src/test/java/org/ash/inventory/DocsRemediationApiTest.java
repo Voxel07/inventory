@@ -49,7 +49,7 @@ class DocsRemediationApiTest {
 
     @Test void privateInboxTasksRetainTypedAuthorizationAndOfferedItemsCannotBecomeFreelyAvailable(){
         String id=admin().body(Map.of("sku","REV-LOT-"+UUID.randomUUID(),"name","Secret expiring review material","category","Review","value",0,"amount",0,"trackingMode","lot_tracked","privateResource",true)).post("/api/items").then().statusCode(200).extract().path("id");
-        admin().body(Map.of("itemId",id,"lotNumber","SECRET-REV-LOT","expiryDate","2026-10-21","status","available"))
+        admin().body(Map.of("itemId",id,"lotNumber","SECRET-REV-LOT","expiryDate",1792540800000L,"status","available"))
                 .post("/api/inventory-lots").then().statusCode(201);
         actor("review-warehouse","warehouse_crew").get("/api/action-inbox").then().statusCode(200)
                 .body("title",not(hasItem("Secret expiring review material"))).body("detail",not(hasItem("SECRET-REV-LOT")));
@@ -77,11 +77,11 @@ class DocsRemediationApiTest {
 
     @Test void deadlinesApplyToNewOrdersAndCopyCreatesAnIndependentDraft(){
         String id=item(false,"Review deadline");
-        String event=admin().body(Map.of("name","Review event","eventType","DE","startDate","2031-05-01","orderDeadline","2020-01-01T00:00:00Z"))
+        String event=admin().body(Map.of("name","Review event","eventType","DE","startDate",1935360000000L,"orderDeadline",1577836800000L))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         admin().body(Map.of("name","Late order","purpose","Review","eventOccurrenceId",event,"requestedQuantities",Map.of(id,1))).post("/api/orders/general").then().statusCode(409);
         String source=admin().body(Map.of("name","Source","purpose","Review","requestedQuantities",Map.of(id,1))).post("/api/orders/general").then().statusCode(200).extract().path("id");
-        String target=admin().body(Map.of("name","Review open event","eventType","DE","startDate","2032-05-01")).post("/api/events").then().statusCode(200).extract().path("id");
+        String target=admin().body(Map.of("name","Review open event","eventType","DE","startDate",1966982400000L)).post("/api/events").then().statusCode(200).extract().path("id");
         admin().body(Map.of("sourceOrderId",source,"eventId",target,"commandId",UUID.randomUUID().toString())).post("/api/order-copies").then().statusCode(200)
                 .body("id",not(equalTo(source))).body("status",equalTo("draft")).body("requestedQuantities."+id,equalTo(1));
     }

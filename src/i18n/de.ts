@@ -3010,7 +3010,7 @@ export default {
       invalidRepairStatus: 'Ungültiger Reparaturstatus',
       theRepairWriteOffQuantityIsMissing: 'Die Reparatur-/Abschreibungsmenge fehlt',
       theInspectionResultIsMissing: 'Das Prüfergebnis fehlt',
-      occurredAtMustBeAValidISOTimestampWithTimeZone: 'occurredAt muss ein gültiger ISO-Zeitstempel mit Zeitzone in der Vergangenheit sein',
+      occurredAtMustBeEpochMillisecondsInThePast: 'occurredAt muss ein ganzzahliger Epoch-Zeitstempel in Millisekunden in der Vergangenheit sein',
       actionMustComeFirstValue: 'Aktion muss vorher stehen: {{value}}',
       unknownItemValue: 'Unbekannter Artikel: {{value}}',
       invalidRelativeDateValue: 'Ungültiger relativer Termin: {{value}}',

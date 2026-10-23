@@ -71,10 +71,9 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
           if (['repaired', 'written_off'].includes(String(data.status)) && data.amount == null) throw new Error(translate('utils.csvOperations.theRepairWriteOffQuantityIsMissing'));
           if (data.status === 'verified' && (typeof data.verificationResult !== 'string' || !data.verificationResult.trim())) throw new Error(translate('utils.csvOperations.theInspectionResultIsMissing'));
         }
-        if (data.occurredAt != null && (typeof data.occurredAt !== 'string'
-          || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.occurredAt)
-          || !Number.isFinite(Date.parse(data.occurredAt)) || Date.parse(data.occurredAt) > Date.now())) {
-          throw new Error(translate('utils.csvOperations.occurredAtMustBeAValidISOTimestampWithTimeZone'));
+        if (data.occurredAt != null && (typeof data.occurredAt !== 'number' || !Number.isSafeInteger(data.occurredAt)
+          || !Number.isFinite(data.occurredAt) || data.occurredAt > Date.now())) {
+          throw new Error(translate('utils.csvOperations.occurredAtMustBeEpochMillisecondsInThePast'));
         }
       }
       function check(value: unknown): void {

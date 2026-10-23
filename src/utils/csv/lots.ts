@@ -1,3 +1,4 @@
+import { csvDate, isCsvDate } from './eventLogistics';
 import type { CsvItemLot } from '../../types/csvImport';
 import { inputChoice, inputRows, inputText } from '../inputValues';
 
@@ -17,11 +18,10 @@ export function parseItemLots(value: string | undefined): CsvItemLot[] | undefin
     const text = (key: string) => row[key] == null ? undefined : inputText(row[key]).trim();
     const date = (key: string) => {
       const value = text(key);
-      if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value)
-        || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) {
-        throw new Error(`Charge ${lotNumber}: ${key} muss ein gültiges Datum (YYYY-MM-DD) sein`);
+      if (value && (!isCsvDate(value))) {
+        throw new Error(`Charge ${lotNumber}: ${key} muss ein gültiges Datum (DD-MM-YYYY) sein`);
       }
-      return value;
+      return value ? csvDate(value) : undefined;
     };
     return {
       lotNumber, quantity: row.quantity,

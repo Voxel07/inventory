@@ -188,7 +188,7 @@ export function OrderDetailHeader({
           <Typography variant="body2" color="text.secondary">
             <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{order.orderCode}</Box>
             {' · '}{formatDate(order.eventDate)} · {orderItemsCount + orderAssembliesCount} {t('orders.detail.orderDetailHeader.lines')} · {requestedTotal} {t('orders.detail.orderDetailHeader.listUnits')}
-            {order.requestedPickupDate && <> · <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}</Box></>}
+            {order.requestedPickupDate != null && <> · <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}</Box></>}
             {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('common.pickupLocation')}: {pickupLocationLabel}</>}
           </Typography>
         </Box>

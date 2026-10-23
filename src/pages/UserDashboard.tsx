@@ -75,7 +75,7 @@ function PersonalOverview() {
     </Stack>;
 }
 
-type WorkRow = { id: string; title: string; detail: string; due?: string; label: string; urgent: boolean; path?: string; notice: boolean };
+type WorkRow = { id: string; title: string; detail: string; due?: number; label: string; urgent: boolean; path?: string; notice: boolean };
 
 /** Ready pickups, overdue returns, pending reviews and upcoming maintenance, as the server filters them by role. */
 function WorkQueue() {
@@ -91,7 +91,7 @@ function WorkQueue() {
     const [visibleCount, setVisibleCount] = useState(WORK_PAGE);
     const labels: Record<string, string> = { pickup: t('common.pickup'), overdue_return: t('pages.userDashboard.returnOverdue'), acknowledgement: t('pages.userDashboard.reviewReturn'), receipt: t('pages.userDashboard.receipt'), expiring_lot: t('pages.userDashboard.expiringLot'), maintenance: t('enum.reason.maintenance'), damage: t('common.damage'), collection: t('pages.userDashboard.collect'), provider_return: t('pages.userDashboard.returnToProvider') };
     const now = inbox.dataUpdatedAt;
-    const due = (inbox.data ?? []).filter((action) => !action.remindAt || Date.parse(action.remindAt) <= now);
+    const due = (inbox.data ?? []).filter((action) => action.remindAt == null || action.remindAt <= now);
     const rows: WorkRow[] = [
         ...notices.unread.map((notification) => ({
             id: notification.id,

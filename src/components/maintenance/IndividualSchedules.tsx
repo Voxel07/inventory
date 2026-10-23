@@ -1,3 +1,4 @@
+import { calendarDate, dateFieldValue, formatDate } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -8,7 +9,6 @@ import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
-import { formatDate } from '../../utils/dateFormat';
 import { translate, useT } from '../../utils/naming';
 
 import type { Schedule } from '../../types/operations';
@@ -16,17 +16,17 @@ import { isDateSchedule, maintenanceTypeLabel, scheduleIsOverdue } from './maint
 import { MAINTENANCE_TYPES, type MaintenanceType } from '../../types/operations';
 import { oneOf } from '../../utils/operationForm';
 
-function dateInputValue(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function dateInputValue(date: Date): number {
+  return calendarDate(date);
 }
 
-function daysFromToday(days: number): string {
+function daysFromToday(days: number): number {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return dateInputValue(date);
 }
 
-type Draft = { itemId: string; assetId: string; type: MaintenanceType; intervalDays: string; nextDue: string };
+type Draft = { itemId: string; assetId: string; type: MaintenanceType; intervalDays: string; nextDue: number | '' };
 const emptyDraft: Draft = { itemId: '', assetId: '', type: 'dguv_v3', intervalDays: '365', nextDue: daysFromToday(365) };
 
 /**
@@ -50,7 +50,7 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
   const save = useMutation({
     mutationFn: async () => {
       const intervalValue = Number(draft.intervalDays);
-      const nextDueAt = new Date(`${draft.nextDue}T12:00:00`).toISOString();
+      const nextDueAt = Number(draft.nextDue);
       const targets = serialized && !draft.assetId ? activeAssets.map((asset) => asset.id) : [draft.assetId || undefined];
       for (const assetInstanceId of targets) {
         const existing = dateSchedules.find((schedule) => schedule.itemId === draft.itemId
@@ -90,7 +90,7 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
       assetId: schedule.assetInstanceId ?? '',
       type: schedule.maintenanceType,
       intervalDays: String(schedule.intervalValue),
-      nextDue: schedule.nextDueAt ? dateInputValue(new Date(schedule.nextDueAt)) : daysFromToday(Number(schedule.intervalValue) || 0),
+      nextDue: schedule.nextDueAt != null ? dateInputValue(new Date(schedule.nextDueAt)) : daysFromToday(Number(schedule.intervalValue) || 0),
     });
   }
 
@@ -127,7 +127,7 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
             nextDue: /^\d+$/.test(event.target.value) ? daysFromToday(Number(event.target.value)) : current.nextDue }))}
           slotProps={{ htmlInput: { min: 1, step: 1 } }} />
         <TextField fullWidth type="date" label={t('common.nextDueDate')} value={draft.nextDue}
-          onChange={(event) => setDraft((current) => ({ ...current, nextDue: event.target.value }))}
+          onChange={(event) => setDraft((current) => ({ ...current, nextDue: dateFieldValue(event.target.value) }))}
           slotProps={{ inputLabel: { shrink: true } }} />
       </Stack>
       {noDevices && <Alert severity="warning">{t('maintenance.individualSchedules.thisItemHasNoActiveDevices')}</Alert>}

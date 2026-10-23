@@ -19,14 +19,14 @@ class EquipmentApiTest {
                 .post("/api/items").then().statusCode(200).extract().path("id");
     }
     private String event(String item, LocalDate start, int quantity) {
-        return admin().body(Map.of("name", "F19 event", "eventType", "DE", "startDate", start.toString(), "endDate", start.plusDays(1).toString(), "plannedQuantities", Map.of(item, quantity)))
+        return admin().body(Map.of("name", "F19 event", "eventType", "DE", "startDate", org.ash.inventory.platform.api.EpochTime.millis(start), "endDate", org.ash.inventory.platform.api.EpochTime.millis(start.plusDays(1)), "plannedQuantities", Map.of(item, quantity)))
                 .post("/api/events").then().statusCode(200).extract().path("id");
     }
     private String path(String item) { return "/api/items/" + item + "/equipment"; }
     private Map<String, Object> profile(int revision) { return new HashMap<>(Map.of("ownershipType", "private_owner", "ownerName", "Radio owner", "keeperName", "Garage keeper", "keeperContact", "Arrange pickup by phone", "availabilityPolicy", "commitment_required", "revision", revision, "reason", "Owner confirmed private equipment")); }
     private void makePrivate(String item) { admin().body(profile(0)).put(path(item)).then().statusCode(200).body("revision", equalTo(1)); }
     private Map<String, Object> offer(String event, int revision, LocalDate start) {
-        var value = new HashMap<String, Object>(Map.of("quantity", 2, "revision", revision, "availableFrom", start.toString(), "availableUntil", start.plusDays(2).toString(), "pickupDetails", "Collect from keeper", "returnDue", start.plusDays(3).toString(), "returnDetails", "Return to owner", "notes", "Owner agreement recorded"));
+        var value = new HashMap<String, Object>(Map.of("quantity", 2, "revision", revision, "availableFrom", org.ash.inventory.platform.api.EpochTime.millis(start), "availableUntil", org.ash.inventory.platform.api.EpochTime.millis(start.plusDays(2)), "pickupDetails", "Collect from keeper", "returnDue", org.ash.inventory.platform.api.EpochTime.millis(start.plusDays(3)), "returnDetails", "Return to owner", "notes", "Owner agreement recorded"));
         if (event != null) value.put("eventId", event); return value;
     }
     private Map<String, Object> checkout(String item, String event, int quantity) {
@@ -79,7 +79,7 @@ class EquipmentApiTest {
         admin().body(offer).post(path(item) + "/commitments").then().statusCode(409);
         offer.put("quantity", 2); offer.remove("returnDue");
         admin().body(offer).post(path(item) + "/commitments").then().statusCode(400);
-        offer = offer(event, 1, LocalDate.now()); offer.put("availableUntil", LocalDate.now().toString());
+        offer = offer(event, 1, LocalDate.now()); offer.put("availableUntil", org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now()));
         admin().body(offer).post(path(item) + "/commitments").then().statusCode(400);
         admin().body(offer(event, 1, LocalDate.now())).post(path(item) + "/commitments").then().statusCode(200);
         admin().body(offer(null, 2, LocalDate.now().plusDays(3))).post(path(item) + "/commitments").then().statusCode(409);

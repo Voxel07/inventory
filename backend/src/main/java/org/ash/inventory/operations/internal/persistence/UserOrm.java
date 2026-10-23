@@ -32,7 +32,7 @@ public class UserOrm {
         try {
             entityManager.createNativeQuery("""
                     insert into app_users (id, created_at, updated_at, issuer, external_subject, name, email, role, roles, factions, access_revision)
-                    values (:id, now(), now(), :issuer, :subject, :name, cast(:email as varchar), :role, cast(:roles as jsonb), cast(:factions as jsonb), 0)
+                    values (:id, (extract(epoch from now()) * 1000)::bigint, (extract(epoch from now()) * 1000)::bigint, :issuer, :subject, :name, cast(:email as varchar), :role, cast(:roles as jsonb), cast(:factions as jsonb), 0)
                     on conflict (issuer, external_subject) do nothing""")
                     .setParameter("id", UUID.randomUUID()).setParameter("issuer", issuer).setParameter("subject", subject)
                     .setParameter("name", name).setParameter("email", email).setParameter("role", assigned.last().name())

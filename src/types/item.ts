@@ -25,8 +25,8 @@ export interface StorageLocation {
   mapZoom?: number;
   mapOverlay?: string;
   overlayBounds?: MapBounds;
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
 }
 
 export type MapBounds = [[number, number], [number, number]];
@@ -84,7 +84,7 @@ export interface MaintenanceBlock {
   assetCode: string | null;
   status: 'due' | 'unknown';
   intervalType: ScheduleIntervalType;
-  nextDueAt: string | null;
+  nextDueAt: number | null;
   nextDueValue: number | null;
 }
 
@@ -122,19 +122,19 @@ export interface Item {
   containerSize?: number;
   containerCount?: number;
   containerRemainingCount?: number;
-  nextMaintenanceDue?: string;
+  nextMaintenanceDue?: number;
   currentOperatingHours?: number;
   /** The warehouse records the hours run per unit and event when it checks a return. */
   tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;
-  batteryReplacementDue?: string;
-  bestBeforeDate?: string;
+  batteryReplacementDue?: number;
+  bestBeforeDate?: number;
   /** Derived by the server from the out-of-service flag and the item calendar. */
   maintenanceStatus: MaintenanceStatus;
   /** Active schedules the server currently considers blocking for item or unit checkout. */
   blockingMaintenance: MaintenanceBlock[];
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
   /** Null when no stock projection was computed for this response. */
   stock: ItemStock | null;
   expand?: {
@@ -174,8 +174,8 @@ export interface ItemFormData {
   currentOperatingHours?: number;
   tracksRuntime?: boolean;
   fuelConsumptionLitersPer100Km?: number;
-  batteryReplacementDue?: string;
-  bestBeforeDate?: string;
+  batteryReplacementDue?: number;
+  bestBeforeDate?: number;
   /** Creation only: serialized opening units are coded prefix + zero-padded number (server default: SKU- and 1). */
   assetCodePrefix?: string;
   assetStartNumber?: number;
@@ -188,7 +188,7 @@ export interface ItemScheduleInput {
   maintenanceType: MaintenanceType;
   intervalType: ScheduleIntervalType;
   intervalValue: number;
-  nextDueAt?: string | null;
+  nextDueAt?: number | null;
   nextDueValue?: number | null;
   warningWindow?: number | null;
   checkoutBlocking: boolean;
@@ -198,8 +198,8 @@ export type ReturnSubmissionStatus = 'pending' | 'accepted' | 'rejected';
 
 export interface ReturnSubmission {
   id: string;
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
   itemId: string;
   itemName: string;
   quantity: number;
@@ -217,7 +217,7 @@ export interface ReturnSubmission {
   status: ReturnSubmissionStatus;
   acknowledgedById?: string;
   acknowledgedByName?: string;
-  acknowledgedAt?: string;
+  acknowledgedAt?: number;
   acknowledgementNotes?: string;
   /** Open damage reports on the returned asset, or by the returning people for bulk items. */
   reportedDamage: ReturnDamage[];
@@ -240,7 +240,7 @@ export interface ReturnDamage {
   status: string;
   description: string;
   reportedByName?: string;
-  reportedAt: string;
+  reportedAt: number;
 }
 
 export interface ReturnSubmissionFormData {
@@ -259,14 +259,14 @@ export type AssetAvailabilityStatus = 'available' | 'reserved' | 'staged' | 'in_
 
 export interface AssetInstance {
   id: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: number;
+  updatedAt: number;
   itemId: string;
   assetCode: string;
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
-  purchaseDate?: string;
+  purchaseDate?: number;
   purchasePrice?: number;
   replacementValue?: number;
   conditionStatus: AssetConditionStatus;
@@ -274,7 +274,7 @@ export interface AssetInstance {
   /** Derived from the asset's out-of-service flag and its own or its item's calendar. */
   serviceStatus: MaintenanceStatus;
   /** The asset's calendar date; it follows the item calendar until the asset is inspected individually. */
-  nextMaintenanceDue?: string;
+  nextMaintenanceDue?: number;
   operatingHours?: number;
   currentLocationId?: string;
   /** Full location code, e.g. `WH1-E1-R3`. */
@@ -299,13 +299,13 @@ export interface RuntimeEntry {
   assetCode?: string;
   eventOccurrenceId?: string;
   eventName?: string;
-  eventStartDate?: string;
+  eventStartDate?: number;
   orderId?: string;
   orderLabel?: string;
   hours: number;
   readingAfter: number;
   source: 'manual' | 'return_check' | 'maintenance' | 'correction';
-  recordedAt: string;
+  recordedAt: number;
   recordedByName?: string;
   notes?: string;
 }
@@ -323,7 +323,7 @@ export interface AssetInstanceInput {
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
-  purchaseDate?: string;
+  purchaseDate?: number;
   purchasePrice?: number;
   replacementValue?: number;
   conditionStatus?: AssetConditionStatus;

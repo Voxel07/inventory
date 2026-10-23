@@ -1,5 +1,5 @@
 import { type Item, type EventReportStatus } from '../../types';
-import { isCsvDate, parseEventAttendees, parseEventTimeline } from './eventLogistics';
+import { csvDate, isCsvDate, parseEventAttendees, parseEventTimeline } from './eventLogistics';
 import type { EventAttendeeInput, EventTimelineInput } from '../../types/eventLogistics';
 import { knownEventType, type CsvReference } from './reference';
 import { type ParsedEventReportRow, type ParsedAssemblyComponent } from '../../types/csvImport';
@@ -61,9 +61,9 @@ export function parseEventReportsFromCsv(
     if (!eventType) {
       validationStatus = 'error';
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
-    } else if (!isCsvDate(startDate) || !isCsvDate(endDate) || endDate < startDate) {
+    } else if (!isCsvDate(startDate) || !isCsvDate(endDate) || csvDate(endDate) < csvDate(startDate)) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (JJJJ-MM-TT) sein; Enddatum darf nicht vor dem Startdatum liegen';
+      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (TT-MM-JJJJ) sein; Enddatum darf nicht vor dem Startdatum liegen';
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;
@@ -84,9 +84,9 @@ export function parseEventReportsFromCsv(
         eventType: eventType ?? 'LS',
         // An empty Name cell keeps the existing name on re-import instead of blanking it.
         name: getField(raw, ['name', 'eventname']) || undefined,
-        eventDate,
-        startDate,
-        endDate,
+        eventDate: csvDate(eventDate),
+        startDate: csvDate(startDate),
+        endDate: csvDate(endDate),
         status,
         itemIds: Object.keys(used.quantities),
         plannedQuantities: planned.quantities,

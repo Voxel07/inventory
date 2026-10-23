@@ -10,8 +10,8 @@ export type MaintenanceRecord = {
   certificateObjectKey?: string;
   type: MaintenanceType;
   inspectorUserId: string;
-  performedAt: string;
-  nextDueAt?: string;
+  performedAt: number;
+  nextDueAt?: number;
   operatingHours?: number;
   result: MaintenanceResult;
   certificateNumber?: string;

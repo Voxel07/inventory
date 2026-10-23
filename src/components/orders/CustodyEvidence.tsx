@@ -10,8 +10,8 @@ import { formatStatus } from '../../utils/formatters';
 import { orderPath } from '../../services/orderCommands';
 import type { OrderKind } from '../../types/orderCommands';
 
-type Handover = { id: string; handoverCode: string; type: string; collectorName?: string; occurredAt: string; conditionConfirmed: boolean; notes?: string; lines: { id: string; itemName: string; assetCode?: string; quantity: number; conditionNotes?: string }[] };
-type Reconciliation = { id: string; itemName: string; assetCode?: string; outcome: string; quantity: number; notes?: string; createdAt: string };
+type Handover = { id: string; handoverCode: string; type: string; collectorName?: string; occurredAt: number; conditionConfirmed: boolean; notes?: string; lines: { id: string; itemName: string; assetCode?: string; quantity: number; conditionNotes?: string }[] };
+type Reconciliation = { id: string; itemName: string; assetCode?: string; outcome: string; quantity: number; notes?: string; createdAt: number };
 
 export function CustodyEvidence({ orderId, kind }: { orderId: string; kind: OrderKind }) {
   const t = useT();

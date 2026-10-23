@@ -1,10 +1,10 @@
 import type { Translator } from '../../utils/naming';
-import { formatDateTime } from '../../utils/dateFormat';
+import { formatDateTime, formatReportValue } from '../../utils/dateFormat';
 
 export interface ReportPdfOptions {
   title: string;
   definition?: string;
-  generatedAt: string;
+  generatedAt: number;
   stale: boolean;
   /** Human-readable active filters, e.g. "Item: Generator". */
   filters: string[];
@@ -73,7 +73,7 @@ export async function reportPdf({ title, definition, generatedAt, stale, filters
     tableStarted = true;
     header();
     for (const row of rows) {
-      const cells = keys.map((key) => doc.splitTextToSize(String(row[key] ?? '—'), columnWidth - 2) as string[]);
+      const cells = keys.map((key) => doc.splitTextToSize(formatReportValue(key, row[key]), columnWidth - 2) as string[]);
       const lines = Math.max(1, ...cells.map((cell) => cell.length));
       // Keep short rows together; a row taller than a page is split across pages line by line.
       if (y + lines * lineHeight > bottom && lines * lineHeight <= bottom - margin - 12) nextPage();

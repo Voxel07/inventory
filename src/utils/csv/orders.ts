@@ -1,3 +1,4 @@
+import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
 import { type ParsedFactionOrderRow, type ParsedAssemblyComponent, type FactionOrderImportStatus, type ParsedGeneralOrderRow } from '../../types/csvImport';
@@ -83,9 +84,9 @@ export function parseFactionOrdersFromCsv(
     if (!eventType) {
       validationStatus = 'error';
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
-    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+    } else if (!isCsvDate(eventDate)) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum muss im Format JJJJ-MM-TT angegeben werden';
+      statusMessage = 'Eventdatum muss im Format TT-MM-JJJJ angegeben werden';
     } else if (!faction) {
       validationStatus = 'error';
       statusMessage = `Fraktion "${rawFaction}" gehört nicht zum Eventtyp ${eventType}`;
@@ -108,7 +109,7 @@ export function parseFactionOrdersFromCsv(
       data: {
         eventType: eventType ?? 'LS',
         faction: faction ?? rawFaction,
-        eventDate,
+        eventDate: csvDate(eventDate),
         itemIds: Object.keys(requestedQuantities),
         requestedQuantities,
         assemblyIds: [],
@@ -165,7 +166,7 @@ export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items:
     const isConsumable = (component: ParsedAssemblyComponent) => Boolean(lookup.get(component.itemName.toLowerCase().trim())?.isConsumable);
     const returnableRequested = requestedItems.filter((component) => !isConsumable(component));
     if (!name || !purpose) { status = 'error'; statusMessage = 'Name und Zweck fehlen'; }
-    else if (!eventType || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || Number.isNaN(Date.parse(`${eventDate}T00:00:00Z`))) {
+    else if (!eventType || !isCsvDate(eventDate)) {
       status = 'error'; statusMessage = 'Eventtyp oder Eventdatum fehlt';
     } else if (!requestedItems.length) { status = 'error'; statusMessage = 'Bestellte Artikel fehlen'; }
     else if (unmatched.length) { status = 'error'; statusMessage = `Unbekannte Artikel: ${unmatched.map((item) => item.itemName).join(', ')}`; }
@@ -184,7 +185,7 @@ export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items:
       && (returnedTotals[component.itemId] ?? 0) !== requestedQuantities[component.itemId])) {
       status = 'error'; statusMessage = 'Vollständige Rückgabe benötigt Mengen für alle bestellten Artikel';
     }
-    return [{ index: index + 1, rawRow: raw, data: { name, purpose, requestedQuantities }, eventType, eventDate,
+    return [{ index: index + 1, rawRow: raw, data: { name, purpose, requestedQuantities }, eventType, eventDate: csvDate(eventDate),
       requestedItems, returnedItems, targetStatus, status, statusMessage }];
   });
 }

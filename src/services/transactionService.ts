@@ -18,12 +18,12 @@ export const transactionApi = createCreateResourceApi<StockTransaction, Transact
   },
 );
 
-export type TransactionFilters = { itemId?: string; assetInstanceId?: string; userId?: string; eventOccurrenceId?: string; transactionType?: string; startDate?: string; endDate?: string; search?: string };
+export type TransactionFilters = { itemId?: string; assetInstanceId?: string; userId?: string; eventOccurrenceId?: string; transactionType?: string; startDate?: number | ''; endDate?: number | ''; search?: string };
 export const getTransactions = (filters: TransactionFilters | undefined, page: number, size: number) => transactionApi.getPage({
   ...filters,
-  startDate: calendarDayInstant(filters?.startDate),
+  startDate: calendarDayInstant(filters?.startDate === '' ? undefined : filters?.startDate),
   // The API uses an exclusive end bound so even sub-millisecond movements on the last day are included.
-  endDate: calendarDayInstant(filters?.endDate, true),
+  endDate: calendarDayInstant(filters?.endDate === '' ? undefined : filters?.endDate, true),
 }, page, size);
 export const createTransaction = transactionApi.create;
 export async function assemblyCheckout(itemQuantities: Record<string, number>, assemblyName: string, reason: string, notes: string, eventType: TransactionFormData['eventType'], faction: string, eventOccurrenceId: string) {
@@ -32,7 +32,7 @@ export async function assemblyCheckout(itemQuantities: Record<string, number>, a
 }
 
 /** A direct consumable checkout that can still take restocked units (quantities in the item's steps). */
-export interface RestockableCheckout { checkoutId: string; occurredAt: string; person?: string; event?: string; faction?: string; issued: number; restocked: number }
+export interface RestockableCheckout { checkoutId: string; occurredAt: number; person?: string; event?: string; faction?: string; issued: number; restocked: number }
 export const getRestockableCheckouts = (itemId: string) =>
   apiRequest<RestockableCheckout[]>('/api/transactions/restockable', { query: { itemId } });
 /** Unused consumables of one direct checkout back to stock; the command key makes a resend harmless. */

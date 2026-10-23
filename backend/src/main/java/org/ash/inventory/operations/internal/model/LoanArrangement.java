@@ -20,6 +20,6 @@ public class LoanArrangement extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "collected_assets", columnDefinition = "jsonb", nullable = false) public List<String> collectedAssets = new ArrayList<>();
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "returned_assets", columnDefinition = "jsonb", nullable = false) public List<String> returnedAssets = new ArrayList<>();
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "transfer_ids", columnDefinition = "jsonb", nullable = false) public List<String> transferIds = new ArrayList<>();
-    @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false) public List<Map<String, String>> history = new ArrayList<>();
+    @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false) public List<Map<String, Object>> history = new ArrayList<>();
     @Version public long revision;
 }

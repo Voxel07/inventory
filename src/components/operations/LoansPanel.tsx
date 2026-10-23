@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { loanApi } from '../../services/loanService';
 import { useLoans } from '../../hooks/useLoans';
 import type { Loan } from '../../types/loan';
-import { inputChoice, inputText } from '../../utils/inputValues';
+import { inputChoice, inputNumber, inputText } from '../../utils/inputValues';
 import { operationsApi } from '../../services/operationsService';
 import { useOperationList } from '../../hooks/useOperations';
 import { useStockLookups } from '../../hooks/useStockLookups';
@@ -54,6 +54,6 @@ export function LoansPanel() {
     ] : [
       { key: 'transferId', label: t('operations.loansPanel.fullyReceivedTransfer'), required: true, options: (transfers.data ?? []).filter(tr => tr.status === 'received' && (action.type === 'collect' ? tr.sourceLocationId : tr.destinationLocationId) === action.loan.providerLocationId && tr.lines.every(line => line.itemId === action.loan.itemId)).map(tr => ({ value: tr.id, label: tr.transferNumber })) },
       { key: 'notes', label: t('operations.loansPanel.handoverReceiptEvidence'), required: true },
-    ]} onSave={v => action.type === 'extend' ? loanApi.extend(action.loan.id, { availableUntil: inputText(v.availableUntil), returnDue: inputText(v.returnDue), reason: inputText(v.reason), revision: action.loan.revision }) : loanApi.move(action.loan.id, action.type, { transferId: inputText(v.transferId), notes: inputText(v.notes), revision: action.loan.revision })} />}
+    ]} onSave={v => action.type === 'extend' ? loanApi.extend(action.loan.id, { availableUntil: inputNumber(v.availableUntil), returnDue: inputNumber(v.returnDue), reason: inputText(v.reason), revision: action.loan.revision }) : loanApi.move(action.loan.id, action.type, { transferId: inputText(v.transferId), notes: inputText(v.notes), revision: action.loan.revision })} />}
   </Stack>;
 }

@@ -33,7 +33,7 @@ public class LoanService {
     public record Extension(@NotNull LocalDate availableUntil, @NotNull LocalDate returnDue, @NotNull Long revision, @NotBlank @Size(max=255) String reason) {}
     public record View(UUID id, UUID itemId, String item, UUID commitmentId, UUID providerLocationId, String kind, String provider,
             String contact, String terms, int quantity, int collected, int returned, List<String> assetCodes,
-            LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,String>> history) {}
+            LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,Object>> history) {}
     @Transactional public List<View> list(int page, int size) {
         actors.requireWarehouse(); var bounds = org.ash.inventory.platform.api.PageBounds.of(page, size);
         var loans = orm.arrangements(bounds.offset(), bounds.limit());
@@ -94,7 +94,7 @@ public class LoanService {
     }
     private List<String> append(List<String> old, List<String> added) { var result = new ArrayList<>(old); result.addAll(added); return result; }
     private void history(LoanArrangement l, String action, String note) {
-        var entry = Map.of("action", action, "at", Instant.now().toString(), "actor", actors.current().name, "notes", note);
+        Map<String, Object> entry = Map.of("action", action, "at", Instant.now().toEpochMilli(), "actor", actors.current().name, "notes", note);
         var history = new ArrayList<>(l.history); history.add(entry); l.history = history;
         events.record("loan." + action, "loan_arrangement", l.id, actors.current().id, null, Map.of("itemId", l.commitment.item.id.toString(), "entry", entry));
     }

@@ -109,10 +109,10 @@ class PriorityRefactorApiTest {
                     .body("expand.itemIds.id", hasItems(person, group));
         }
         var orderBody = Map.of("eventType", "DE", "faction", "Priority",
-                "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1));
+                "eventDate", 2199225600000L, "requestedAssemblyQuantities", Map.of(assembly, 1));
         // Orders reference existing events and factions; only the admin catalog command creates them.
         actor("priority-owner", "faction_leader").body(orderBody).post("/api/orders/faction").then().statusCode(404);
-        admin().body(Map.of("eventType", "DE", "startDate", "2039-09-10")).post("/api/events").then().statusCode(200);
+        admin().body(Map.of("eventType", "DE", "startDate", 2199225600000L)).post("/api/events").then().statusCode(200);
         admin().body(Map.of("eventType", "DE", "name", "Priority")).post("/api/factions").then().statusCode(200);
         String order = actor("priority-owner", "faction_leader").body(orderBody)
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -122,7 +122,7 @@ class PriorityRefactorApiTest {
         actor("priority-owner", "faction_leader").get("/api/orders/faction/" + order).then().statusCode(404);
         admin().get("/api/orders/faction/" + order).then().statusCode(200).body("expand.assemblyIds.id", hasItem(assembly));
         actor("priority-owner", "faction_leader").body(Map.of("eventType", "DE", "faction", "Priority",
-                "eventDate", "2039-09-10", "requestedAssemblyQuantities", Map.of(assembly, 1)))
+                "eventDate", 2199225600000L, "requestedAssemblyQuantities", Map.of(assembly, 1)))
                 .post("/api/orders/faction").then().statusCode(404);
     }
 
@@ -206,7 +206,7 @@ class PriorityRefactorApiTest {
         for (boolean reconcile : List.of(false, true)) {
             String item = item(location(), 1), asset = asset(item);
             String order = admin().body(Map.of("eventType", "DE", "faction", "Priority " + UUID.randomUUID(),
-                    "eventDate", "2039-09-10", "requestedQuantities", Map.of(item, 1)))
+                    "eventDate", 2199225600000L, "requestedQuantities", Map.of(item, 1)))
                     .post("/api/orders/faction").then().statusCode(200).extract().path("id");
             admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
             admin().body(Map.of("preparedQuantities", Map.of(item, 1), "assetAssignments", Map.of(item, List.of(asset)), "acknowledgeShortages", false))
@@ -227,7 +227,7 @@ class PriorityRefactorApiTest {
         String item = admin().body(Map.of("sku", "BULK-" + UUID.randomUUID(), "name", "Reserved bulk " + UUID.randomUUID(),
                 "category", "Priority", "amount", 3, "storageLocation", location()))
                 .post("/api/items").then().statusCode(200).extract().path("id");
-        String event = admin().body(Map.of("eventType", "DE", "startDate", "2039-09-11", "endDate", "2039-09-12"))
+        String event = admin().body(Map.of("eventType", "DE", "startDate", 2199312000000L, "endDate", 2199398400000L))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         String count = approvedCount(item, 1);
         String order = admin().body(Map.of("name", "Reserved bulk order", "purpose", "Count safety",

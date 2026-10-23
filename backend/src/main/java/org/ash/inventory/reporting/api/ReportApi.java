@@ -52,9 +52,9 @@ public class ReportApi {
         var allowed=Set.of("itemId","eventId","locationId","siteId","category","status","from","to","search");
         if(!allowed.containsAll(filters.keySet()))throw ApiException.badRequest("Unknown report filter");
         try {
-            var from=filters.containsKey("from")?LocalDate.parse(filters.get("from")):null;
-            var to=filters.containsKey("to")?LocalDate.parse(filters.get("to")):null;
+            var from=filters.containsKey("from")?org.ash.inventory.platform.api.EpochTime.date(Long.parseLong(filters.get("from"))):null;
+            var to=filters.containsKey("to")?org.ash.inventory.platform.api.EpochTime.date(Long.parseLong(filters.get("to"))):null;
             if(from!=null && to!=null && from.isAfter(to))throw ApiException.badRequest("Start date must not follow end date");
-        } catch(java.time.format.DateTimeParseException invalid){throw ApiException.badRequest("Use YYYY-MM-DD dates");}
+        } catch(IllegalArgumentException invalid){throw ApiException.badRequest("Use midnight UTC epoch milliseconds for dates");}
     }
 }

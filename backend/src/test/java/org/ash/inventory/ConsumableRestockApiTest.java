@@ -46,7 +46,7 @@ class ConsumableRestockApiTest {
         var orderBody = new HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Fuel crew");
-        orderBody.put("eventDate", "2037-07-01");
+        orderBody.put("eventDate", 2130019200000L);
         orderBody.put("requestedQuantities", Map.of());
         orderBody.put("requestedAssemblyQuantities", Map.of(filled, 2));
         String order = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");

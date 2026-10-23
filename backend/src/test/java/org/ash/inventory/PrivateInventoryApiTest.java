@@ -239,11 +239,11 @@ class PrivateInventoryApiTest {
         tenant("lender").get("/api/items/" + item + "/equipment").then().statusCode(200)
                 .body("availabilityPolicy", equalTo("available")).body("commitments", empty());
 
-        String event = admin().body(Map.of("eventType", "DE", "startDate", "2043-06-01")).post("/api/events")
+        String event = admin().body(Map.of("eventType", "DE", "startDate", 2316729600000L)).post("/api/events")
                 .then().statusCode(200).extract().path("id");
         admin().body(Map.of("eventType", "DE", "name", "Offer test")).post("/api/factions").then().statusCode(200);
         var leader = actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test");
-        String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", "2043-06-01",
+        String order = leader.body(Map.of("eventType", "DE", "faction", "Offer test", "eventDate", 2316729600000L,
                         "requestedQuantities", Map.of(item, 1), "requestedAssemblyQuantities", Map.of()))
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
         for (String target : List.of("submitted", "draft", "submitted"))

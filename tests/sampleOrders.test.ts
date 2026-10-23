@@ -24,7 +24,7 @@ test('every sample order row is valid', () => {
 });
 
 test('sample has finished orders of past events and open ones to prepare', () => {
-  const today = '2026-10-05';
+  const today = Date.UTC(2026, 9, 5);
   const faction = parseFactionOrdersFromCsv(rows, items, reference);
   const general = parseGeneralOrdersFromCsv(rows, items, reference);
   const finished = ['returned', 'closed'];
@@ -37,7 +37,7 @@ test('sample has finished orders of past events and open ones to prepare', () =>
 test('orders past "ready" need an exact pickup point', () => {
   const header = 'Typ;Eventtyp;Eventdatum;Fraktion;Bestellte Artikel;Bestellstatus;Abholpunkt';
   const parse = (status: string, point: string) => parseFactionOrdersFromCsv(
-    parseCsv(`${header}\nBestellung;LS;2025-06-14;TERA;Biertisch: 1;${status};${point}`).rows, items, reference)[0];
+    parseCsv(`${header}\nBestellung;LS;14-06-2025;TERA;Biertisch: 1;${status};${point}`).rows, items, reference)[0];
   expect(parse('Abgeschlossen', '').status).toBe('error');
   expect(parse('Abgeschlossen', 'irgendwo').status).toBe('error');
   expect(parse('Eingereicht', '').status).toBe('valid');
@@ -71,9 +71,9 @@ test('downloadable combined template includes a valid event with logistics', () 
 });
 
 test('event validation rejects malformed logistics and invalid calendar/time ranges', () => {
-  const base = { Typ: 'Event', Eventtyp: 'DE', Eventdatum: '2026-10-17' };
+  const base = { Typ: 'Event', Eventtyp: 'DE', Eventdatum: '17-10-2026' };
   const attendee = { personName: 'Person', roles: [{ role: 'event_crew' }] };
-  const timeline = { category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' };
+  const timeline = { category: 'in_game', title: 'Briefing', startsAt: '17-10-2026 09:00' };
   for (const invalid of [
     { Teilnehmer: '{broken' }, { Teilnehmer: '{}' }, { Teilnehmer: '[null]' },
     { Teilnehmer: JSON.stringify([{ ...attendee, roles: [] }]) },
@@ -84,11 +84,11 @@ test('event validation rejects malformed logistics and invalid calendar/time ran
     { Teilnehmer: JSON.stringify([{ ...attendee, roles: [{ role: 'event_crew' }, { role: 'event_crew' }] }]) },
     { Teilnehmer: JSON.stringify([{ ...attendee, foodStampsIssued: 'false' }]) },
     { Teilnehmer: JSON.stringify([attendee, attendee]) },
-    { Teilnehmer: JSON.stringify([{ ...attendee, arrivesAt: '2026-10-17T10:00', leavesAt: '2026-10-17T09:00' }]) },
-    { Eventdatum: '2026-02-30' }, { Enddatum: '2026-10-16' },
-    { Zeitplan: JSON.stringify([{ ...timeline, startsAt: '2026-10-17T25:00' }]) },
+    { Teilnehmer: JSON.stringify([{ ...attendee, arrivesAt: '17-10-2026 10:00', leavesAt: '17-10-2026 09:00' }]) },
+    { Eventdatum: '30-02-2026' }, { Enddatum: '16-10-2026' },
+    { Zeitplan: JSON.stringify([{ ...timeline, startsAt: '17-10-2026 25:00' }]) },
     { Zeitplan: JSON.stringify([{ ...timeline, startsAt: '2026-10-17T09:00Z' }]) },
-    { Zeitplan: JSON.stringify([{ ...timeline, endsAt: '2026-10-17T08:00' }]) },
+    { Zeitplan: JSON.stringify([{ ...timeline, endsAt: '17-10-2026 08:00' }]) },
     { Zeitplan: JSON.stringify([{ ...timeline, category: 'unknown' }]) },
     { Zeitplan: JSON.stringify([{ ...timeline, status: 'unknown' }]) },
     { Zeitplan: JSON.stringify([timeline, timeline]) },
@@ -97,6 +97,6 @@ test('event validation rejects malformed logistics and invalid calendar/time ran
   }
   const valid = parseEventReportsFromCsv([{ ...base, attendees: JSON.stringify([attendee]), timeline: JSON.stringify([timeline]) }], [], reference)[0];
   expect(valid.status).toBe('valid');
-  expect(valid.timeline[0].startsAt).toBe('2026-10-17T09:00:00');
+  expect(valid.timeline[0].startsAt).toBe(new Date(2026, 9, 17, 9).getTime());
   expect(valid.timeline[0].status).toBe('planned');
 });

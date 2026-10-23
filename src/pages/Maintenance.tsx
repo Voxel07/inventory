@@ -1,4 +1,4 @@
-import { formatDate } from '../utils/dateFormat';
+import { calendarDate, dateFieldValue, formatDate } from '../utils/dateFormat';
 import { Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
@@ -39,17 +39,17 @@ import { IndividualSchedules } from '../components/maintenance/IndividualSchedul
 import { CALENDAR_WARNING_DAYS, isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel } from '../components/maintenance/maintenanceSchedules';
 import { formatStatus } from '../utils/formatters';
 
-function dateInputValue(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function dateInputValue(date: Date): number {
+  return calendarDate(date);
 }
 
-function addMonths(months: number): string {
+function addMonths(months: number): number {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
   return dateInputValue(d);
 }
 
-function addYears(years: number): string {
+function addYears(years: number): number {
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
   return dateInputValue(d);
@@ -88,21 +88,21 @@ export function Maintenance() {
   });
   const [type, setType] = useState<MaintenanceType>('dguv_v3');
   const [result, setResult] = useState<MaintenanceResult>('passed');
-  const [nextDueAt, setNextDueAt] = useState('');
+  const [nextDueAt, setNextDueAt] = useState<number | ''>('');
   const [certificateNumber, setCertificateNumber] = useState('');
   const [operatingHours, setOperatingHours] = useState('');
   const [notes, setNotes] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (performedAt: number) =>
       createMaintenanceRecord({
         itemId,
         assetInstanceId: serialized ? assetId : undefined,
         scheduleId: matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type)?.id,
         type,
         result,
-        performedAt: new Date().toISOString(),
-        nextDueAt: nextDueAt ? new Date(`${nextDueAt}T12:00:00Z`).toISOString() : undefined,
+        performedAt,
+        nextDueAt: nextDueAt === '' ? undefined : nextDueAt,
         certificateNumber: certificateNumber || undefined,
         operatingHours: operatingHours ? Number(operatingHours) : undefined,
         notes: notes || undefined,
@@ -124,7 +124,7 @@ export function Maintenance() {
   warningDate.setDate(warningDate.getDate() + CALENDAR_WARNING_DAYS);
   const today = dateInputValue(new Date());
   const attention = attentionItems.data ?? [];
-  const attentionSchedules = dateSchedules.filter((schedule) => !schedule.nextDueAt || new Date(schedule.nextDueAt) <= warningDate);
+  const attentionSchedules = dateSchedules.filter((schedule) => schedule.nextDueAt == null || new Date(schedule.nextDueAt) <= warningDate);
   const attentionCount = attention.length + attentionSchedules.length;
   const activeSchedule = itemId ? matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type) : undefined;
 
@@ -214,12 +214,12 @@ export function Maintenance() {
                         <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
                         <Chip
                           size="small"
-                          icon={item.nextMaintenanceDue && item.nextMaintenanceDue < today ? <ErrorIcon /> : <WarningAmberIcon />}
-                          color={item.maintenanceStatus === 'in_service' ? 'info' : item.nextMaintenanceDue && item.nextMaintenanceDue < today ? 'error' : 'warning'}
+                          icon={item.nextMaintenanceDue != null && item.nextMaintenanceDue < today ? <ErrorIcon /> : <WarningAmberIcon />}
+                          color={item.maintenanceStatus === 'in_service' ? 'info' : item.nextMaintenanceDue != null && item.nextMaintenanceDue < today ? 'error' : 'warning'}
                           label={
                             item.maintenanceStatus === 'in_service'
                               ? t('pages.maintenance.inService')
-                              : item.nextMaintenanceDue && item.nextMaintenanceDue < today
+                              : item.nextMaintenanceDue != null && item.nextMaintenanceDue < today
                               ? t('enum.value.overdue')
                               : t('enum.value.due_soon')
                           }
@@ -228,7 +228,7 @@ export function Maintenance() {
                       <Typography variant="caption" color="text.secondary">
                         {item.category ? `${item.category} · ` : ''}
                         {item.expand?.storageLocation?.name || item.storageLocation || t('pages.maintenance.noLocation')}
-                        {item.nextMaintenanceDue ? ` · ${t('pages.maintenance.dueOn')}: ${formatDate(item.nextMaintenanceDue)}` : ''}
+                        {item.nextMaintenanceDue != null ? ` · ${t('pages.maintenance.dueOn')}: ${formatDate(item.nextMaintenanceDue)}` : ''}
                       </Typography>
                     </Box>
                     <Button title={translate('pages.maintenance.fillInTheInspectionFormForThisItem')}
@@ -342,7 +342,7 @@ export function Maintenance() {
               type="date"
               label={t('common.nextDueDate')}
               value={nextDueAt}
-              onChange={(event) => setNextDueAt(event.target.value)}
+              onChange={(event) => setNextDueAt(dateFieldValue(event.target.value))}
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
@@ -394,7 +394,7 @@ export function Maintenance() {
             size="large"
             color={result === 'failed' ? 'error' : result === 'advisory' ? 'warning' : 'primary'}
             disabled={!canPerformMaintenance(user) || !itemId || (serialized && !assets.some((asset) => asset.id === assetId)) || mutation.isPending}
-            onClick={() => mutation.mutate()}
+            onClick={() => mutation.mutate(Date.now())}
             sx={{ minHeight: 44 }}
           >
             {result === 'failed'
@@ -444,7 +444,7 @@ export function Maintenance() {
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {t('pages.maintenance.inspectedOn')}: {formatDate(record.performedAt)}
-                        {record.nextDueAt ? ` · ${t('pages.maintenance.nextDue')}: ${formatDate(record.nextDueAt)}` : ''}
+                        {record.nextDueAt != null ? ` · ${t('pages.maintenance.nextDue')}: ${formatDate(record.nextDueAt)}` : ''}
                         {record.certificateNumber ? ` · Nr: ${record.certificateNumber}` : ''}
                         {record.operatingHours ? ` · ${record.operatingHours}h` : ''}
                       </Typography>

@@ -3,6 +3,7 @@ package org.ash.inventory.operations.internal.application;
 import org.ash.inventory.notification.api.NotificationService;
 import org.ash.inventory.operations.internal.model.ActionReminder;
 import org.ash.inventory.platform.api.BusinessTime;
+import org.ash.inventory.platform.api.EpochTime;
 import org.ash.inventory.platform.runtime.WorkerRoles;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,7 +22,7 @@ public class NotificationTaskService {
     @Transactional
     public void reminders() {
         if (!workers.enabled("reminders")) return;
-        var due=em.createNativeQuery("select id from action_reminders where remind_at <= now() order by remind_at for update skip locked limit 100").getResultList();
+        var due=em.createNativeQuery("select id from action_reminders where remind_at <= (extract(epoch from now()) * 1000)::bigint order by remind_at for update skip locked limit 100").getResultList();
         for (var id:due) {
             var reminder=em.find(ActionReminder.class,id);
             if (reminder.user.active) {
@@ -53,13 +54,13 @@ public class NotificationTaskService {
                 and inventory_resource_visible('item',l.item_id,u.id,u.role='admin',true))
               or exists(select 1 from maintenance_schedules s join items i on i.id=s.item_id left join asset_instances a on a.id=s.asset_instance_id
                 where s.active=true and (u.role in ('warehouse_crew','admin') or s.responsible_person_id=u.id)
-                and (s.warning_window is null or s.interval_type='date' and (s.next_due_at is null or s.next_due_at<=now()+s.warning_window*interval '1 day')
+                and (s.warning_window is null or s.interval_type='date' and (s.next_due_at is null or s.next_due_at<=(extract(epoch from now()) * 1000)::bigint+s.warning_window*86400000::bigint)
                   or s.interval_type='operating_hours' and (s.next_due_value is null or coalesce(a.operating_hours,i.current_operating_hours)+s.warning_window>=s.next_due_value)
                   or s.interval_type='usage_count' and (s.next_due_value is null or (select coalesce(sum(sign(t.quantity)),0) from stock_transactions t where t.item_id=s.item_id and t.type='checkout' and (s.asset_instance_id is null or t.asset_instance_id=s.asset_instance_id))+s.warning_window>=s.next_due_value))
                 and inventory_resource_visible('item',s.item_id,u.id,u.role='admin',true))
             ) and u.id > :after order by u.id limit 200
-            """).setParameter("after",after).setParameter("today",org.ash.inventory.platform.api.BusinessTime.today())
-                .setParameter("warning",org.ash.inventory.platform.api.BusinessTime.today().plusDays(30)).getResultList();
+            """).setParameter("after",after).setParameter("today",EpochTime.millis(BusinessTime.today()))
+                .setParameter("warning",EpochTime.millis(BusinessTime.today().plusDays(30))).getResultList();
         for (var id : recipients) notifications.enqueue((UUID)id,null,"action_digest",key,Map.of("path","/","reminder",true));
         if(recipients.size()<200)break;
         after=(UUID)recipients.getLast();

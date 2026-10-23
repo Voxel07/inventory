@@ -125,7 +125,7 @@ class ArchitectureApiCoverageTest {
         reader().queryParam("itemId", id).get("/api/inventory-lots").then().statusCode(200)
                 .body("find { it.id == '" + lot + "' }.status", equalTo("hold"));
         var input = new HashMap<String, Object>(Map.of("itemId", id, "maintenanceType", "battery_test", "intervalType", "date",
-                "intervalValue", 30, "checkoutBlocking", true, "nextDueAt", Instant.now().plus(Duration.ofDays(20)).toString()));
+                "intervalValue", 30, "checkoutBlocking", true, "nextDueAt", Instant.now().plus(Duration.ofDays(20)).toEpochMilli()));
         String schedule = admin().body(input).post("/api/maintenance-schedules").then().statusCode(201).extract().path("id");
         input.put("intervalValue", 60);
         reader().body(input).put("/api/maintenance-schedules/" + schedule).then().statusCode(403);
@@ -196,7 +196,8 @@ class ArchitectureApiCoverageTest {
         actor("member", "faction_leader").body(request).post("/api/member/requests").then().statusCode(200).body("id", equalTo(requestId));
         actor("other-member", "faction_leader").body(request).post("/api/member/requests").then().statusCode(409);
         actor("other-member", "faction_leader").get("/api/member/requests").then().statusCode(200).body("id", not(hasItem(requestId)));
-        String key = "request:" + requestId, remind = Instant.now().plus(Duration.ofDays(1)).toString();
+        String key = "request:" + requestId;
+        long remind = Instant.now().plus(Duration.ofDays(1)).toEpochMilli();
         actor("member", "faction_leader").body(Map.of("key", key, "remindAt", remind)).put("/api/action-inbox/reminder").then().statusCode(204);
         actor("member", "faction_leader").get("/api/action-inbox").then().statusCode(200)
                 .body("find { it.key == '" + key + "' }.remindAt", notNullValue());
@@ -237,7 +238,7 @@ class ArchitectureApiCoverageTest {
     @Test void custodyEvidenceAndNotificationsKeepTheOriginalRecipient() {
         String creator = actor("order-owner", "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id");
         String id = item(location(), 2, "bulk"), faction = "Architecture " + UUID.randomUUID();
-        String order = admin().body(Map.of("eventType", "DE", "faction", faction, "eventDate", "2039-06-12", "requestedQuantities", Map.of(id, 1)))
+        String order = admin().body(Map.of("eventType", "DE", "faction", faction, "eventDate", 2191449600000L, "requestedQuantities", Map.of(id, 1)))
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
         admin().body(Map.of()).post("/api/orders/faction/" + order + "/transitions/submitted").then().statusCode(200);
         admin().body(Map.of("preparedQuantities", Map.of(id, 1))).post("/api/orders/faction/" + order + "/prepare").then().statusCode(200);
@@ -294,8 +295,8 @@ class ArchitectureApiCoverageTest {
         admin().body(Map.of("ownershipType", "external", "ownerName", "Review provider", "availabilityPolicy", "commitment_required",
                 "revision", 0, "reason", "Provider agreement")).put("/api/items/" + id + "/equipment").then().statusCode(200);
         LocalDate today = BusinessTime.today();
-        var commitmentInput = new HashMap<String, Object>(Map.of("quantity", 1, "availableFrom", today.toString(),
-                "availableUntil", today.plusDays(2).toString(), "returnDue", today.plusDays(3).toString(), "pickupDetails", "Provider shelf",
+        var commitmentInput = new HashMap<String, Object>(Map.of("quantity", 1, "availableFrom", org.ash.inventory.platform.api.EpochTime.millis(today),
+                "availableUntil", org.ash.inventory.platform.api.EpochTime.millis(today.plusDays(2)), "returnDue", org.ash.inventory.platform.api.EpochTime.millis(today.plusDays(3)), "pickupDetails", "Provider shelf",
                 "returnDetails", "Same shelf", "notes", "Provider consent", "revision", 1));
         String commitment = admin().body(commitmentInput).post("/api/items/" + id + "/equipment/commitments")
                 .then().statusCode(200).extract().path("commitments[0].id");
@@ -303,10 +304,10 @@ class ArchitectureApiCoverageTest {
                 "provider", "Review provider", "contact", "Warehouse", "terms", "Return to owner"))
                 .post("/api/loans").then().statusCode(200).extract().jsonPath();
         String path = "/api/loans/" + loan.getString("id") + "/extend";
-        var extension = Map.of("revision", loan.getLong("revision"), "availableUntil", today.plusDays(4).toString(),
-                "returnDue", today.plusDays(5).toString(), "reason", "Owner agreed to two more days");
+        var extension = Map.of("revision", loan.getLong("revision"), "availableUntil", org.ash.inventory.platform.api.EpochTime.millis(today.plusDays(4)),
+                "returnDue", org.ash.inventory.platform.api.EpochTime.millis(today.plusDays(5)), "reason", "Owner agreed to two more days");
         reader().body(extension).post(path).then().statusCode(403);
-        admin().body(extension).post(path).then().statusCode(200).body("returnDue", equalTo(today.plusDays(5).toString()))
+        admin().body(extension).post(path).then().statusCode(200).body("returnDue", equalTo(org.ash.inventory.platform.api.EpochTime.millis(today.plusDays(5))))
                 .body("history.action", hasItem("extended"));
         admin().body(extension).post(path).then().statusCode(409);
     }

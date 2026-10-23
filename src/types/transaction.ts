@@ -22,11 +22,11 @@ export interface StockTransaction {
   destinationLocationId?: string;
   reason: string;
   notes: string;
-  timestamp: string;
-  created: string;
-  updated: string;
+  timestamp: number;
+  created: number;
+  updated: number;
   expand?: {
-    eventOccurrence?: { id: string; name: string; eventType: string; startDate: string; endDate: string };
+    eventOccurrence?: { id: string; name: string; eventType: string; startDate: number; endDate: number };
     userId?: ActorSummary;
     assetInstanceId?: AssetInstance;
     order?: {
@@ -44,7 +44,7 @@ export const TRANSACTION_TYPES = ['received', 'adjusted', 'reserved', 'reservati
 export type TransactionType = typeof TRANSACTION_TYPES[number];
 
 export interface TransactionFormData {
-  occurredAt?: string;
+  occurredAt?: number;
   locationId?: string;
   lotId?: string;
   eventOccurrenceId?: string;

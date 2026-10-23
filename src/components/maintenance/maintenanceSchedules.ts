@@ -20,7 +20,7 @@ export function isDateSchedule(schedule: Schedule): boolean {
 }
 
 export function scheduleIsOverdue(schedule: Schedule, now = new Date()): boolean {
-  return Boolean(schedule.nextDueAt && new Date(schedule.nextDueAt) <= now);
+  return Boolean(schedule.nextDueAt != null && new Date(schedule.nextDueAt) <= now);
 }
 
 /** The schedule a recorded inspection advances: the device's own plan first, then the item-wide one. */

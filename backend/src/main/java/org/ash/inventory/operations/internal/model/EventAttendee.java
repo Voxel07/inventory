@@ -10,7 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,8 +21,8 @@ public class EventAttendee extends BaseEntity {
     @JoinColumn(name = "event_id", nullable = false) public EventOccurrence event;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "person_id", nullable = false) public EventPerson person;
-    @Column(name = "arrives_at") public LocalDateTime arrivesAt;
-    @Column(name = "leaves_at") public LocalDateTime leavesAt;
+    @Column(name = "arrives_at") public Instant arrivesAt;
+    @Column(name = "leaves_at") public Instant leavesAt;
     @Column(name = "food_stamps_issued", nullable = false) public boolean foodStampsIssued;
     @Column(length = 2000) public String notes;
     @ElementCollection

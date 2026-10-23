@@ -72,9 +72,9 @@ class MaintenanceStockApiTest {
         admin().body(Map.of("ownershipType", "private_owner", "ownerName", "Equipment owner", "availabilityPolicy", "commitment_required",
                 "revision", 0, "reason", "Owner consent"))
                 .put("/api/items/" + item + "/equipment").then().statusCode(200);
-        admin().body(Map.of("quantity", 2, "assetIds", assets, "availableFrom", java.time.LocalDate.now().toString(),
-                "availableUntil", java.time.LocalDate.now().plusDays(1).toString(), "pickupDetails", "Warehouse", "notes", "Owner consent", "revision", 1,
-                "returnDue", java.time.LocalDate.now().plusDays(1).toString(), "returnDetails", "Return to owner"))
+        admin().body(Map.of("quantity", 2, "assetIds", assets, "availableFrom", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now()),
+                "availableUntil", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now().plusDays(1)), "pickupDetails", "Warehouse", "notes", "Owner consent", "revision", 1,
+                "returnDue", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now().plusDays(1)), "returnDetails", "Return to owner"))
                 .post("/api/items/" + item + "/equipment/commitments").then().statusCode(200);
         QuarkusTransaction.requiringNew().run(() -> {
             em.find(Item.class, UUID.fromString(item)).currentOperatingHours = new BigDecimal("12");
@@ -143,9 +143,9 @@ class MaintenanceStockApiTest {
         admin().body(Map.of("ownershipType", "external", "ownerName", "Provider", "availabilityPolicy", "commitment_required",
                 "revision", 0, "reason", "Provider consent"))
                 .put("/api/items/" + item + "/equipment").then().statusCode(200);
-        String commitment = admin().body(Map.of("quantity", 1, "assetIds", assets, "availableFrom", java.time.LocalDate.now().toString(),
-                "availableUntil", java.time.LocalDate.now().plusDays(1).toString(), "pickupDetails", "Provider depot", "notes", "Loan consent", "revision", 1,
-                "returnDue", java.time.LocalDate.now().plusDays(1).toString(), "returnDetails", "Return to provider"))
+        String commitment = admin().body(Map.of("quantity", 1, "assetIds", assets, "availableFrom", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now()),
+                "availableUntil", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now().plusDays(1)), "pickupDetails", "Provider depot", "notes", "Loan consent", "revision", 1,
+                "returnDue", org.ash.inventory.platform.api.EpochTime.millis(java.time.LocalDate.now().plusDays(1)), "returnDetails", "Return to provider"))
                 .post("/api/items/" + item + "/equipment/commitments").then().statusCode(200).extract().path("commitments[0].id");
         var loan = admin().body(Map.of("commitmentId", commitment, "providerLocationId", provider, "kind", "borrow",
                 "provider", "Provider", "contact", "Warehouse", "terms", "Return the exact asset"))

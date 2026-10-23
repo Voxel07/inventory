@@ -19,7 +19,7 @@ export interface OrderHistoryEntry {
   action: OrderHistoryAction;
   userId: string;
   userName: string;
-  timestamp: string;
+  timestamp: number;
   deltaSnapshot?: {
     items?: Record<string, number>;
     assemblies?: Record<string, number>;

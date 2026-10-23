@@ -10,7 +10,7 @@ public final class InventoryMcpDtos {
     public record StockPositionDto(UUID id, String locationId, String locationName,
             int quantityOnHand, int quantityReserved, int availableQuantity,
             int quantityDamaged, int quantityQuarantined, int quantityInTransit,
-            String lotNumber, String expiryDate) {}
+            String lotNumber, Long expiryDate) {}
 
     public record LowStockAlertDto(UUID itemId, String sku, String name,
             int currentOnHand, int currentAvailable, int minStock, int deficit, String primaryLocation) {}
@@ -23,7 +23,7 @@ public final class InventoryMcpDtos {
     public record ResourcePage<T>(List<T> rows, int page, int limit, boolean hasMore, Integer nextPage, String continuationTool) {}
 
     public record MaintenanceAlertDto(String type, UUID entityId, String codeOrSku,
-            String name, String issue, String status, String dueDate) {}
+            String name, String issue, String status, Long dueDate) {}
 
     public record DeleteResultDto(boolean success, String entityType, UUID id, String message) {}
 }

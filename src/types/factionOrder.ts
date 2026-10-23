@@ -26,9 +26,9 @@ export interface FactionOrder {
   factionKey: string;
   eventType: EventType;
   faction: string;
-  eventDate: string;
+  eventDate: number;
   eventOccurrenceId: string;
-  requestedPickupDate?: string;
+  requestedPickupDate?: number;
   pickupLocation?: string;
   pickupLatitude?: number;
   pickupLongitude?: number;
@@ -55,8 +55,8 @@ export interface FactionOrder {
   pickedUpBy?: string;
   returnedBy?: string;
   history: OrderHistoryEntry[];
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
   expand?: {
     itemIds?: Item[];
     assemblyIds?: Assembly[];
@@ -75,9 +75,9 @@ export type FactionOrderSummary = Omit<FactionOrder, 'history' | 'assetAssignmen
 export interface FactionOrderFormData {
   eventType: EventType;
   faction: string;
-  eventDate: string;
+  eventDate: number;
   eventOccurrenceId?: string;
-  requestedPickupDate?: string;
+  requestedPickupDate?: number;
   pickupLocation?: string;
   pickupLatitude?: number;
   pickupLongitude?: number;

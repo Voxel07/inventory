@@ -36,7 +36,7 @@ class InventoryApiTest {
                 "category", "Test", "amount", 3, "value", 0, "privateResource", false))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String event = request().body(Map.of("eventType", "DE", "name", "ASH takeout event",
-                "startDate", LocalDate.now(java.time.ZoneId.of("Europe/Berlin")).toString(), "status", "planned"))
+                "startDate", org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now(java.time.ZoneId.of("Europe/Berlin"))), "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         var checkout = Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 1,
                 "reason", "ASH crew equipment", "eventType", "DE", "faction", "ASH", "eventOccurrenceId", event);
@@ -102,8 +102,8 @@ class InventoryApiTest {
         var event = new java.util.HashMap<String, Object>();
         event.put("eventType", "LS");
         event.put("name", "LightSim history test");
-        event.put("startDate", "2026-06-13");
-        event.put("endDate", "2026-06-13");
+        event.put("startDate", 1781308800000L);
+        event.put("endDate", 1781308800000L);
         event.put("status", "planned");
         event.put("plannedQuantities", Map.of(usedItemId, 8, plannedOnlyItemId, 3));
         event.put("usedQuantities", Map.of(usedItemId, 6, plannedOnlyItemId, 0));
@@ -153,7 +153,7 @@ class InventoryApiTest {
     @Test
     void unlinkedEventCanBeDeleted() {
         String eventId = request().body(Map.of("eventType", "ASD", "name", "Temporary event",
-                        "startDate", "2039-03-01", "endDate", "2039-03-02", "status", "planned"))
+                        "startDate", 2182550400000L, "endDate", 2182636800000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         request().delete("/api/events/" + eventId).then().statusCode(204);
         request().get("/api/events/" + eventId).then().statusCode(404);
@@ -188,7 +188,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Serialized packing faction");
-        orderBody.put("eventDate", "2037-09-10");
+        orderBody.put("eventDate", 2136153600000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 1));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -348,7 +348,7 @@ class InventoryApiTest {
                         "maintenanceType", "generator_service",
                         "intervalType", "date",
                         "intervalValue", 30,
-                        "nextDueAt", "2020-01-01T00:00:00Z",
+                        "nextDueAt", 1577836800000L,
                         "checkoutBlocking", true))
                 .post("/api/maintenance-schedules").then().statusCode(201)
                 .body("assetInstanceId", equalTo(assetId)).extract().path("id");
@@ -365,15 +365,15 @@ class InventoryApiTest {
                         "assetInstanceId", assetId,
                         "scheduleId", scheduleId,
                         "type", "generator_service",
-                        "performedAt", "2030-01-01T00:00:00Z",
+                        "performedAt", 1893456000000L,
                         "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200)
-                .body("nextDueAt", equalTo("2030-01-31T00:00:00Z"));
+                .body("nextDueAt", equalTo(1896048000000L));
 
         request().queryParam("itemId", itemId).get("/api/maintenance").then().statusCode(200)
                 .body("size()", equalTo(1)).body("[0].type", equalTo("generator_service"))
                 .body("[0].result", equalTo("passed"))
-                .body("[0].nextDueAt", equalTo("2030-01-31T00:00:00Z"));
+                .body("[0].nextDueAt", equalTo(1896048000000L));
 
         request().body(Map.of(
                         "itemId", itemId, "assetInstanceId", assetId,
@@ -393,14 +393,14 @@ class InventoryApiTest {
                 .post("/api/vendors").then().statusCode(201).extract().path("id");
         String purchaseOrderId = request().body(Map.of(
                         "vendorId", vendorId,
-                        "orderDate", "2026-09-12",
+                        "orderDate", 1789171200000L,
                         "lines", java.util.List.of(Map.of(
                                 "itemId", itemId, "orderedQuantity", 5, "unitPriceCents", 125))))
                 .post("/api/purchase-orders").then().statusCode(201)
                 .body("status", equalTo("draft"))
                 .body("vendorName", equalTo("Receipt Vendor 001"))
                 .body("createdByName", equalTo("Test Admin"))
-                .body("orderDate", equalTo("2026-09-12"))
+                .body("orderDate", equalTo(1789171200000L))
                 .body("lines[0].unitPriceCents", equalTo(125)).extract().path("id");
         request().get("/api/items/" + itemId).then().statusCode(200)
                 .body("stock.ordered", equalTo(0)).body("stock.available", equalTo(0));
@@ -687,7 +687,7 @@ class InventoryApiTest {
                 .header("X-Actor-Id", "canonical-event-admin")
                 .header("X-Actor-Role", "admin")
                 .body(Map.of("eventType", "DE", "name", "Canonical role event",
-                        "startDate", "2038-09-10", "endDate", "2038-09-11", "status", "planned"))
+                        "startDate", 2167689600000L, "endDate", 2167776000000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200);
 
         // Event planning is the inventory admin's; warehouse workers and removed role names may not.
@@ -695,7 +695,7 @@ class InventoryApiTest {
                 .header("X-Actor-Id", "canonical-event-warehouse")
                 .header("X-Actor-Role", "warehouse_crew")
                 .body(Map.of("eventType", "DE", "name", "Warehouse event",
-                        "startDate", "2038-09-12", "endDate", "2038-09-13", "status", "planned"))
+                        "startDate", 2167862400000L, "endDate", 2167948800000L, "status", "planned"))
                 .post("/api/events").then().statusCode(403);
         for (String removed : java.util.List.of("marshal", "event_planner", "maintenance_crew"))
             given().contentType(ContentType.JSON)
@@ -719,7 +719,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Reopen edit faction");
-        orderBody.put("eventDate", "2037-05-10");
+        orderBody.put("eventDate", 2125526400000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -748,7 +748,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Consumable pickup faction");
-        orderBody.put("eventDate", "2037-06-10");
+        orderBody.put("eventDate", 2128204800000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 4));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -791,7 +791,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Mixed pickup faction");
-        orderBody.put("eventDate", "2037-06-11");
+        orderBody.put("eventDate", 2128291200000L);
         orderBody.put("requestedQuantities", Map.of(consumable, 3, returnable, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -831,7 +831,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Repair stock faction");
-        orderBody.put("eventDate", "2037-07-10");
+        orderBody.put("eventDate", 2130796800000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -848,7 +848,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Missing delta faction");
-        orderBody.put("eventDate", "2037-08-10");
+        orderBody.put("eventDate", 2133475200000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -885,7 +885,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "LS");
         orderBody.put("faction", "Sync rollback faction");
-        orderBody.put("eventDate", "2036-06-01");
+        orderBody.put("eventDate", 2095891200000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -915,7 +915,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Reservation alpha");
-        orderBody.put("eventDate", "2035-05-10");
+        orderBody.put("eventDate", 2062368000000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 2));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String first = request().body(orderBody).post("/api/orders/faction").then().statusCode(200).extract().path("id");
@@ -1068,7 +1068,7 @@ class InventoryApiTest {
     void directCustodyKeepsPendingReturnsAndOccurrenceUntilAcknowledged() {
         String location = TestLocations.section(() -> request(), Map.of("name", "Custody source" ));
         String item = request().body(Map.of("sku", "CUSTODY-NEW-01", "name", "Custody balances", "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
-        String event = request().body(Map.of("eventType", "DE", "startDate", "2039-01-01", "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
+        String event = request().body(Map.of("eventType", "DE", "startDate", 2177452800000L, "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
         String person = factionLeaderRequest().get("/api/auth/me").then().statusCode(200).extract().path("id");
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 3, "eventType", "DE", "faction", "KGG", "eventOccurrenceId", event, "userId", person)).post("/api/transactions").then().statusCode(200);
         request().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200).body("[0].quantityOnHand", equalTo(2));
@@ -1086,12 +1086,12 @@ class InventoryApiTest {
     void lotCheckoutUsesFefoAndBlocksHeldStock() {
         String location = TestLocations.section(() -> request(), Map.of("name", "FEFO source"));
         String item = request().body(Map.of("sku", "FEFO-NEW-01", "name", "FEFO stock", "category", "Test", "amount", 0, "trackingMode", "lot_tracked", "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
-        String early = request().body(Map.of("itemId", item, "lotNumber", "EARLY", "expiryDate", "2040-01-01")).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
-        String late = request().body(Map.of("itemId", item, "lotNumber", "LATE", "expiryDate", "2041-01-01")).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
+        String early = request().body(Map.of("itemId", item, "lotNumber", "EARLY", "expiryDate", 2208988800000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
+        String late = request().body(Map.of("itemId", item, "lotNumber", "LATE", "expiryDate", 2240611200000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
         for (var lot : java.util.List.of(late, early)) request().body(Map.of("itemId", item, "transactionType", "added", "quantityChanged", 3, "lotId", lot, "locationId", location)).post("/api/transactions").then().statusCode(200);
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 2, "eventType", "DE", "faction", "KGG")).post("/api/transactions").then().statusCode(200);
         request().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200).body("find { it.lotId == '" + early + "' }.quantityOnHand", equalTo(1)).body("find { it.lotId == '" + late + "' }.quantityOnHand", equalTo(3));
-        request().body(Map.of("lotNumber", "LATE", "expiryDate", "2041-01-01", "status", "hold")).put("/api/inventory-lots/" + late).then().statusCode(200);
+        request().body(Map.of("lotNumber", "LATE", "expiryDate", 2240611200000L, "status", "hold")).put("/api/inventory-lots/" + late).then().statusCode(200);
         request().get("/api/items/" + item).then().statusCode(200).body("stock.available", equalTo(1));
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 2, "eventType", "DE", "faction", "KGG")).post("/api/transactions").then().statusCode(409);
     }
@@ -1100,7 +1100,7 @@ class InventoryApiTest {
     void generalReservationsProtectSourcesAndMissingRemainsInCustody() {
         String location = TestLocations.section(() -> request(), Map.of("name", "Reserved source"));
         String item = request().body(Map.of("sku", "GENERAL-BULK-NEW", "name", "Reserved bulk " + UUID.randomUUID(), "category", "Test", "amount", 5, "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
-        String event = request().body(Map.of("eventType", "DE", "startDate", "2039-02-01", "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
+        String event = request().body(Map.of("eventType", "DE", "startDate", 2180131200000L, "status", "planned")).post("/api/events").then().statusCode(200).extract().path("id");
         String order = request().body(Map.of("name", "Reserved", "purpose", "Test reservation", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 3))).post("/api/orders/general").then().statusCode(200).extract().path("id");
         request().get("/api/orders/general/" + order).then().statusCode(200).body("kind", equalTo("general"));
         request().get("/api/orders/faction/" + order).then().statusCode(404);
@@ -1127,14 +1127,14 @@ class InventoryApiTest {
     @Test
     void planningUsesPeakConcurrentDemandAndDatedSupplyWithoutDoubleCountingReservations() {
         String item = request().body(Map.of("sku", "PLANNER-NEW-01", "name", "Reusable planning stock", "category", "Test", "amount", 5, "minStock", 1)).post("/api/items").then().statusCode(200).extract().path("id");
-        String event = request().body(Map.of("eventType", "DE", "startDate", "2045-01-01", "endDate", "2045-01-05", "status", "planned", "plannedQuantities", Map.of(item, 4))).post("/api/events").then().statusCode(200).extract().path("id");
-        request().body(Map.of("eventType", "DE", "startDate", "2045-01-02", "endDate", "2045-01-04", "status", "planned", "plannedQuantities", Map.of(item, 4))).post("/api/events").then().statusCode(200);
-        request().body(Map.of("eventType", "DE", "startDate", "2045-01-20", "status", "planned", "plannedQuantities", Map.of(item, 30))).post("/api/events").then().statusCode(200);
+        String event = request().body(Map.of("eventType", "DE", "startDate", 2366841600000L, "endDate", 2367187200000L, "status", "planned", "plannedQuantities", Map.of(item, 4))).post("/api/events").then().statusCode(200).extract().path("id");
+        request().body(Map.of("eventType", "DE", "startDate", 2366928000000L, "endDate", 2367100800000L, "status", "planned", "plannedQuantities", Map.of(item, 4))).post("/api/events").then().statusCode(200);
+        request().body(Map.of("eventType", "DE", "startDate", 2368483200000L, "status", "planned", "plannedQuantities", Map.of(item, 30))).post("/api/events").then().statusCode(200);
         String order = request().body(Map.of("name", "Planning reservation", "purpose", "No double counting", "eventOccurrenceId", event, "requestedQuantities", Map.of(item, 4))).post("/api/orders/general").then().statusCode(200).extract().path("id");
         request().body(Map.of()).post("/api/orders/general/" + order + "/transitions/submitted").then().statusCode(200);
         request().body(Map.of("preparedQuantities", Map.of(item, 4))).post("/api/orders/general/" + order + "/prepare").then().statusCode(200);
         String vendor = request().body(Map.of("name", "Planning supplier")).post("/api/vendors").then().statusCode(201).extract().path("id");
-        String purchase = request().body(Map.of("vendorId", vendor, "orderDate", "2044-12-01", "expectedDeliveryDate", "2045-01-10", "lines", java.util.List.of(Map.of("itemId", item, "orderedQuantity", 4, "unitPriceCents", 100)))).post("/api/purchase-orders").then().statusCode(201).extract().path("id");
+        String purchase = request().body(Map.of("vendorId", vendor, "orderDate", 2364163200000L, "expectedDeliveryDate", 2367619200000L, "lines", java.util.List.of(Map.of("itemId", item, "orderedQuantity", 4, "unitPriceCents", 100)))).post("/api/purchase-orders").then().statusCode(201).extract().path("id");
         request().body(Map.of("status", "ordered")).post("/api/purchase-orders/" + purchase + "/transitions").then().statusCode(200);
         String row = "find { it.itemId == '" + item + "' }";
         request().queryParam("eventOccurrenceId", event).get("/api/procurement/deficits").then().statusCode(200)
@@ -1234,17 +1234,17 @@ class InventoryApiTest {
         var assignedOrder = Map.of(
                 "eventType", "DE",
                 "faction", "Allowed API faction",
-                "eventDate", "2034-05-06",
+                "eventDate", 2030486400000L,
                 "requestedQuantities", Map.of(itemId, 1),
                 "requestedAssemblyQuantities", Map.of());
         var unassignedOrder = Map.of(
                 "eventType", "DE",
                 "faction", "Hidden API faction",
-                "eventDate", "2034-05-06",
+                "eventDate", 2030486400000L,
                 "requestedQuantities", Map.of(itemId, 1),
                 "requestedAssemblyQuantities", Map.of());
         // Orders reference existing events and factions; the admin catalog command creates them.
-        request().body(Map.of("eventType", "DE", "startDate", "2034-05-06")).post("/api/events").then().statusCode(200);
+        request().body(Map.of("eventType", "DE", "startDate", 2030486400000L)).post("/api/events").then().statusCode(200);
         request().body(Map.of("eventType", "DE", "name", "Allowed API faction", "slug", "allowed-api-faction")).post("/api/factions").then().statusCode(200);
         request().body(Map.of("eventType", "DE", "name", "Hidden API faction")).post("/api/factions").then().statusCode(200);
 
@@ -1301,7 +1301,7 @@ class InventoryApiTest {
                 .body(Map.of(
                         "sku", "TEST-001", "name", "Test Generator", "category", "Infrastructure",
                         "amount", 2, "minStock", 1, "value", 250, "storageLocation", locationId,
-                        "maintenanceSchedules", java.util.List.of(Map.of("maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",LocalDate.now().minusDays(1)+"T00:00:00Z","checkoutBlocking",true))))
+                        "maintenanceSchedules", java.util.List.of(Map.of("maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().minusDays(1)),"checkoutBlocking",true))))
                 .post("/api/items")
                 .then().statusCode(200).body("name", equalTo("Test Generator"))
                 .extract().path("id");
@@ -1365,7 +1365,7 @@ class InventoryApiTest {
         payload.put("kind", "faction");
         payload.put("eventType", "DE");
         payload.put("faction", "Offline order test faction");
-        payload.put("eventDate", "2033-05-06");
+        payload.put("eventDate", 1998950400000L);
         payload.put("requestedQuantities", Map.of(itemId, 2));
         payload.put("requestedAssemblyQuantities", Map.of());
         String idempotencyKey = java.util.UUID.randomUUID().toString();
@@ -1399,15 +1399,15 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Late pickup test faction");
-        orderBody.put("eventDate", "2032-04-05");
-        orderBody.put("requestedPickupDate", "2032-04-03");
+        orderBody.put("eventDate", 1964736000000L);
+        orderBody.put("requestedPickupDate", 1964563200000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 1));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String orderId = request().body(orderBody)
                 .post("/api/orders/faction")
                 .then().statusCode(200)
                 .body("status", equalTo("draft"))
-                .body("requestedPickupDate", equalTo("2032-04-03"))
+                .body("requestedPickupDate", equalTo(1964563200000L))
                 .extract().path("id");
 
         request().body(Map.of())
@@ -1435,7 +1435,7 @@ class InventoryApiTest {
         var orderBody = new java.util.HashMap<String, Object>();
         orderBody.put("eventType", "DE");
         orderBody.put("faction", "Procurement test faction");
-        orderBody.put("eventDate", "2031-04-05");
+        orderBody.put("eventDate", 1933113600000L);
         orderBody.put("requestedQuantities", Map.of(itemId, 15));
         orderBody.put("requestedAssemblyQuantities", Map.of());
         String eventId = request().body(orderBody)
@@ -1526,7 +1526,7 @@ class InventoryApiTest {
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String eventId = request().body(Map.of(
                         "eventType", "RACE", "name", "Order code race event",
-                        "startDate", "2041-05-03", "endDate", "2041-05-03", "status", "planned"))
+                        "startDate", 2251152000000L, "endDate", 2251152000000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         String factionId = request().body(Map.of("eventType", "RACE", "name", "Order code race faction"))
                 .post("/api/factions").then().statusCode(200).extract().path("id");
@@ -1646,38 +1646,38 @@ class InventoryApiTest {
                         "category", "Test", "amount", 200, "value", 0))
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String eventId = request().body(Map.of("eventType", "TNO", "name", "TNO 2038",
-                        "startDate", "2038-07-12", "endDate", "2038-07-14", "status", "planned"))
+                        "startDate", 2162505600000L, "endDate", 2162678400000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200)
-                .body("startDate", equalTo("2038-07-12"))
-                .body("endDate", equalTo("2038-07-14"))
+                .body("startDate", equalTo(2162505600000L))
+                .body("endDate", equalTo(2162678400000L))
                 .extract().path("id");
         request().body(Map.of("eventType", "TNO", "name", "TNO summer 2038",
-                        "startDate", "2038-07-12", "endDate", "2038-07-15", "status", "planned"))
+                        "startDate", 2162505600000L, "endDate", 2162764800000L, "status", "planned"))
                 .patch("/api/events/" + eventId).then().statusCode(200)
                 .body("name", equalTo("TNO summer 2038"))
-                .body("endDate", equalTo("2038-07-15"));
+                .body("endDate", equalTo(2162764800000L));
         String firstOrderId = null;
         for (String faction : new String[] {"Freiheit", "Stalker"}) {
             String orderId = request().body(Map.of("eventOccurrenceId", eventId, "eventType", "TNO",
-                            "faction", faction, "eventDate", "2038-01-01",
+                            "faction", faction, "eventDate", 2145916800000L,
                             "requestedQuantities", Map.of(itemId, 100),
                             "requestedAssemblyQuantities", Map.of()))
                     .post("/api/orders/faction").then().statusCode(200)
                     .body("eventOccurrenceId", equalTo(eventId))
-                    .body("eventDate", equalTo("2038-07-12"))
+                    .body("eventDate", equalTo(2162505600000L))
                     .body("faction", equalTo(faction)).extract().path("id");
             if (firstOrderId == null) firstOrderId = orderId;
         }
         String nextEventId = request().body(Map.of("eventType", "TNO", "name", "TNO 2039",
-                        "startDate", "2039-07-10", "endDate", "2039-07-12", "status", "planned"))
+                        "startDate", 2193868800000L, "endDate", 2194041600000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         request().body(Map.of("eventOccurrenceId", nextEventId, "eventType", "TNO",
-                        "faction", "Stalker", "eventDate", "2038-01-01",
+                        "faction", "Stalker", "eventDate", 2145916800000L,
                         "requestedQuantities", Map.of(itemId, 100),
                         "requestedAssemblyQuantities", Map.of()))
                 .patch("/api/orders/faction/" + firstOrderId).then().statusCode(200)
                 .body("eventOccurrenceId", equalTo(nextEventId))
-                .body("eventDate", equalTo("2039-07-10"))
+                .body("eventDate", equalTo(2193868800000L))
                 .body("faction", equalTo("Stalker"));
     }
 
@@ -1724,7 +1724,7 @@ class InventoryApiTest {
                 .post("/api/items").then().statusCode(200).extract().path("id");
         String assetId = request().get("/api/items/" + itemId + "/assets").then().statusCode(200)
                 .extract().path("[0].id");
-        String eventId = request().body(Map.of("eventType", "DE", "startDate", "2037-04-10", "status", "planned"))
+        String eventId = request().body(Map.of("eventType", "DE", "startDate", 2122934400000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
         String orderId = request().body(Map.of("name", "Stage", "purpose", "Light the stage",
                         "eventOccurrenceId", eventId, "requestedQuantities", Map.of(itemId, 1)))
@@ -1767,13 +1767,13 @@ class InventoryApiTest {
         item.put("privateResource", true);
         item.put("returnLocation", returnLocationId);
         item.put("fuelConsumptionLitersPer100Km", 8.5);
-        item.put("batteryReplacementDue", "2027-03-01");
+        item.put("batteryReplacementDue", 1803859200000L);
         String itemId = request().body(item).post("/api/items").then().statusCode(200)
                 .body("description", equalTo("Vehicle details visible to its assigned crew member."))
                 .body("access.privateResource", equalTo(true))
                 .body("returnLocation", equalTo(returnLocationId))
                 .body("fuelConsumptionLitersPer100Km", equalTo(8.5f))
-                .body("batteryReplacementDue", equalTo("2027-03-01"))
+                .body("batteryReplacementDue", equalTo(1803859200000L))
                 .extract().path("id");
 
         request().body(Map.of("revision", 0, "grants", List.of(Map.of("userId", assigneeId, "canEdit", false)), "reason", "Crew vehicle"))

@@ -89,7 +89,7 @@ public class OutboxDispatcher {
                         payload.put("eventId", event.eventId().toString());
                         payload.put("aggregateType", event.aggregateType());
                         payload.put("aggregateId", event.aggregateId().toString());
-                        payload.put("occurredAt", event.occurredAt().toString());
+                        payload.put("occurredAt", event.occurredAt().toEpochMilli());
                         if (event.actorId() != null) payload.put("actorId", event.actorId().toString());
                         if (event.idempotencyKey() != null) payload.put("idempotencyKey", event.idempotencyKey().toString());
                         broadcaster.broadcast(event.type(), payload);

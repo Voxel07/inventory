@@ -16,7 +16,7 @@ export function getFactionOrders(filters: FactionOrderFilters | undefined, page:
 }
 const orderDetailKey = (id: string) => `faction-orders:detail:${encodeURIComponent(id)}`;
 
-export async function getPreviousFactionOrder(eventType: string, faction: string, before: string, excludeId?: string): Promise<FactionOrder | null> {
+export async function getPreviousFactionOrder(eventType: string, faction: string, before: number, excludeId?: string): Promise<FactionOrder | null> {
   return await apiRequest<FactionOrder | null>('/api/orders/faction/previous', { query: { eventType, faction, before, excludeId } }) ?? null;
 }
 

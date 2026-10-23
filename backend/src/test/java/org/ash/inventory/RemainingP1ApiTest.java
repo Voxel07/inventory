@@ -63,13 +63,13 @@ class RemainingP1ApiTest {
 
     @Test void reportsRefreshOnOpenAndNeverWriteStock() {
         String item = item();
-        var event = new HashMap<String, Object>(Map.of("name", "P1 planned-only event", "eventType", "DE", "startDate", "2039-04-12", "endDate", "2039-04-13", "plannedQuantities", Map.of(item, 20)));
+        var event = new HashMap<String, Object>(Map.of("name", "P1 planned-only event", "eventType", "DE", "startDate", 2186179200000L, "endDate", 2186265600000L, "plannedQuantities", Map.of(item, 20)));
         String eventId = admin().body(event).post("/api/events").then().statusCode(200).extract().path("id");
         admin().post("/api/reports/events/rebuild").then().statusCode(202);
         for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         String filter = "/api/reports/events?eventId=" + eventId + "&itemId=" + item;
         admin().get(filter).then().statusCode(200).body("total", equalTo(1)).body("rows[0].planned", equalTo(20)).body("rows[0].handedOver", equalTo(0)).body("stale", equalTo(false));
-        String generation = admin().get(filter).then().statusCode(200).extract().path("generatedAt");
+        Long generation = admin().get(filter).then().statusCode(200).extract().path("generatedAt");
         admin().queryParam("generation", generation).queryParam("eventId", eventId).queryParam("itemId", item)
                 .get("/api/reports/events/export").then().statusCode(200)
                 .body("generatedAt", equalTo(generation)).body("total", equalTo(1)).body("rows[0].planned", equalTo(20));
@@ -86,7 +86,7 @@ class RemainingP1ApiTest {
         for(int reportJob=0;reportJob<8;reportJob++)reportWorker.runOne();
         admin().queryParam("generation", generation).get("/api/reports/events/export").then().statusCode(409);
         admin().get(filter).then().statusCode(200).body("rows[0].planned", equalTo(25));
-        admin().get(filter + "&from=2040-01-01").then().statusCode(200).body("total", equalTo(0));
+        admin().get(filter + "&from=2208988800000").then().statusCode(200).body("total", equalTo(0));
         admin().get(filter + "&from=bad-date").then().statusCode(400);
         for (String name : List.of("availability", "returns", "repairs", "maintenance", "purchases", "counts", "movements")) {
             admin().post("/api/reports/" + name + "/rebuild").then().statusCode(202);

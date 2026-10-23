@@ -1,3 +1,6 @@
+import { csvDate } from '../utils/csv/eventLogistics';
+import { optionalNumber } from '../utils/inputValues';
+import { calendarDate } from '../utils/dateFormat';
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { normalizeLocationRef } from '../utils/csv/locations';
 import { apiRequest } from './apiClient';
@@ -23,18 +26,23 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
   const today = new Date();
   const date = (offset: number, timestamp: boolean) => {
     const value = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, 12);
-    return timestamp ? value.toISOString() : `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    return timestamp ? value.getTime() : calendarDate(value);
   };
-  function resolve(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(resolve);
-    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolve(entry)]));
+  function resolve(value: unknown, field?: string): unknown {
+    if (Array.isArray(value)) return value.map(entry => resolve(entry));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolve(entry, key)]));
+    if (field && /(?:Date$|availableFrom$|availableUntil$|returnDue$)/.test(field) && typeof value === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(value)) {
+      const parsed = csvDate(value);
+      if (!Number.isFinite(parsed)) throw new Error('Invalid DD-MM-YYYY date');
+      return parsed;
+    }
     if (typeof value !== 'string' || !value.startsWith('@')) return value;
-    let result: string | undefined;
+    let result: string | number | undefined;
     if (value.startsWith('@item:')) result = items.find((item) => item.name.toLowerCase().trim() === value.slice(6).toLowerCase().trim())?.id;
     else if (value.startsWith('@location:')) result = locations.get(normalizeLocationRef(value.slice(10)));
     else if (value.startsWith('@event:')) {
       const [type, start] = value.slice(7).split(':');
-      result = events.find((event) => event.eventType === type && event.startDate.slice(0, 10) === start)?.id;
+      result = events.find((event) => event.eventType === type && event.startDate === csvDate(start))?.id;
     } else if (value.startsWith('@row:')) result = outputs.get(value.slice(5));
     else if (/^@(date|datetime):[+-]?\d+$/.test(value)) result = date(Number(value.split(':')[1]), value.startsWith('@datetime:'));
     else return value;
@@ -77,7 +85,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
           quantityChanged: inputNumber(data.quantityChanged), reason: inputText(data.reason), notes: optionalText(data.notes),
           assetInstanceId: optionalText(data.assetInstanceId), locationId: optionalText(data.locationId), lotId: optionalText(data.lotId),
           eventType: optionalText(data.eventType), eventOccurrenceId: optionalText(data.eventOccurrenceId), faction: optionalText(data.faction),
-          occurredAt: optionalText(data.occurredAt), idempotencyKey: key,
+          occurredAt: optionalNumber(data.occurredAt), idempotencyKey: key,
         } });
         break;
       }
@@ -86,7 +94,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
           itemId, amount: inputNumber(data.amount), description: inputText(data.description),
           severity: inputChoice(data.severity, ['low', 'medium', 'high', 'critical', 'total_loss']),
           assetInstanceId: optionalText(data.assetInstanceId), safetyImpact: data.safetyImpact === true,
-          occurredAt: optionalText(data.occurredAt), idempotencyKey: key,
+          occurredAt: optionalNumber(data.occurredAt), idempotencyKey: key,
         } });
         break;
       }

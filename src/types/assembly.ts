@@ -13,8 +13,8 @@ export interface Assembly {
   hint?: string;
   image?: string;
   eventTypes?: EventType[];
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
   expand?: {
     itemIds?: Item[];
   };

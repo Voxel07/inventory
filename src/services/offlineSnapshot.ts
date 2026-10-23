@@ -8,7 +8,7 @@ import { storageLocationApi } from './storageLocationService';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import type { Page } from './apiPagination';
 
-export type SnapshotStatus = { kind: 'idle' | 'downloading' | 'complete' | 'partial'; completed: number; total: number; failed: string[]; finishedAt?: string };
+export type SnapshotStatus = { kind: 'idle' | 'downloading' | 'complete' | 'partial'; completed: number; total: number; failed: string[]; finishedAt?: number };
 const idle = (): SnapshotStatus => ({ kind: 'idle', completed: 0, total: 6, failed: [] });
 let status = idle();
 let pending: { generation: number; promise: Promise<void> } | undefined;
@@ -49,10 +49,10 @@ export function downloadOfflineCatalog(): Promise<void> {
     }
     assertAuthSession(context);
     const finished: SnapshotStatus = { kind: failed.length ? 'partial' : 'complete', completed: tasks.length - failed.length,
-      total: tasks.length, failed, finishedAt: new Date().toISOString() };
+      total: tasks.length, failed, finishedAt: Date.now() };
     await setOfflineCatalog('offline-snapshot-status', finished, context, true);
     publish(finished);
-  })().catch(error => { if (captureAuthSession().generation === context.generation) publish({ ...status, kind: 'partial', failed: [...status.failed, 'storage/session'], finishedAt: new Date().toISOString() }); throw error; }).finally(() => { if (pending?.generation === context.generation) pending = undefined; });
+  })().catch(error => { if (captureAuthSession().generation === context.generation) publish({ ...status, kind: 'partial', failed: [...status.failed, 'storage/session'], finishedAt: Date.now() }); throw error; }).finally(() => { if (pending?.generation === context.generation) pending = undefined; });
   pending = { generation: context.generation, promise };
   return promise;
 }

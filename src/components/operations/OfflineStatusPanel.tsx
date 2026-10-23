@@ -12,7 +12,7 @@ import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { translate, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 
-interface Audit { commandId: string; operationType: string; syncStatus: string; conflictMessage?: string; createdAt: string; supersedes?: string; resolutionNote?: string }
+interface Audit { commandId: string; operationType: string; syncStatus: string; conflictMessage?: string; createdAt: number; supersedes?: string; resolutionNote?: string }
 const auditPage = (page: number, size: number) => apiPage<Audit>('/api/sync/audit/mine', page, size);
 export function OfflineStatusPanel() {
   const { cachedAt, sync } = useOfflineStatus();

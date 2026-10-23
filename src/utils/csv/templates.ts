@@ -6,8 +6,8 @@ const quote = (value: string) => /[;"\r\n]/.test(value) ? `"${value.replaceAll('
 const quoteJson = (value: unknown) => quote(JSON.stringify(value));
 
 const sampleLots = [
-  { lotNumber: 'VB-2026-03', quantity: 12, supplierLot: 'SAG-77812', manufactureDate: '2026-03-02', expiryDate: '2028-03-01', notes: 'Ältere Charge zuerst verwenden' },
-  { lotNumber: 'VB-2026-08', quantity: 6, bestBeforeDate: '2028-08-15', storageRequirements: 'Trocken und unter 25 °C lagern', status: 'available' },
+  { lotNumber: 'VB-2026-03', quantity: 12, supplierLot: 'SAG-77812', manufactureDate: '02-03-2026', expiryDate: '01-03-2028', notes: 'Ältere Charge zuerst verwenden' },
+  { lotNumber: 'VB-2026-08', quantity: 6, bestBeforeDate: '15-08-2028', storageRequirements: 'Trocken und unter 25 °C lagern', status: 'available' },
 ];
 
 function csv(header: readonly string[], rows: Record<string, string>[]): string {
@@ -47,24 +47,24 @@ export function generateSampleCombinedCsv(): string {
     { Typ: 'Artikel', Name: 'Desinfektionsmittel 1L', Kategorie: 'Sanität', Unterkategorie: 'Hygiene', Menge: '0', Mindestbestand: '5', Einzelwert: '6,90', Lagerort: 'Lager A / Sanität', Events: 'DE,TNO', Hinweis: 'Ältere Charge zuerst verwenden', TrackingMode: 'lot' },
     { Typ: 'Artikel', Name: 'Verbandsmaterial steril', Kategorie: 'Sanität', Unterkategorie: 'Erste Hilfe', Menge: '18', Mindestbestand: '5', Einzelwert: '3,50', Lagerort: 'Lager A / Sanität', Events: 'DE,TNO', TrackingMode: 'lot_tracked', Lots: quoteJson(sampleLots) },
     { Typ: 'Baugruppe', Name: 'SG-Zelt komplett', Kategorie: 'Infrastruktur', Unterkategorie: 'Zelte', Komponenten: quote('Zeltgestänge 4x4m: 1; Zeltplane 4x4m: 1; Heringe 30cm (10er Set): 2'), Events: 'DE,TNO', Hinweis: 'Komplettes Zelt mit Heringen' },
-    { Typ: 'Event', Name: 'Beispiel-Event', Eventtyp: 'DE', Eventdatum: '2026-06-13', Startdatum: '2026-06-13', Enddatum: '2026-06-14',
+    { Typ: 'Event', Name: 'Beispiel-Event', Eventtyp: 'DE', Eventdatum: '13-06-2026', Startdatum: '13-06-2026', Enddatum: '14-06-2026',
       Teilnehmer: quoteJson([
-        { personName: 'Alex König', arrivesAt: '2026-06-12T15:00', leavesAt: '2026-06-14T13:00', roles: [{ role: 'event_crew', assignment: 'Aufbau & Logistik' }] },
+        { personName: 'Alex König', arrivesAt: '12-06-2026 15:00', leavesAt: '14-06-2026 13:00', roles: [{ role: 'event_crew', assignment: 'Aufbau & Logistik' }] },
       ]),
       Zeitplan: quoteJson([
-        { category: 'preparation', title: 'Aufbau', startsAt: '2026-06-12T15:00', endsAt: '2026-06-12T18:00', owner: 'Alex König', location: 'HQ', status: 'completed' },
-        { category: 'in_game', title: 'Briefing', startsAt: '2026-06-13T09:00', endsAt: '2026-06-13T09:30', status: 'completed' },
+        { category: 'preparation', title: 'Aufbau', startsAt: '12-06-2026 15:00', endsAt: '12-06-2026 18:00', owner: 'Alex König', location: 'HQ', status: 'completed' },
+        { category: 'in_game', title: 'Briefing', startsAt: '13-06-2026 09:00', endsAt: '13-06-2026 09:30', status: 'completed' },
       ]) },
-    { Typ: 'AllgemeineBestellung', Name: 'Catering', Eventtyp: 'DE', Eventdatum: '2026-06-13', BestellteArtikel: quote('Heringe 30cm (10er Set): 2'), RueckgabeArtikel: quote('Heringe 30cm (10er Set): 1'), Bestellstatus: 'partially_returned', Zweck: 'Catering-Zelt' },
-    { Typ: 'Return', Name: 'Heringe 30cm (10er Set)', Menge: '1', Eventtyp: 'DE', Eventdatum: '2026-06-13', Bestellname: 'Catering' },
+    { Typ: 'AllgemeineBestellung', Name: 'Catering', Eventtyp: 'DE', Eventdatum: '13-06-2026', BestellteArtikel: quote('Heringe 30cm (10er Set): 2'), RueckgabeArtikel: quote('Heringe 30cm (10er Set): 1'), Bestellstatus: 'partially_returned', Zweck: 'Catering-Zelt' },
+    { Typ: 'Return', Name: 'Heringe 30cm (10er Set)', Menge: '1', Eventtyp: 'DE', Eventdatum: '13-06-2026', Bestellname: 'Catering' },
     { Typ: 'Ausleihe', Name: 'Zeltgestänge 4x4m', Menge: '1', Eventtyp: 'DE', Fraktion: 'KGG' },
     // `@row:<Name>` passes the lot created by an earlier row to the stock booking.
     { Typ: 'Aktion', Name: 'charge-desi-2026-03', Aktion: 'lot', Beschreibung: 'Charge anlegen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-03', supplierLot: 'SAG-77812', manufactureDate: '2026-03-02', expiryDate: '2028-03-01' }) },
+      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-03', supplierLot: 'SAG-77812', manufactureDate: '02-03-2026', expiryDate: '01-03-2028' }) },
     { Typ: 'Aktion', Name: 'bestand-desi-2026-03', Aktion: 'stock', Beschreibung: 'Bestand der Charge buchen',
       Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 12, reason: 'Anfangsbestand', lotId: '@row:charge-desi-2026-03' }) },
     { Typ: 'Aktion', Name: 'charge-desi-2026-08', Aktion: 'lot', Beschreibung: 'Zweite Charge anlegen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-08', expiryDate: '2028-08-15', storageRequirements: 'Unter 25 °C lagern' }) },
+      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-08', expiryDate: '15-08-2028', storageRequirements: 'Unter 25 °C lagern' }) },
     { Typ: 'Aktion', Name: 'bestand-desi-2026-08', Aktion: 'stock', Beschreibung: 'Bestand der Charge buchen',
       Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 6, reason: 'Anfangsbestand', lotId: '@row:charge-desi-2026-08' }) },
   ]);

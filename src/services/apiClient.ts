@@ -308,7 +308,7 @@ function bodyIdempotencyKey(body: unknown): string | undefined {
 
 async function queueOffline<T>(action: OfflineCommand & { idempotencyKey?: string }, context: AuthSessionContext): Promise<T> {
   const idempotencyKey = action.idempotencyKey ?? crypto.randomUUID();
-  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: { ...action.payload }, localTimestamp: new Date().toISOString() }, context);
+  await enqueueOfflineAction({ idempotencyKey, type: action.type, payload: { ...action.payload }, localTimestamp: Date.now() }, context);
   assertAuthSession(context);
   throw new OfflineQueuedError(idempotencyKey);
 }

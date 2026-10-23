@@ -175,7 +175,7 @@ class ReviewFollowupApiTest {
             var privateLocation=new StorageLocation();privateLocation.name="SECRET report location";var locationPolicy=new InventoryAccessPolicy();locationPolicy.owner=owner;em.persist(locationPolicy);privateLocation.accessPolicy=locationPolicy;em.persist(privateLocation);
             var report=em.find(OperationalReport.class,"movements");if(report==null){report=new OperationalReport();report.name="movements";em.persist(report);}
             var rows=new ArrayList<Map<String,Object>>();
-            for(int i=0;i<4;i++) {var row=new HashMap<String,Object>();row.put("id","row-"+i);row.put("itemId",(i==2?privateItem:publicItem).id.toString());row.put("category","Filter review");row.put("date","2030-01-0"+(i+1));row.put("month","2030-01");row.put("status","consumed");row.put("quantity",i+2);row.put("label",i==0?"100%_literal":"ordinary");if(i==3)row.put("locationId",privateLocation.id.toString());rows.add(row);}
+            for(int i=0;i<4;i++) {var row=new HashMap<String,Object>();row.put("id","row-"+i);row.put("itemId",(i==2?privateItem:publicItem).id.toString());row.put("category","Filter review");row.put("date",org.ash.inventory.platform.api.EpochTime.millis(LocalDate.of(2030,1,i+1)));row.put("month","2030-01");row.put("status","consumed");row.put("quantity",i+2);row.put("label",i==0?"100%_literal":"ordinary");if(i==3)row.put("locationId",privateLocation.id.toString());rows.add(row);}
             report.rows=rows;report.generatedAt=Instant.now();report.startedAt=report.generatedAt;report.sourceToken="fixture";
             return new UUID[]{viewer.id,publicItem.id};
         });
@@ -184,7 +184,7 @@ class ReviewFollowupApiTest {
             var first=reportRows.rows("movements",Map.of("category","Filter review"),viewer.id,0,1);
             var second=reportRows.rows("movements",Map.of(),viewer.id,1,1);
             assertEquals(2,first.total());assertEquals("row-0",first.rows().getFirst().get("id"));assertEquals("row-1",second.rows().getFirst().get("id"));
-            var filtered=reportRows.rows("movements",Map.of("itemId",ids[1].toString(),"from","2030-01-01","to","2030-01-02","status","consumed","search","%_"),viewer.id,0,100);
+            var filtered=reportRows.rows("movements",Map.of("itemId",ids[1].toString(),"from","1893456000000","to","1893542400000","status","consumed","search","%_"),viewer.id,0,100);
             assertEquals(1,filtered.total());assertEquals(2,((Number)filtered.monthlyTotals().getFirst().get("quantity")).intValue());
             assertEquals(5,((Number)reportRows.rows("movements",Map.of("itemId",ids[1].toString()),viewer.id,0,100).monthlyTotals().getFirst().get("quantity")).intValue());
             assertThrows(org.ash.inventory.platform.api.ApiException.class,()->reportRows.rows("movements",Map.of("unsupported","x"),viewer.id,0,100));
@@ -200,7 +200,7 @@ class ReviewFollowupApiTest {
         var unlinked=new EventPerson();unlinked.name="Old unlinked name";em.persist(unlinked);
         var linked=new EventPerson();linked.name="Linked name";linked.user=person;em.persist(linked);
         for(var attendeePerson:List.of(unlinked,linked)){var attendee=new EventAttendee();attendee.event=oldEvent;attendee.person=attendeePerson;attendee.notes="Private notes";em.persist(attendee);}
-        em.flush();em.createNativeQuery("update action_reminders set updated_at=now()-interval '181 days' where id=:id").setParameter("id",reminder.id).executeUpdate();
+        em.flush();em.createNativeQuery("update action_reminders set updated_at=(extract(epoch from now()-interval '181 days')*1000)::bigint where id=:id").setParameter("id",reminder.id).executeUpdate();
         retention.purge();em.clear();
         assertNull(em.find(Notification.class,sent.id));assertNotNull(em.find(Notification.class,pending.id));assertNull(em.find(ActionReminder.class,reminder.id));
         assertTrue(em.find(EventPerson.class,unlinked.id).name.startsWith("Former attendee "));assertEquals("Linked name",em.find(EventPerson.class,linked.id).name);
@@ -210,9 +210,9 @@ class ReviewFollowupApiTest {
     @Test void copiedFactionDraftPreservesAssemblyAndLooseItemGroups() {
         String id=item("Copy grouping component",false,0);
         String assembly=admin().body(Map.of("name","Copy group "+UUID.randomUUID(),"itemQuantities",Map.of(id,2))).post("/api/assemblies").then().statusCode(200).extract().path("id");
-        String source=admin().body(Map.of("eventType","DE","faction","Copy group "+UUID.randomUUID(),"eventDate","2035-01-01","requestedQuantities",Map.of(id,1),"requestedAssemblyQuantities",Map.of(assembly,3)))
+        String source=admin().body(Map.of("eventType","DE","faction","Copy group "+UUID.randomUUID(),"eventDate",2051222400000L,"requestedQuantities",Map.of(id,1),"requestedAssemblyQuantities",Map.of(assembly,3)))
                 .post("/api/orders/faction").then().statusCode(200).extract().path("id");
-        String event=admin().body(Map.of("name","Copy target","eventType","DE","startDate","2036-01-01")).post("/api/events").then().statusCode(200).extract().path("id");
+        String event=admin().body(Map.of("name","Copy target","eventType","DE","startDate",2082758400000L)).post("/api/events").then().statusCode(200).extract().path("id");
         admin().body(Map.of("sourceOrderId",source,"eventId",event,"commandId",UUID.randomUUID().toString())).post("/api/order-copies").then().statusCode(200)
                 .body("requestedQuantities."+id,equalTo(1)).body("requestedAssemblyQuantities."+assembly,equalTo(3)).body("lines.findAll { it.sourceAssemblyId=='"+assembly+"' }.requestedQuantity",hasItem(6));
     }

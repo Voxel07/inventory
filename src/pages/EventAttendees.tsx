@@ -1,3 +1,4 @@
+import { dateAtTime, formatDateTime } from '../utils/dateFormat';
 import { useState } from 'react';
 import { Alert, Autocomplete, Box, Checkbox, Chip, DialogActions, DialogContent, DialogTitle, FormControlLabel, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Typography } from '@mui/material';
 import { DateRangeField, TextField } from '../components/shared/DateTextField';
@@ -26,7 +27,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useOverflowCollapse } from '../hooks/useOverflowCollapse';
 import { canEditEvents } from '../utils/access';
 import { useT } from '../utils/naming';
-import { formatDateTime } from '../utils/dateFormat';
 import { factionColor } from '../utils/factionColors';
 import { useUIStore } from '../store/uiStore';
 import { ATTENDEE_ROLES, FACTION_ROLES } from '../types/eventLogistics';
@@ -61,7 +61,7 @@ function RoleChips({ attendee, eventType }: { attendee: EventAttendee; eventType
   </Stack>;
 }
 
-function TravelTime({ value }: { value: string | null }) {
+function TravelTime({ value }: { value: number | null }) {
   const t = useT();
   return value ? <>{formatDateTime(value)}</> : <Chip size="small" variant="outlined" label={t('pages.eventAttendees.toConfirm')} />;
 }
@@ -104,7 +104,7 @@ function AttendeeList({ event }: { event: EventReport }) {
   const { ref: tableRef, collapsed: compact } = useOverflowCollapse<HTMLDivElement>();
   const attendees = query.data ?? [];
   const unissued = attendees.filter((attendee) => !attendee.foodStampsIssued);
-  const missingDates = attendees.filter((attendee) => !attendee.arrivesAt || !attendee.leavesAt).length;
+  const missingDates = attendees.filter((attendee) => attendee.arrivesAt == null || attendee.leavesAt == null).length;
   const term = search.trim().toLocaleLowerCase();
   const visible = attendees.filter((attendee) => (!roleFilter || attendee.roles.some((role) => role.role === roleFilter))
     && [attendee.person.name, attendee.notes ?? '', ...attendee.roles.map((role) => roleText(role, roleLabels))].join(' ').toLocaleLowerCase().includes(term))
@@ -112,8 +112,8 @@ function AttendeeList({ event }: { event: EventReport }) {
       const nameOrder = left.person.name.localeCompare(right.person.name);
       const direction = sortDirection === 'asc' ? 1 : -1;
       if (sortBy === 'arrivesAt') {
-        if (!left.arrivesAt || !right.arrivesAt) return left.arrivesAt ? -1 : right.arrivesAt ? 1 : nameOrder;
-        return direction * left.arrivesAt.localeCompare(right.arrivesAt) || nameOrder;
+        if (left.arrivesAt == null || right.arrivesAt == null) return left.arrivesAt != null ? -1 : right.arrivesAt != null ? 1 : nameOrder;
+        return direction * (left.arrivesAt - right.arrivesAt) || nameOrder;
       }
       if (sortBy === 'roles') {
         const rank = (attendee: EventAttendee) => Math.min(...attendee.roles.map((role) => ATTENDEE_ROLES.indexOf(role.role)));
@@ -307,7 +307,7 @@ function CateringRatesForm({ eventId, settings, canEdit }: { eventId: string; se
 type RoleRow = { role: AttendeeRoleKind; factionId: string; factionName: string | null; assignment: string };
 
 function AttendeeForm({ attendee, initialPerson, eventType, startDate, endDate, attendingPersonIds, pending, error, onSubmit, onCancel }: {
-  attendee?: EventAttendee; initialPerson?: EventPerson; eventType: EventType; startDate: string; endDate: string; attendingPersonIds: string[]; pending: boolean; error?: string;
+  attendee?: EventAttendee; initialPerson?: EventPerson; eventType: EventType; startDate: number; endDate: number; attendingPersonIds: string[]; pending: boolean; error?: string;
   onSubmit: (data: EventAttendeeInput) => void; onCancel: () => void;
 }) {
   const t = useT();
@@ -320,8 +320,8 @@ function AttendeeForm({ attendee, initialPerson, eventType, startDate, endDate, 
   const [userId, setUserId] = useState<string | null>(attendee?.person.userId ?? initialPerson?.userId ?? null);
   const [roles, setRoles] = useState<RoleRow[]>(attendee?.roles.map((role) => ({ ...role, factionId: role.factionId ?? '', assignment: role.assignment ?? '' }))
     ?? [{ role: 'event_crew', factionId: '', factionName: null, assignment: '' }]);
-  const [arrivesAt, setArrivesAt] = useState(attendee ? attendee.arrivesAt?.slice(0, 16) ?? '' : `${startDate.slice(0, 10)}T00:00`);
-  const [leavesAt, setLeavesAt] = useState(attendee ? attendee.leavesAt?.slice(0, 16) ?? '' : `${endDate.slice(0, 10)}T23:59`);
+  const [arrivesAt, setArrivesAt] = useState<number | ''>(attendee ? attendee.arrivesAt ?? '' : dateAtTime(startDate));
+  const [leavesAt, setLeavesAt] = useState<number | ''>(attendee ? attendee.leavesAt ?? '' : dateAtTime(endDate, 23, 59));
   const [foodStampsIssued, setFoodStampsIssued] = useState(attendee?.foodStampsIssued ?? false);
   const [notes, setNotes] = useState(attendee?.notes ?? '');
   const personId = attendee?.person.id ?? person?.id ?? null;
@@ -330,7 +330,7 @@ function AttendeeForm({ attendee, initialPerson, eventType, startDate, endDate, 
   const linkable = (accounts.data ?? []).filter((account) => !account.linkedPersonId || account.linkedPersonId === personId);
   const linkedAccount = linkable.find((account) => account.id === userId)
     ?? (userId ? { id: userId, name: attendee?.person.userName ?? person?.userName ?? userId, linkedPersonId: personId } : null);
-  const invalidRange = Boolean(arrivesAt && leavesAt && leavesAt < arrivesAt);
+  const invalidRange = Boolean(arrivesAt !== '' && leavesAt !== '' && leavesAt < arrivesAt);
   const roleKeys = roles.map((row) => `${row.role}:${FACTION_ROLES.includes(row.role) ? row.factionId : ''}`);
   const duplicateRole = roleKeys.some((key, index) => roleKeys.indexOf(key) !== index);
   const missingFaction = roles.some((row) => FACTION_ROLES.includes(row.role) && !row.factionId);
@@ -351,7 +351,7 @@ function AttendeeForm({ attendee, initialPerson, eventType, startDate, endDate, 
     pending={pending} error={error} onCancel={onCancel} submitDisabled={!personName.trim() || !roles.length || invalidRange || duplicateRole || missingFaction}
     onSubmit={() => onSubmit({
       personId, personName: personName.trim(), personUserId: userId,
-      arrivesAt: arrivesAt || null, leavesAt: leavesAt || null, foodStampsIssued, notes: notes.trim(),
+      arrivesAt: arrivesAt === '' ? null : arrivesAt, leavesAt: leavesAt === '' ? null : leavesAt, foodStampsIssued, notes: notes.trim(),
       roles: roles.map((row) => ({
         role: row.role,
         factionId: FACTION_ROLES.includes(row.role) ? row.factionId : null,

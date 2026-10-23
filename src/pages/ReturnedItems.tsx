@@ -71,7 +71,7 @@ export function ReturnedItemsPage() {
     { field: 'quantity', headerName: t('common.quantity'), type: 'number', width: 90 },
     { field: 'returnedForUserName', headerName: t('pages.returnedItems.for'), minWidth: 140, flex: 0.8, valueGetter: (_, row) => person(row) },
     { field: 'expectedReturnLocationName', headerName: t('common.returnLocation'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
-    { field: 'created', headerName: t('pages.returnedItems.submitted'), width: 170, valueFormatter: (value: string) => formatDateTime(value) },
+    { field: 'created', headerName: t('pages.returnedItems.submitted'), width: 170, valueFormatter: (value: number) => formatDateTime(value) },
     { field: 'status', headerName: t('common.status'), width: 160, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
     { field: 'actions', headerName: '', sortable: false, filterable: false, width: 120,
       renderCell: ({ row }) => <Button variant={row.status === 'pending' ? 'contained' : 'outlined'} size="small" aria-haspopup="dialog"

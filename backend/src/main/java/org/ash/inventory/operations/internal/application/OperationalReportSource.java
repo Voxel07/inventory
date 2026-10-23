@@ -57,7 +57,7 @@ public class OperationalReportSource implements ReportSource {
         var result = new LinkedHashMap<String, Object>();
         for (int i = 0; i < pairs.length; i += 2) {
             Object value = pairs[i + 1];
-            result.put(pairs[i].toString(), value instanceof Number || value instanceof Boolean || value == null ? value : value.toString());
+            result.put(pairs[i].toString(), value instanceof Instant instant ? instant.toEpochMilli() : value instanceof LocalDate date ? org.ash.inventory.platform.api.EpochTime.millis(date) : value instanceof Number || value instanceof Boolean || value == null ? value : value.toString());
         }
         return result;
     }

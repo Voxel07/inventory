@@ -41,7 +41,7 @@ const { decodeAuthSession } = await import('../src/services/authSession');
 
 const session = (revision: number): PersistedAuthSession => ({
   accessToken: 'access', refreshToken: 'refresh', idToken: 'id', expiresAt: null, tokenRevision: revision,
-  user: { active: true, id: 'u1', name: 'User', email: 'u@example.test', role: 'ash', roles: ['ash'], faction: [], created: '', updated: '' },
+  user: { active: true, id: 'u1', name: 'User', email: 'u@example.test', role: 'ash', roles: ['ash'], faction: [], created: 0, updated: 0 },
 });
 
 beforeEach(() => { rows.clear(); local.clear(); abortDeletes = false; localStorageFails = false; closed = 0; });

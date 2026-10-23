@@ -41,7 +41,7 @@ import jakarta.transaction.Transactional;
 
 import jakarta.validation.Valid;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import java.util.ArrayList;
 
@@ -187,9 +187,11 @@ public class EventLogisticsService {
 
         var event = writableEvent(eventId);
 
-        var arrival = id == null && input.arrivesAt() == null ? event.startDate.atStartOfDay() : input.arrivesAt();
+        var arrival = id == null && input.arrivesAt() == null
+                ? event.startDate.atStartOfDay(org.ash.inventory.platform.api.BusinessTime.zone()).toInstant() : input.arrivesAt();
 
-        var departure = id == null && input.leavesAt() == null ? event.endDate.atTime(23, 59) : input.leavesAt();
+        var departure = id == null && input.leavesAt() == null
+                ? event.endDate.atTime(23, 59).atZone(org.ash.inventory.platform.api.BusinessTime.zone()).toInstant() : input.leavesAt();
 
         validateRange(arrival, departure);
 
@@ -389,7 +391,7 @@ public class EventLogisticsService {
 
     }
 
-    private void validateRange(LocalDateTime start, LocalDateTime end) {
+    private void validateRange(Instant start, Instant end) {
 
         if (start != null && end != null && end.isBefore(start))
 

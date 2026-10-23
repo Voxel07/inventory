@@ -37,7 +37,7 @@ export function createCsvEventLogisticsImporter(factionIds: ReadonlyMap<string, 
       for (const input of row.timeline) {
         assertAuthSession(context);
         const existing = timeline.find((entry) => entry.category === input.category && entry.title === input.title
-          && Date.parse(`${entry.startsAt}Z`) === Date.parse(`${input.startsAt}Z`));
+          && entry.startsAt === input.startsAt);
         await apiRequest(existing ? `${base}/timeline/${existing.id}` : `${base}/timeline`, {
           method: existing ? 'PUT' : 'POST', body: input,
         });

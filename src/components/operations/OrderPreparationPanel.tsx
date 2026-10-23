@@ -14,8 +14,8 @@ import { translate, useT } from '../../utils/naming';
 const TO_PREPARE = ['submitted', 'preparing'] as const;
 
 type Entry =
-  | { kind: 'faction'; order: FactionOrderSummary; due: string }
-  | { kind: 'general'; order: GeneralOrderSummary; due: string };
+  | { kind: 'faction'; order: FactionOrderSummary; due?: number }
+  | { kind: 'general'; order: GeneralOrderSummary; due?: number };
 
 function sum(values?: Record<string, number>) {
   return Object.values(values ?? {}).reduce((total, value) => total + value, 0);
@@ -33,8 +33,8 @@ export function OrderPreparationPanel() {
     ...(factionOrders.data ?? [])
       .map((order): Entry => ({ kind: 'faction', order, due: order.requestedPickupDate ?? order.eventDate })),
     ...(generalOrders.data ?? [])
-      .map((order): Entry => ({ kind: 'general', order, due: (order.eventOccurrenceId && eventMap.get(order.eventOccurrenceId)?.startDate) || '' })),
-  ].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+      .map((order): Entry => ({ kind: 'general', order, due: order.eventOccurrenceId ? eventMap.get(order.eventOccurrenceId)?.startDate : undefined })),
+  ].sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity));
 
   const loading = factionOrders.isLoading || generalOrders.isLoading;
   const error = factionOrders.error || generalOrders.error;
@@ -55,7 +55,7 @@ export function OrderPreparationPanel() {
           actions={[{ key: 'prepare', label: entry.order.status === 'preparing' ? t('operations.orderPreparationPanel.continue') : t('operations.orderPreparationPanel.prepare'),
             title: translate('operations.orderPreparationPanel.openTheOrderListToPrepareIt'), variant: 'contained', pinned: true, to: `/orders/faction/${entry.order.id}` }]}>
           <Typography>{t('common.faction')} {entry.order.faction} · {entry.order.eventType === 'LS' ? 'LightSim' : entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
-          <OperationDetail label={t('common.requestedPickup')}>{entry.order.requestedPickupDate ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
+          <OperationDetail label={t('common.requestedPickup')}>{entry.order.requestedPickupDate != null ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
           <OperationDetail label={t('operations.orderPreparationPanel.progress')}>
             {`${sum(entry.order.preparedQuantities) + sum(entry.order.preparedAssemblyQuantities)}/${sum(entry.order.requestedQuantities) + sum(entry.order.requestedAssemblyQuantities)} ${t('operations.orderPreparationPanel.listUnits')}`}
           </OperationDetail>

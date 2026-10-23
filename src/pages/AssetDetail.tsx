@@ -174,7 +174,7 @@ export function AssetDetail() {
                             {canEditAsset && <Button size="small" title={t('pages.assetDetail.updateCondition')} sx={{ flexShrink: 0 }} onClick={() => setAction('condition')}>{t('common.edit')}</Button>}
                         </Box>
                         <InfoRow label={t('pages.assetDetail.manufacturerModel')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
-                        <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate ? formatDate(asset.purchaseDate) : '—'} />
+                        <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate != null ? formatDate(asset.purchaseDate) : '—'} />
                         <InfoRow label={t('items.assetDetailsFields.purchasePrice')} value={asset.purchasePrice == null ? '—' : formatMoney(asset.purchasePrice)} />
                         <InfoRow label={t('items.assetDetailsFields.replacementValue')} value={asset.replacementValue == null ? '—' : formatMoney(asset.replacementValue)} />
                         {item.tracksRuntime && <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
@@ -302,7 +302,7 @@ function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: 
     for (const entry of entries) {
         if (entry.source === 'correction') continue;
         const key = entry.eventOccurrenceId ?? '';
-        const label = entry.eventName ? `${entry.eventName}${entry.eventStartDate ? ` · ${formatDate(entry.eventStartDate)}` : ''}` : t('pages.assetDetail.withoutEvent');
+        const label = entry.eventName ? `${entry.eventName}${entry.eventStartDate != null ? ` · ${formatDate(entry.eventStartDate)}` : ''}` : t('pages.assetDetail.withoutEvent');
         const current = byEvent.get(key) ?? { label, hours: 0 };
         current.hours = Math.round((current.hours + Number(entry.hours)) * 100) / 100;
         byEvent.set(key, current);

@@ -10,23 +10,26 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { PickerDay, type PickerDayProps } from '@mui/x-date-pickers/PickerDay';
 import { TimeField } from '@mui/x-date-pickers/TimeField';
 import dayjs, { type Dayjs } from 'dayjs';
+import { type DateFieldValue } from '../../utils/dateFormat';
 import { Button, IconButton } from './ActionButtons';
 import { useT } from '../../utils/naming';
 
 export const DATE_FORMAT = 'DD-MM-YYYY';
 export const DATE_TIME_FORMAT = 'DD-MM-YYYY HH:mm';
 
-/** Field values are ISO calendar days (`YYYY-MM-DD`) or local wall-clock times (`YYYY-MM-DDTHH:mm`). */
-function toDayjs(value: unknown): Dayjs | null {
+/** Pickers exchange epoch milliseconds; date-only values represent midnight UTC. */
+function toDayjs(value: unknown, withTime = false): Dayjs | null {
   if (value == null || value === '') return null;
-  const parsed = dayjs(String(value).slice(0, 16));
+  const epoch = Number(value);
+  const date = new Date(epoch);
+  const parsed = withTime ? dayjs(epoch) : dayjs(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   return parsed.isValid() ? parsed : null;
 }
 
-function toValue(date: Dayjs | null, withTime: boolean): string | null {
+function toValue(date: Dayjs | null, withTime: boolean): DateFieldValue | null {
   if (!date) return '';
   if (!date.isValid()) return null;
-  return date.format(withTime ? 'YYYY-MM-DDTHH:mm' : 'YYYY-MM-DD');
+  return withTime ? date.valueOf() : Date.UTC(date.year(), date.month(), date.date());
 }
 
 /** Hidden picker inputs take part in native form validation, as DialogForm expects of date fields. */
@@ -47,15 +50,15 @@ export function TextField(props: TextFieldProps) {
 function PickerField({ value, type, onChange, slotProps, label, required, fullWidth, size, error, helperText, disabled, sx, name, autoFocus }: TextFieldProps) {
   const t = useT();
   const withTime = type === 'datetime-local';
-  const source = String(value ?? '');
-  const [draft, setDraft] = useState<{ source: string; date: Dayjs | null }>({ source, date: toDayjs(source) });
-  const date = draft.source === source ? draft.date : toDayjs(source);
+  const source: DateFieldValue = value == null || value === '' ? '' : Number(value);
+  const [draft, setDraft] = useState<{ source: DateFieldValue; date: Dayjs | null }>({ source, date: toDayjs(source, withTime) });
+  const date = draft.source === source ? draft.date : toDayjs(source, withTime);
   // Date callers supply ordinary slot objects, so retain their min/max and read-only constraints.
   const htmlInput = (typeof slotProps?.htmlInput === 'object' ? slotProps.htmlInput : {}) as InputHTMLAttributes<HTMLInputElement>;
   const input = typeof slotProps?.input === 'object' ? slotProps.input : {};
   const readOnly = Boolean((input as { readOnly?: boolean }).readOnly || htmlInput.readOnly);
-  const min = toDayjs(htmlInput.min);
-  const max = toDayjs(htmlInput.max);
+  const min = toDayjs(htmlInput.min, withTime);
+  const max = toDayjs(htmlInput.max, withTime);
   const unit = withTime ? 'minute' : 'day';
   const malformed = Boolean(date && !date.isValid());
   const outOfRange = Boolean(date?.isValid() && ((min && date.isBefore(min, unit)) || (max && date.isAfter(max, unit))));
@@ -67,7 +70,7 @@ function PickerField({ value, type, onChange, slotProps, label, required, fullWi
     setDraft({ source: toValue(next, withTime) ?? source, date: next });
     const emitted = toValue(next, withTime);
     if (emitted !== null && emitted !== source) {
-      onChange?.({ target: { value: emitted, name }, currentTarget: { value: emitted, name } } as unknown as ChangeEvent<HTMLInputElement>);
+      onChange?.({ target: { value: String(emitted), name }, currentTarget: { value: String(emitted), name } } as unknown as ChangeEvent<HTMLInputElement>);
     }
   }
 
@@ -109,9 +112,9 @@ function RangeDay(props: PickerDayProps) {
 type DateRangeFieldProps = {
   startLabel: string;
   endLabel: string;
-  start: string;
-  end: string;
-  onChange: (range: { start: string; end: string }) => void;
+  start: DateFieldValue;
+  end: DateFieldValue;
+  onChange: (range: { start: DateFieldValue; end: DateFieldValue }) => void;
   /** Date-time bounds keep their wall-clock time and add time fields below the calendar. */
   withTime?: boolean;
   /** `true` requires both bounds; `'start'` leaves the end optional. */
@@ -132,11 +135,11 @@ export function DateRangeField({ startLabel, endLabel, start, end, onChange, wit
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState<Bound>('start');
   const [hover, setHover] = useState<Dayjs | null>(null);
-  const [drafts, setDrafts] = useState<Record<Bound, { source: string; date: Dayjs | null }>>({
-    start: { source: start, date: toDayjs(start) }, end: { source: end, date: toDayjs(end) },
+  const [drafts, setDrafts] = useState<Record<Bound, { source: DateFieldValue; date: Dayjs | null }>>({
+    start: { source: start, date: toDayjs(start, withTime) }, end: { source: end, date: toDayjs(end, withTime) },
   });
-  const startDate = drafts.start.source === start ? drafts.start.date : toDayjs(start);
-  const endDate = drafts.end.source === end ? drafts.end.date : toDayjs(end);
+  const startDate = drafts.start.source === start ? drafts.start.date : toDayjs(start, withTime);
+  const endDate = drafts.end.source === end ? drafts.end.date : toDayjs(end, withTime);
   const unit = withTime ? 'minute' : 'day';
   const format = withTime ? DATE_TIME_FORMAT : DATE_FORMAT;
   const malformed = (date: Dayjs | null) => Boolean(date && !date.isValid());

@@ -45,8 +45,8 @@ export interface EventAttendeeInput {
   personId: string | null;
   personName: string;
   personUserId: string | null;
-  arrivesAt: string | null;
-  leavesAt: string | null;
+  arrivesAt: number | null;
+  leavesAt: number | null;
   foodStampsIssued: boolean;
   notes: string;
   roles: AttendeeRoleInput[];
@@ -57,8 +57,8 @@ export interface EventAttendee {
   eventId: string;
   person: EventPersonSummary;
   roles: AttendeeRole[];
-  arrivesAt: string | null;
-  leavesAt: string | null;
+  arrivesAt: number | null;
+  leavesAt: number | null;
   mainMealStamps: number;
   breakfastStamps: number;
   foodStampsIssued: boolean;
@@ -77,8 +77,8 @@ export type TimelineStatus = 'planned' | 'in_progress' | 'completed';
 export interface EventTimelineInput {
   category: TimelineCategory;
   title: string;
-  startsAt: string;
-  endsAt: string | null;
+  startsAt: number;
+  endsAt: number | null;
   owner: string;
   location: string;
   status: TimelineStatus;

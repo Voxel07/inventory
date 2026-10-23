@@ -1,3 +1,4 @@
+import { formatDate } from '../utils/dateFormat';
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { loadAllPages } from './apiPagination';
 import { withApiRequestBatch } from './apiClient';
@@ -252,7 +253,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     // open until their history is imported and are closed in the final step.
     const eventsToClose: { id: string; row: ParsedEventReportRow; data: ParsedEventReportRow['data'] }[] = [];
     for (const row of parsedEvents.filter((event) => event.status === 'valid')) {
-      setImportStatusText(t('services.csvImportService.creatingEventTypeEventOnEventDate', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate) }));
+      setImportStatusText(t('services.csvImportService.creatingEventTypeEventOnEventDate', { eventType: String(row.data.eventType), eventDate: formatDate(row.data.eventDate) }));
 
       const resolveQuantities = (components: ParsedEventReportRow['usedItems']) => {
         const quantities: Record<string, number> = {};
@@ -277,7 +278,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           usedQuantities,
         };
         const existing = existingEvents.find((event) => (
-          event.eventType === data.eventType && event.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
+          event.eventType === data.eventType && event.eventDate === data.eventDate
         ));
         // Existing completed events reopen too, so a retry can add the orders a failed run missed.
         const closeLater = data.status === 'completed';
@@ -294,11 +295,11 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           await importEventLogistics(saved.id, row);
         } catch (err: unknown) {
           assertAuthSession(context);
-          errors.push(translate('services.csvImportService.eventEventTypeEventDateSavedAttendeesTimelineIncompleteMessage', { eventType: String(row.data.eventType), eventDate: String(row.data.eventDate), message: String((err as Error).message || err) }));
+          errors.push(translate('services.csvImportService.eventEventTypeEventDateSavedAttendeesTimelineIncompleteMessage', { eventType: String(row.data.eventType), eventDate: formatDate(row.data.eventDate), message: String((err as Error).message || err) }));
         }
       } catch (err: unknown) {
         assertAuthSession(context);
-        errors.push(`Event ${row.data.eventType} ${row.data.eventDate}: ${(err as Error).message || err}`);
+        errors.push(`Event ${row.data.eventType} ${formatDate(row.data.eventDate)}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
       }
@@ -329,7 +330,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     const existingOrders = parsedOrders.length > 0
       ? await loadAllPages((page, size) => getFactionOrders(undefined, page, size)) : [];
     for (const row of parsedOrders.filter((order) => order.status === 'valid')) {
-      setImportStatusText(t('services.csvImportService.importingFactionOrderForEventDate', { faction: String(row.data.faction), eventDate: String(row.data.eventDate) }));
+      setImportStatusText(t('services.csvImportService.importingFactionOrderForEventDate', { faction: String(row.data.faction), eventDate: formatDate(row.data.eventDate) }));
 
       try {
         const requestedQuantities: Record<string, number> = {};
@@ -349,7 +350,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         const existing = existingOrders.find((order) => (
           order.eventType === data.eventType
           && order.faction.toLowerCase() === data.faction.toLowerCase()
-          && order.eventDate.slice(0, 10) === data.eventDate.slice(0, 10)
+          && order.eventDate === data.eventDate
           && (order.notes || '').trim() === (data.notes || '').trim()
         ));
         let finalOrder = existing ? await getFactionOrder(existing.id) : await createFactionOrder(data);
@@ -402,7 +403,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         successOrders++;
       } catch (err: unknown) {
         assertAuthSession(context);
-        errors.push(`Bestellung ${row.data.eventType} ${row.data.eventDate} ${row.data.faction}: ${(err as Error).message || err}`);
+        errors.push(`Bestellung ${row.data.eventType} ${formatDate(row.data.eventDate)} ${row.data.faction}: ${(err as Error).message || err}`);
       } finally {
         reportCompletedRow();
       }
@@ -424,7 +425,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           }
           return quantities;
         };
-        let event = existingEvents.find((candidate) => candidate.eventType === row.eventType && candidate.eventDate.slice(0, 10) === row.eventDate);
+        let event = existingEvents.find((candidate) => candidate.eventType === row.eventType && candidate.eventDate === row.eventDate);
         if (!event) {
           event = await createEventReport({ eventType: row.eventType!, eventDate: row.eventDate,
             status: 'planned', itemIds: [], plannedQuantities: {}, usedQuantities: {}, notes: '' });
@@ -480,7 +481,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
 
         if (ret.generalOrderName) {
           const order = existingGeneralOrders.find((candidate) => candidate.name.toLowerCase() === ret.generalOrderName?.toLowerCase()
-            && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate.slice(0, 10) === ret.date));
+            && (!ret.date || existingEvents.find((event) => event.id === candidate.eventOccurrenceId)?.eventDate === ret.date));
           if (!order) throw new Error(translate('services.csvImportService.generalOrderGeneralOrderNameNotFound', { generalOrderName: String(ret.generalOrderName) }));
           if (['returned', 'closed'].includes(order.status)) continue;
           const updated = await returnOrder(order.id, { [item.id]: ret.quantity });
@@ -580,12 +581,12 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     // Step 9: Close completed events. Closing freezes the usage derived from the
     // imported orders; a "Verwendet" cell replaces it as the explicit report.
     for (const { id, row, data } of eventsToClose) {
-      setImportStatusText(t('services.csvImportService.closingEventTypeEventOnEventDate', { eventType: String(data.eventType), eventDate: String(data.eventDate) }));
+      setImportStatusText(t('services.csvImportService.closingEventTypeEventOnEventDate', { eventType: String(data.eventType), eventDate: formatDate(data.eventDate) }));
       try {
         await updateEventReport(id, { ...data, usedQuantities: row.usedItems.length ? data.usedQuantities : undefined });
       } catch (err: unknown) {
         assertAuthSession(context);
-        errors.push(`Event ${data.eventType} ${data.eventDate}: ${(err as Error).message || err}`);
+        errors.push(`Event ${data.eventType} ${formatDate(data.eventDate)}: ${(err as Error).message || err}`);
       }
     }
   } catch (error) {

@@ -1,4 +1,4 @@
-import { formatDate } from '../../utils/dateFormat';
+import { calendarDate, formatDate } from '../../utils/dateFormat';
 import { formatQuantity } from '../../utils/stock';
 import { Dialog } from '../shared/ClosableDialog';
 import { CollapsibleOperationLines, OperationLines } from './OperationLines';
@@ -124,7 +124,7 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
   const positions = useCompleteList(queryKeys.operations(`positions:transfer:${item.id}`), operationsApi.positions({ itemId: item.id }), { enabled: item.trackingMode !== 'serialized' });
   const assets = useItemAssets(item.trackingMode === 'serialized' ? item.id : undefined);
   const lots = useCompleteList(queryKeys.operations(`lots:${item.id}`), operationsApi.lots({ itemId: item.id }), { enabled: item.trackingMode === 'lot_tracked' });
-  const [today] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10));
+  const [today] = useState(() => calendarDate());
   const usableLots = (lots.data ?? []).filter(lot => lot.status === 'available' && (!lot.expiryDate || lot.expiryDate >= today) && (!lot.bestBeforeDate || lot.bestBeforeDate >= today));
   const availableAssets = (assets.data ?? []).filter(asset => asset.active && asset.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus));
   const availablePositions = (positions.data ?? []).filter(position => position.transferableQuantity > 0 && (item.trackingMode !== 'lot_tracked' || usableLots.some(lot => lot.id === position.lotId)));

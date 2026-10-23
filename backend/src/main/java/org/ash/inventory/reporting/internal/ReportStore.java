@@ -49,8 +49,14 @@ public class ReportStore {
                 where.append(" and exists(select 1 from jsonb_each_text(value) f where lower(f.value) like :").append(parameter).append(" escape '!')");
                 parameters.put(parameter,"%"+f.getValue().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%");
             }else{
-                where.append(" and value->>'").append(key.equals("from") || key.equals("to")?"date":key).append("' ")
-                    .append(key.equals("from")?">=":key.equals("to")?"<=":"=").append(" :").append(parameter);parameters.put(parameter,f.getValue());
+                boolean dateFilter = key.equals("from") || key.equals("to");
+                if (dateFilter) {
+                    where.append(" and cast(value->>'date' as bigint) ").append(key.equals("from") ? ">=" : "<=").append(" :").append(parameter);
+                    parameters.put(parameter, Long.parseLong(f.getValue()));
+                } else {
+                    where.append(" and value->>'").append(key).append("' = :").append(parameter);
+                    parameters.put(parameter, f.getValue());
+                }
             }
         }
         var query=em.createNativeQuery("select cast(value as text) from operational_reports r cross join lateral jsonb_array_elements(r.report_rows) with ordinality snapshot(value,ordinal)"+where+" order by ordinal");

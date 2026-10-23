@@ -156,7 +156,7 @@ export function FactionOrders() {
       title: history ? `${order.faction} · ${order.orderCode}` : order.orderCode,
       subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('pages.factionOrders.used') : t('pages.factionOrders.prepared')}`,
       details: <>
-        {order.requestedPickupDate && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
+        {order.requestedPickupDate != null && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
           {t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}
         </Typography>}
         <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>

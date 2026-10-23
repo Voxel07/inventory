@@ -1,14 +1,15 @@
+import { calendarDate } from '../../utils/dateFormat';
 import { maintenanceTypeLabel } from '../maintenance/maintenanceSchedules';
 import type { MaintenanceType, ScheduleIntervalType } from '../../types/operations';
 import type { ItemScheduleInput } from '../../types';
 import type { useT } from '../../utils/naming';
 
-/** One interval as edited in the dialog; due values stay strings until the item is saved. */
+/** One interval as edited in the dialog; numeric inputs stay strings; dates are epoch milliseconds. */
 export type ScheduleDraft = {
     type: MaintenanceType;
     intervalType: ScheduleIntervalType;
     intervalValue: string;
-    nextDueDate: string;
+    nextDueDate: number | '';
     nextDueValue: string;
     checkoutBlocking: boolean;
 };
@@ -16,10 +17,10 @@ export type ScheduleDraft = {
 const DEFAULT_INTERVAL: Record<ScheduleIntervalType, number> = { date: 365, operating_hours: 100, usage_count: 20 };
 export const SCHEDULE_NUMBER = /^\d+(\.\d+)?$/;
 
-export function daysFromToday(days: number): string {
+export function daysFromToday(days: number): number {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return calendarDate(date);
 }
 
 export function newDraft(intervalType: ScheduleIntervalType, hours: number, type: MaintenanceType = 'dguv_v3'): ScheduleDraft {
@@ -46,7 +47,7 @@ export function toScheduleInput(draft: ScheduleDraft): ItemScheduleInput {
         maintenanceType: draft.type,
         intervalType: draft.intervalType,
         intervalValue: Number(draft.intervalValue),
-        nextDueAt: byDate ? new Date(`${draft.nextDueDate}T12:00:00`).toISOString() : null,
+        nextDueAt: byDate ? Number(draft.nextDueDate) : null,
         nextDueValue: byDate ? null : Number(draft.nextDueValue),
         warningWindow: byDate ? 30 : 10,
         checkoutBlocking: draft.checkoutBlocking,

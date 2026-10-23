@@ -1,3 +1,4 @@
+import { dateFieldValue } from '../../utils/dateFormat';
 import { useState } from 'react';
 import { Box, FormControlLabel, MenuItem, Stack, Switch, Typography } from '@mui/material';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
@@ -92,7 +93,7 @@ function ScheduleDraftsForm({ initial, openingHours, onClose, onSave }: {
                 </Stack>
                 {draft.intervalType === 'date'
                     ? <TextField fullWidth type="date" label={t('common.nextDueDate')} value={draft.nextDueDate}
-                        onChange={(event) => update(index, { nextDueDate: event.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+                        onChange={(event) => update(index, { nextDueDate: dateFieldValue(event.target.value) })} slotProps={{ inputLabel: { shrink: true } }} />
                     : <TextField fullWidth type="number" label={`${t('maintenance.assetMaintenance.dueAt2')} (${unit(draft.intervalType)})`}
                         value={draft.nextDueValue} onChange={(event) => update(index, { nextDueValue: event.target.value })}
                         helperText={draft.intervalType === 'operating_hours' ? t('forms.itemForm.openingReadingHoursH', { hours: openingHours }) : undefined}

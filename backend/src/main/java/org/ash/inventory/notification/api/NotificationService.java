@@ -58,7 +58,7 @@ public class NotificationService {
     }
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Delivery claim() {
-        var ids=em.createNativeQuery("select id from notifications where delivery_status in ('pending','retry','sending') and coalesce(next_delivery_at,created_at)<=now() and (delivery_lease_until is null or delivery_lease_until<now()) order by created_at,id for update skip locked limit 20").getResultList();
+        var ids=em.createNativeQuery("select id from notifications where delivery_status in ('pending','retry','sending') and coalesce(next_delivery_at,created_at)<=(extract(epoch from now()) * 1000)::bigint and (delivery_lease_until is null or delivery_lease_until<(extract(epoch from now()) * 1000)::bigint) order by created_at,id for update skip locked limit 20").getResultList();
         if(ids.isEmpty())return null;
         for(var id:ids){
         var n=em.find(Notification.class,id);
@@ -84,6 +84,6 @@ public class NotificationService {
             .setParameter("id",recipient).setParameter("offset",offset).setParameter("limit",limit).getResultList().stream().map(Object::toString).toList();
     }
     public void erase(UUID recipient){em.createQuery("delete from Notification n where n.recipientId=:id").setParameter("id",recipient).executeUpdate();}
-    public int purge(int days){return em.createNativeQuery("delete from notifications where id in (select id from notifications where created_at<now()-make_interval(days=>:days) and delivery_status in ('sent','skipped','failed') order by created_at limit 1000)").setParameter("days",days).executeUpdate();}
+    public int purge(int days){return em.createNativeQuery("delete from notifications where id in (select id from notifications where created_at<(extract(epoch from now()) * 1000)::bigint - cast(:days as bigint) * 86400000 and delivery_status in ('sent','skipped','failed') order by created_at limit 1000)").setParameter("days",days).executeUpdate();}
     private Notice view(Notification n){return new Notice(n.id,n.recipientId,n.orderId,n.type,n.payload,n.createdAt,n.readAt);}
 }

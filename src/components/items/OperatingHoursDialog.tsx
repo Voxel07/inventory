@@ -1,3 +1,4 @@
+import { calendarDate, formatDate } from '../../utils/dateFormat';
 import { Button } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import { useLogAssetRuntime } from '../../hooks/useItems';
 import { useEventReports } from '../../hooks/useEvents';
 import { useUIStore } from '../../store/uiStore';
 import { translate, useT } from '../../utils/naming';
-import { formatDate } from '../../utils/dateFormat';
 
 type Mode = 'add' | 'total';
 
@@ -21,8 +21,8 @@ export function OperatingHoursDialog({ itemId, asset, onClose }: { itemId: strin
     const [value, setValue] = useState('');
     const [notes, setNotes] = useState('');
     // Default to the event running today, else no event; recent events first.
-    const today = new Date().toLocaleDateString('sv-SE');
-    const sortedEvents = [...events].sort((a, b) => b.startDate.localeCompare(a.startDate));
+    const today = calendarDate();
+    const sortedEvents = [...events].sort((a, b) => (b.startDate - a.startDate));
     const runningEvent = sortedEvents.find((event) => event.startDate <= today && event.endDate >= today);
     const [eventId, setEventId] = useState<string | null>(null);
     const selectedEventId = eventId ?? runningEvent?.id ?? '';

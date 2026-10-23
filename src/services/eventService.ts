@@ -2,12 +2,12 @@ import type { EventReport, EventReportFormData, EventType } from '../types';
 import { createCrudResourceApi } from './resourceFactory';
 
 function formatEventPayload(data: Partial<EventReportFormData>) {
-  const startDate = (data.startDate ?? data.eventDate)?.slice(0, 10);
+  const startDate = (data.startDate ?? data.eventDate);
   return {
     eventType: data.eventType,
     name: data.name,
     startDate,
-    endDate: (data.endDate ?? data.startDate ?? data.eventDate)?.slice(0, 10),
+    endDate: (data.endDate ?? data.startDate ?? data.eventDate),
     status: data.status,
     notes: data.notes,
     orderDeadline: data.orderDeadline,

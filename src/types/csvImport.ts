@@ -78,7 +78,7 @@ export interface ParsedGeneralOrderRow {
   rawRow: Record<string, string>;
   data: GeneralOrderFormData;
   eventType?: EventType;
-  eventDate: string;
+  eventDate: number;
   requestedItems: ParsedAssemblyComponent[];
   returnedItems: ParsedAssemblyComponent[];
   targetStatus: FactionOrderImportStatus;
@@ -99,7 +99,7 @@ export interface ParsedReturnRow {
   eventType?: EventType;
   faction?: string;
   person?: string;
-  date?: string;
+  date?: number;
   generalOrderName?: string;
   notes?: string;
   targetStatus: 'pending' | 'accepted' | 'rejected';

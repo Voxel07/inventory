@@ -73,7 +73,7 @@ public class InventoryMcpTools {
     @Blocking
     @Tool(description = "Create an item using the REST ItemInput contract. Warehouse staff may create organization items; other inventory creators add privately owned items. The creator becomes responsible. Initial stock uses canonical ledger and asset/position rules.")
     public ApiResponses.ItemResponse create_item(
-            @ToolArg(description = "ItemInput: name/category required; privateResource selects private ownership; publicUse makes a privately owned item available for faction/general orders without commitments. Value is decimal currency, locations are UUIDs; optional amount initializes stock; serialized items use assetCodePrefix + assetStartNumber (default SKU- and 1, zero-padded to 3 digits); optional maintenanceSchedules[] create item-wide plans (date plans need nextDueAt, operating_hours/usage_count plans need nextDueValue; operating_hours requires tracksRuntime)", required = true) ApiModels.ItemInput input) {
+            @ToolArg(description = "ItemInput: all dates use epoch milliseconds; name/category required; privateResource selects private ownership; publicUse makes a privately owned item available for faction/general orders without commitments. Value is decimal currency, locations are UUIDs; optional amount initializes stock; serialized items use assetCodePrefix + assetStartNumber (default SKU- and 1, zero-padded to 3 digits); optional maintenanceSchedules[] create item-wide plans (date plans need nextDueAt, operating_hours/usage_count plans need nextDueValue; operating_hours requires tracksRuntime)", required = true) ApiModels.ItemInput input) {
         return call("create_item", () -> service.createItem(input));
     }
 
@@ -157,7 +157,7 @@ public class InventoryMcpTools {
     @Blocking
     @Tool(description = "Create an event using REST EventInput. Inventory admin access required; item quotas must refer to visible items.")
     public ApiResponses.EventResponse create_event(
-            @ToolArg(description = "EventInput: eventType and startDate (YYYY-MM-DD) required; optional name/endDate/status/notes/plannedQuantities/usedQuantities", required = true) ApiModels.EventInput input) {
+            @ToolArg(description = "EventInput: eventType and startDate (epoch milliseconds at midnight UTC) required; optional name/endDate/status/notes/plannedQuantities/usedQuantities", required = true) ApiModels.EventInput input) {
         return call("create_event", () -> service.createEvent(input));
     }
 

@@ -68,7 +68,7 @@ class AuditFixesApiTest {
     }
 
     @Test void assetInspectionIsScopedToThatAsset() { // H02
-        String due = LocalDate.now().plusDays(200).toString();
+        long due = org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().plusDays(200));
         String item = serializedItem(2, Map.of());
         var list = assets(item);
         String first = list.getString("[0].id"), second = list.getString("[1].id");
@@ -93,7 +93,7 @@ class AuditFixesApiTest {
                 .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("in_service"))
                 .body("find { it.id == '" + second + "' }.availabilityStatus", equalTo("in_field"))
                 .body("find { it.id == '" + second + "' }.nextMaintenanceDue",
-                        equalTo(LocalDate.now().plusDays(365).toString()));
+                        equalTo(org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().plusDays(365))));
 
         admin().body(Map.of("itemId", item, "assetInstanceId", first, "scheduleId", firstSchedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200);
@@ -106,16 +106,16 @@ class AuditFixesApiTest {
         String item = serializedItem(2, Map.of());
         var list = assets(item);
         String inspected = list.getString("[0].id"), pending = list.getString("[1].id");
-        String schedule = dateSchedule(item, inspected, LocalDate.now().minusDays(1).toString());
-        dateSchedule(item, pending, LocalDate.now().minusDays(1).toString());
+        String schedule = dateSchedule(item, inspected, org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().minusDays(1)));
+        dateSchedule(item, pending, org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().minusDays(1)));
         admin().body(Map.of("itemId", item, "assetInstanceId", inspected, "scheduleId", schedule, "type", "dguv_v3", "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200);
         admin().body(checkout(item, pending)).post("/api/transactions").then().statusCode(409);
         admin().body(checkout(item, inspected)).post("/api/transactions").then().statusCode(200);
     }
 
-    private String dateSchedule(String item, String asset, String due) {
-        return admin().body(Map.of("itemId",item,"assetInstanceId",asset,"maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",due+"T00:00:00Z","checkoutBlocking",true))
+    private String dateSchedule(String item, String asset, long due) {
+        return admin().body(Map.of("itemId",item,"assetInstanceId",asset,"maintenanceType","dguv_v3","intervalType","date","intervalValue",365,"nextDueAt",due,"checkoutBlocking",true))
                 .post("/api/maintenance-schedules").then().statusCode(201).extract().path("id");
     }
 

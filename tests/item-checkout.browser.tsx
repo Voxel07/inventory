@@ -27,7 +27,7 @@ const diesel = fixtureItem({ id: 'diesel', name: 'Diesel', isConsumable: true, i
   stock: fixtureStock(1000), storageLocation: location.id });
 installFixtureApi(({ url, path, method, body }) => {
   if (path === '/api/items') return [item, diesel];
-  if (path === '/api/transactions/restockable') return [{ checkoutId: 'checkout-1', occurredAt: '2026-10-18T08:00:00Z', person: 'Matthias Schneider',
+  if (path === '/api/transactions/restockable') return [{ checkoutId: 'checkout-1', occurredAt: 1792310400000, person: 'Matthias Schneider',
     event: 'Herbstspiel', faction: 'Logistik', issued: 400, restocked: 0 }];
   if (path === '/api/transactions/checkout-1/restock' && method === 'POST') return { id: 'restock-1', ...(body as object) };
   if (path === '/api/storage-locations') return locations;

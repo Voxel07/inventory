@@ -100,16 +100,16 @@ const { createCsvEventLogisticsImporter } = await import('../src/services/csvEve
 const { importCsvFactions } = await import('../src/services/csvReferenceImport');
 const { parseEventReportsFromCsv } = await import('../src/utils/csv/events');
 import type { EventAttendee, EventPersonSummary, EventTimelineEntry } from '../src/types/eventLogistics';
-const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: '', updated: '', faction: [] });
+const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: 0, updated: 0, faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
 const signIn = (id: string) => auth.setDevelopmentSession(`dev:${id}`, user(id));
 
 function logisticsRow() {
   return parseEventReportsFromCsv([{
-    Typ: 'Event', Eventtyp: 'DE', Eventdatum: '2026-10-17',
+    Typ: 'Event', Eventtyp: 'DE', Eventdatum: '17-10-2026',
     Teilnehmer: JSON.stringify(['alex', 'Mara'].map((personName) => ({ personName, roles: [{ role: 'event_crew' }] }))),
-    Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '2026-10-17T09:00' }]),
+    Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '17-10-2026 09:00' }]),
   }], [], { eventTypes: ['DE'], factions: [] })[0];
 }
 
@@ -137,7 +137,7 @@ test('CSV imports create missing factions once and save attendee roles with data
   expect([...(await importCsvFactions(planned))]).toEqual([...ids]);
   expect(writes.filter((write) => write.path === '/api/factions')).toHaveLength(1);
   const row = parseEventReportsFromCsv([{
-    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '2026-10-17',
+    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '17-10-2026',
     Teilnehmer: JSON.stringify([{ personName: 'Alex', roles: [{ role: 'faction_leader', faction: 'TERA' }] }]),
   }], [], { eventTypes: ['LS'], factions: planned })[0];
   expect(row.status).toBe('valid');
@@ -171,8 +171,7 @@ test('CSV logistics retries reuse people, preserve linked accounts, and update e
       if (!person) { person = { id: `person-${people.length}`, name: body.personName, userId: null, userName: null }; people.push(person); }
       saved = { ...body, id: id ?? `attendee-${rows.length}`, eventId, person };
     } else {
-      // ISO LocalDateTime may omit zero seconds; retry matching must treat them equally.
-      saved = { ...body, id: id ?? `timeline-${rows.length}`, eventId, startsAt: body.startsAt.slice(0, 16) };
+      saved = { ...body, id: id ?? `timeline-${rows.length}`, eventId };
     }
     if (id) rows.splice(rows.findIndex((entry) => entry.id === id), 1, saved);
     else rows.push(saved);
@@ -289,7 +288,7 @@ test('private catalog responses remove durable snapshots and private writes cann
   privacy.markPrivateInventoryResponse(rows);
   await offline.setOfflineCatalog('items', rows);
   expect(await offline.getOfflineCatalog('items')).toBeNull();
-  await expect(offline.enqueueOfflineAction({ idempotencyKey: 'secret-write', type: 'checkout', payload: { itemId: 'secret-item' }, localTimestamp: '2026-10-01' })).rejects.toThrow('online connection');
+  await expect(offline.enqueueOfflineAction({ idempotencyKey: 'secret-write', type: 'checkout', payload: { itemId: 'secret-item' }, localTimestamp: 1790812800000 })).rejects.toThrow('online connection');
   expect(await offline.getOfflineActions()).toEqual([]);
 });
 
@@ -316,10 +315,10 @@ test('an absent previous faction order is a null result from one targeted reques
     const url = new URL(String(input));
     expect(url.pathname).toBe('/api/orders/faction/previous');
     expect(url.searchParams.get('faction')).toBe('Search & Rescue');
-    expect(url.searchParams.get('before')).toBe('2027-06-12');
+    expect(url.searchParams.get('before')).toBe(String(Date.UTC(2027, 5, 12)));
     return new Response(null, { status: 204 });
   };
-  expect(await getPreviousFactionOrder('LS', 'Search & Rescue', '2027-06-12')).toBeNull();
+  expect(await getPreviousFactionOrder('LS', 'Search & Rescue', Date.UTC(2027, 5, 12))).toBeNull();
   expect(calls).toBe(1);
 });
 
@@ -551,7 +550,7 @@ test('a queue write committed during account switching keeps its original owner 
   let finish!: () => void;
   completeTransaction = (complete) => { finish = complete; written.resolve(); };
   signIn('A');
-  const pending = outcome(offline.enqueueOfflineAction({ idempotencyKey: 'A-command', type: 'checkout', payload: {}, localTimestamp: '2026-09-30' }));
+  const pending = outcome(offline.enqueueOfflineAction({ idempotencyKey: 'A-command', type: 'checkout', payload: {}, localTimestamp: 1790726400000 }));
   await written.promise;
   signIn('B'); finish();
   expect((await pending).error).toBeInstanceOf(auth.SessionChangedError);
@@ -626,14 +625,14 @@ test('report exports retain the initial generation and filters across the export
   const calls: URL[] = [];
   fetchRequest = async input => {
     const url = new URL(String(input)); calls.push(url);
-    return Response.json({ generatedAt: 'snapshot', total: 2, rows: url.pathname.endsWith('/export') ? [{ id: 'one' }, { id: 'two' }] : [{ id: 'one' }] });
+    return Response.json({ generatedAt: 1790848800000, total: 2, rows: url.pathname.endsWith('/export') ? [{ id: 'one' }, { id: 'two' }] : [{ id: 'one' }] });
   };
-  expect(await reports.reportApi.exportRows('movements', { itemId: 'item', from: '2026-01-01' }, 'Generation changed'))
-    .toEqual({ generation: 'snapshot', rows: [{ id: 'one' }, { id: 'two' }] });
-  expect(calls[1].searchParams.get('generation')).toBe('snapshot');
+  expect(await reports.reportApi.exportRows('movements', { itemId: 'item', from: 1767225600000 }, 'Generation changed'))
+    .toEqual({ generation: 1790848800000, rows: [{ id: 'one' }, { id: 'two' }] });
+  expect(calls[1].searchParams.get('generation')).toBe('1790848800000');
   expect(calls[1].searchParams.get('itemId')).toBe('item');
-  expect(calls[1].searchParams.get('from')).toBe('2026-01-01');
-  fetchRequest = async input => Response.json({ generatedAt: String(input).includes('/export') ? 'new-snapshot' : 'snapshot', total: 2, rows: [{ id: 'one' }] });
+  expect(calls[1].searchParams.get('from')).toBe(String(Date.UTC(2026, 0, 1)));
+  fetchRequest = async input => Response.json({ generatedAt: String(input).includes('/export') ? 1790848801000 : 1790848800000, total: 2, rows: [{ id: 'one' }] });
   await expect(reports.reportApi.exportRows('movements', {}, 'Generation changed')).rejects.toThrow('Generation changed');
 });
 
@@ -677,7 +676,7 @@ test('offline replay pauses on terminal failures, honours Retry-After and resume
   await offline.flushOfflineQueue({ resume: true });
   const state = offline.getSyncState();
   expect(state).toMatchObject({ kind: 'retrying', reason: 'rate_limited' });
-  expect(Date.parse((state as { retryAt: string }).retryAt) - before).toBeGreaterThanOrEqual(7000);
+  expect((state as { retryAt: number }).retryAt - before).toBeGreaterThanOrEqual(7000);
 
   respond = () => new Response('<html>proxy</html>', { status: 200 });
   await new Promise((resolve) => setTimeout(resolve, 0));

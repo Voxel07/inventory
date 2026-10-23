@@ -20,7 +20,7 @@ export function factionOrderAssemblyBaseline(order: FactionOrderSummary): Record
 
 export function findPreviousFactionOrder(
   orders: FactionOrderSummary[],
-  values: { eventType: EventType; faction: string; eventDate: string; excludeId?: string },
+  values: { eventType: EventType; faction: string; eventDate: number; excludeId?: string },
 ): FactionOrderSummary | undefined {
   const targetTime = new Date(values.eventDate).getTime();
   if (!Number.isFinite(targetTime)) return undefined;

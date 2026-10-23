@@ -89,7 +89,7 @@ public class OutboxOrm {
                   and not exists(select 1 from integration_subscriptions s where s.enabled=true and e.occurred_at>=s.since
                     and exists(select 1 from jsonb_array_elements_text(s.prefixes) as prefixes(prefix) where left(e.event_type,length(prefix))=prefix)
                     and not exists(select 1 from integration_deliveries d where d.consumer=s.name and d.event_id=e.event_id and d.state='acknowledged'))
-                """).setParameter("cutoff",cutoff).executeUpdate();
+                """).setParameter("cutoff",cutoff.toEpochMilli()).executeUpdate();
     }
 
     public int markPublished(List<UUID> ids, Instant publishedAt) {

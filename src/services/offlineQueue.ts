@@ -27,7 +27,7 @@ export type OfflineAction = {
   idempotencyKey: string;
   type: string;
   payload: Record<string, unknown>;
-  localTimestamp: string;
+  localTimestamp: number;
   ownerId?: string;
   supersedes?: string;
   resolutionNote?: string;
@@ -39,7 +39,7 @@ const STORE = 'sync-queue';
 const CATALOG_STORE = 'catalog-cache';
 const FAILURES_STORE = 'sync-failures';
 const HISTORY_STORE = 'sync-history';
-const catalogFallbacks = new Map<string, string>();
+const catalogFallbacks = new Map<string, number>();
 export const getCatalogFallbacks = () => [...catalogFallbacks.entries()].filter(([key]) => key.startsWith(`${captureAuthSession().catalogScope}:`)).map(([key, cachedAt]) => ({ key, cachedAt }));
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -75,7 +75,7 @@ export async function setOfflineCatalogEntries(entries: { key: string; data: unk
   await Promise.all(protectedEntries.map(entry => removeOfflineCatalog(entry.key, context)));
   entries = entries.filter(entry => !containsPrivateInventory(entry.data));
   if (!context.accountId || !entries.length) return;
-  const cachedAt = new Date().toISOString();
+  const cachedAt = Date.now();
   const rows = entries.map((entry) => ({ ...entry, key: `${context.catalogScope}:${entry.key}`, cachedAt }));
   try {
     const db = await openDatabase();
@@ -160,7 +160,7 @@ export async function getOfflineActions(): Promise<OfflineAction[]> {
   const rows = await readStore<OfflineAction>(STORE, context);
   assertAuthSession(context);
   return rows.filter((action) => Boolean(context.accountId) && action.ownerId === context.accountId)
-    .sort((a, b) => a.localTimestamp.localeCompare(b.localTimestamp));
+    .sort((a, b) => (a.localTimestamp - b.localTimestamp));
 }
 
 export async function discardOfflineAction(idempotencyKey: string): Promise<void> {
@@ -184,10 +184,10 @@ export type SyncFailure = {
   type: string;
   payload: Record<string, unknown>;
   ownerId?: string;
-  localTimestamp?: string;
+  localTimestamp?: number;
   status: 'conflict' | 'rejected';
   error: string;
-  timestamp: string;
+  timestamp: number;
 };
 
 export async function getSyncFailures(): Promise<SyncFailure[]> {
@@ -218,7 +218,7 @@ export async function discardSyncFailure(idempotencyKey: string): Promise<void> 
  */
 export type SyncState =
   | { kind: 'idle' }
-  | { kind: 'retrying'; reason: 'network' | 'server' | 'rate_limited' | 'storage'; message: string; retryAt: string }
+  | { kind: 'retrying'; reason: 'network' | 'server' | 'rate_limited' | 'storage'; message: string; retryAt: number }
   | { kind: 'paused'; reason: 'auth' | 'forbidden' | 'rejected' | 'invalid_response'; message: string };
 
 let syncState: SyncState = { kind: 'idle' };
@@ -263,7 +263,7 @@ function retry(reason: Extract<SyncState, { kind: 'retrying' }>['reason'], messa
   console.warn(`Offline replay will retry (${reason})`, cause);
   flushAttempt += 1;
   const delay = retryAfterSeconds !== undefined ? retryAfterSeconds * 1000 : Math.min(60_000, 2_000 * 2 ** flushAttempt);
-  syncState = { kind: 'retrying', reason, message, retryAt: new Date(Date.now() + delay).toISOString() };
+  syncState = { kind: 'retrying', reason, message, retryAt: Date.now() + delay };
   return delay;
 }
 
@@ -355,7 +355,7 @@ async function storeResults(actions: OfflineAction[], results: SyncResult[]): Pr
       const original = actions.find((action) => action.idempotencyKey === result.idempotencyKey);
       if (!original) continue;
       queueStore.delete(result.idempotencyKey);
-      tx.objectStore(HISTORY_STORE).put({ ...original, status: result.status, error: result.error, timestamp: new Date().toISOString() });
+      tx.objectStore(HISTORY_STORE).put({ ...original, status: result.status, error: result.error, timestamp: Date.now() });
       if (result.status === 'applied') {
         failuresStore.delete(result.idempotencyKey);
       } else {
@@ -367,7 +367,7 @@ async function storeResults(actions: OfflineAction[], results: SyncResult[]): Pr
           payload: original.payload,
           status: result.status,
           error: result.error || result.status,
-          timestamp: new Date().toISOString(),
+          timestamp: Date.now(),
         } satisfies SyncFailure);
       }
     }
@@ -400,12 +400,12 @@ export async function getOfflineHistory(): Promise<OfflineHistory[]> {
   const rows = await readStore<OfflineHistory>(HISTORY_STORE, context);
   assertAuthSession(context);
   return rows.filter((entry) => Boolean(context.accountId) && entry.ownerId === context.accountId)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    .sort((a, b) => (b.timestamp - a.timestamp));
 }
-export async function getCacheFreshness(): Promise<{ key: string; cachedAt: string }[]> {
+export async function getCacheFreshness(): Promise<{ key: string; cachedAt: number }[]> {
   const context = captureAuthSession();
   const prefix = `${context.catalogScope}:`;
-  const rows = await readStore<{ key: string; cachedAt: string }>(CATALOG_STORE, context);
+  const rows = await readStore<{ key: string; cachedAt: number }>(CATALOG_STORE, context);
   assertAuthSession(context);
   return rows.filter((entry) => entry.key.startsWith(prefix))
     .map((entry) => ({ key: entry.key.slice(prefix.length), cachedAt: entry.cachedAt }));
@@ -414,7 +414,7 @@ export async function getCacheFreshness(): Promise<{ key: string; cachedAt: stri
 async function archiveAndDelete(db: IDBDatabase, source: string, entry: OfflineAction | SyncFailure, status: string) {
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([source, HISTORY_STORE], 'readwrite');
-    tx.objectStore(HISTORY_STORE).put({ ...entry, status, timestamp: new Date().toISOString() });
+    tx.objectStore(HISTORY_STORE).put({ ...entry, status, timestamp: Date.now() });
     tx.objectStore(source).delete(entry.idempotencyKey);
     tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
@@ -432,8 +432,8 @@ export async function correctSyncFailure(failure: SyncFailure, payload: Record<s
   assertAuthSession(context);
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([STORE, FAILURES_STORE, HISTORY_STORE], 'readwrite');
-    tx.objectStore(STORE).put({ idempotencyKey: crypto.randomUUID(), ownerId: context.accountId, type: failure.type, payload, localTimestamp: new Date().toISOString(), supersedes: failure.idempotencyKey, resolutionNote });
-    tx.objectStore(HISTORY_STORE).put({ ...failure, status: 'superseded', resolutionNote, timestamp: new Date().toISOString() });
+    tx.objectStore(STORE).put({ idempotencyKey: crypto.randomUUID(), ownerId: context.accountId, type: failure.type, payload, localTimestamp: Date.now(), supersedes: failure.idempotencyKey, resolutionNote });
+    tx.objectStore(HISTORY_STORE).put({ ...failure, status: 'superseded', resolutionNote, timestamp: Date.now() });
     tx.objectStore(FAILURES_STORE).delete(failure.idempotencyKey);
     tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });

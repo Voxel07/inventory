@@ -24,35 +24,35 @@ test('a location with redacted ancestry stays a stock location without inventing
   expect(holdsStock({ depth: 0 })).toBe(false);
 });
 
-const order = (id: string, date: string, status: FactionOrder['status'] = 'closed', faction = 'KGG', eventType = 'DE'): FactionOrder => ({
+const order = (id: string, date: number, status: FactionOrder['status'] = 'closed', faction = 'KGG', eventType = 'DE'): FactionOrder => ({
   id, eventDate: date, status, faction, eventType, requestedQuantities: { radio: 8 }, preparedQuantities: { radio: 5 },
   requestedAssemblyQuantities: { kit: 3 }, preparedAssemblyQuantities: { kit: 2 },
 } as FactionOrder);
 
 test('previous-year comparison ignores current-year, cancelled, other-faction and other-event orders', () => {
-  const previous = order('previous', '2025-06-12');
-  const candidates = [order('current', '2026-01-01'), order('cancelled', '2025-12-01', 'cancelled'),
-    order('other-faction', '2025-11-01', 'closed', 'GOF'), order('other-event', '2025-10-01', 'closed', 'KGG', 'LS'),
-    order('older', '2024-06-12'), previous];
-  const values = { eventType: 'DE', faction: 'KGG', eventDate: '2026-06-12' };
+  const previous = order('previous', 1749686400000);
+  const candidates = [order('current', 1767225600000), order('cancelled', 1764547200000, 'cancelled'),
+    order('other-faction', 1761955200000, 'closed', 'GOF'), order('other-event', 1759276800000, 'closed', 'KGG', 'LS'),
+    order('older', 1718150400000), previous];
+  const values = { eventType: 'DE', faction: 'KGG', eventDate: 1781222400000 };
   expect(findPreviousFactionOrder(candidates, values)).toBe(previous);
   expect(findPreviousFactionOrder(candidates, { ...values, excludeId: 'previous' })?.id).toBe('older');
-  expect(findPreviousFactionOrder(candidates, { ...values, eventDate: 'invalid' })).toBeUndefined();
+  expect(findPreviousFactionOrder(candidates, { ...values, eventDate: NaN })).toBeUndefined();
   expect(findPreviousFactionOrder([], values)).toBeUndefined();
 });
 
 test('historical baselines compare handed-over preparation; open orders compare demand', () => {
   for (const status of ['picked_up', 'partially_returned', 'returned', 'closed'] as const) {
-    const source = order('history', '2025-06-12', status);
+    const source = order('history', 1749686400000, status);
     expect(factionOrderItemBaseline(source)).toEqual({ radio: 5 });
     expect(factionOrderAssemblyBaseline(source)).toEqual({ kit: 2 });
   }
   for (const status of ['draft', 'submitted', 'preparing', 'ready'] as const) {
-    const source = order('open', '2026-06-12', status);
+    const source = order('open', 1781222400000, status);
     expect(factionOrderItemBaseline(source)).toEqual({ radio: 8 });
     expect(factionOrderAssemblyBaseline(source)).toEqual({ kit: 3 });
   }
-  const empty = { ...order('empty', '2025-06-12'), preparedQuantities: {}, preparedAssemblyQuantities: {} };
+  const empty = { ...order('empty', 1749686400000), preparedQuantities: {}, preparedAssemblyQuantities: {} };
   expect(factionOrderItemBaseline(empty)).toEqual({ radio: 8 });
   expect(factionOrderAssemblyBaseline(empty)).toEqual({ kit: 3 });
 });

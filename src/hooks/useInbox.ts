@@ -23,7 +23,7 @@ export function usePickupNotifications() {
   });
   const count = useUnreadNoticeCount();
   // Pages can overlap after a notice is read between page loads; keep one row per notice.
-  const unread = [...new Map((query.data?.pages ?? []).flatMap((page) => page.rows).filter((notification) => !notification.readAt)
+  const unread = [...new Map((query.data?.pages ?? []).flatMap((page) => page.rows).filter((notification) => notification.readAt == null)
     .map((notification) => [notification.id, notification])).values()];
   // Total unread on the server; the list holds the newest page of them.
   const unreadTotal = Math.max(unread.length, count.data ?? 0);
@@ -32,7 +32,7 @@ export function usePickupNotifications() {
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
       const previous = queryClient.getQueryData<InfiniteData<Page<AppNotification>, number>>(NOTIFICATIONS_KEY);
-      const readAt = new Date().toISOString();
+      const readAt = Date.now();
       queryClient.setQueryData<InfiniteData<Page<AppNotification>, number>>(NOTIFICATIONS_KEY, (current) => current && ({
         ...current,
         pages: current.pages.map((page) => ({ ...page, rows: page.rows.map((notification) => ids.includes(notification.id) ? { ...notification, readAt } : notification) })),
@@ -58,7 +58,7 @@ export function usePickupNotifications() {
 export function useInboxCount() {
   const inbox = useActionInbox();
   const notices = useUnreadNoticeCount();
-  const dueActions = (inbox.data ?? []).filter((action) => !action.remindAt || Date.parse(action.remindAt) <= inbox.dataUpdatedAt).length;
+  const dueActions = (inbox.data ?? []).filter((action) => action.remindAt == null || action.remindAt <= inbox.dataUpdatedAt).length;
   return dueActions + (notices.data ?? 0);
 }
 

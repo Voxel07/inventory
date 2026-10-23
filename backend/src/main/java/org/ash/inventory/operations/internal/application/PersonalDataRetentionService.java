@@ -22,11 +22,11 @@ public class PersonalDataRetentionService {
     public void purge() {
         if (!workers.enabled("retention")) return;
         if (notificationsDays>0) notifications.purge(notificationsDays);
-        if (remindersDays>0) em.createNativeQuery("delete from action_reminders where id in (select id from action_reminders where remind_at is null and updated_at < now()-make_interval(days=>:days) order by updated_at limit 1000)").setParameter("days",remindersDays).executeUpdate();
+        if (remindersDays>0) em.createNativeQuery("delete from action_reminders where id in (select id from action_reminders where remind_at is null and updated_at < (extract(epoch from now()) * 1000)::bigint - cast(:days as bigint) * 86400000 order by updated_at limit 1000)").setParameter("days",remindersDays).executeUpdate();
         if (attendeeDays>0) {
-            var ids=em.createNativeQuery("select p.id from event_people p where p.user_id is null and p.name not like 'Former attendee %' and exists(select 1 from event_attendees a where a.person_id=p.id) and not exists(select 1 from event_attendees a join event_occurrences e on e.id=a.event_id where a.person_id=p.id and e.end_date >= current_date-:days) order by p.id limit 1000").setParameter("days",attendeeDays).getResultList();
+            var ids=em.createNativeQuery("select p.id from event_people p where p.user_id is null and p.name not like 'Former attendee %' and exists(select 1 from event_attendees a where a.person_id=p.id) and not exists(select 1 from event_attendees a join event_occurrences e on e.id=a.event_id where a.person_id=p.id and e.end_date >= :cutoff) order by p.id limit 1000").setParameter("cutoff",org.ash.inventory.platform.api.EpochTime.millis(org.ash.inventory.platform.api.BusinessTime.today().minusDays(attendeeDays))).getResultList();
             for(var id:ids) {
-                em.createNativeQuery("update event_people set name=:alias,updated_at=now() where id=:id").setParameter("alias","Former attendee "+id.toString().substring(0,8)).setParameter("id",id).executeUpdate();
+                em.createNativeQuery("update event_people set name=:alias,updated_at=(extract(epoch from now()) * 1000)::bigint where id=:id").setParameter("alias","Former attendee "+id.toString().substring(0,8)).setParameter("id",id).executeUpdate();
                 em.createNativeQuery("update event_attendees set notes=null where person_id=:id").setParameter("id",id).executeUpdate();
             }
         }

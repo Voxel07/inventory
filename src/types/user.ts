@@ -14,8 +14,8 @@ export interface User {
   faction?: string[];
   /** Revision of role and factions; required when the admin changes them. */
   revision?: number;
-  created: string;
-  updated: string;
+  created: number;
+  updated: number;
 }
 
 /**
@@ -35,7 +35,7 @@ export interface UserAccessState {
 
 export interface UserAccessHistoryEntry {
   id: string;
-  occurredAt: string;
+  occurredAt: number;
   changedBy: ActorSummary | null;
   before: UserAccessState;
   after: UserAccessState;

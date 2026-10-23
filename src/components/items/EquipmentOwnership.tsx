@@ -89,7 +89,7 @@ function EquipmentLending({ item, canEdit, embedded = false, showSummary = true,
           <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('items.equipmentOwnership.dateRangeWithoutEventRestriction')} · {c.quantity} · {statuses[c.status]}</Typography>
           <Typography>{formatDate(c.availableFrom)} – {formatDate(c.availableUntil)}</Typography>
           <Typography variant="body2">{t('common.pickup')}: {c.pickupDetails}</Typography>
-          {c.returnDue && <Typography variant="body2">{t('items.equipmentOwnership.returnDue')}: {formatDate(c.returnDue)} · {c.returnDetails}</Typography>}
+          {c.returnDue != null && <Typography variant="body2">{t('items.equipmentOwnership.returnDue')}: {formatDate(c.returnDue)} · {c.returnDetails}</Typography>}
           {c.assetIds.length > 0 && <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{t('items.equipmentOwnership.assets')}: {c.assetIds.map(id => assets.find(a => a.id === id)?.assetCode ?? id).join(', ')}</Typography>}
           <Typography variant="body2">{c.recordedBy}: {c.notes}</Typography>
           {c.cancellationReason && <Typography variant="body2">{t('items.equipmentOwnership.cancellationReason')}: {c.cancellationReason}</Typography>}

@@ -31,17 +31,17 @@ const items = [
   item('table', 'Biertisch', 'Mobiliar', 15, locations[2]),
 ];
 const assemblies = [fixtureAssembly({ id: 'power', name: 'Notstrom-Einheit 3,5 kW', description: 'Generator mit Kanister', itemQuantities: { generator: 1, fuel: 1 }, eventTypes: ['LS'] })];
-const event = (id: string, eventType: string, name: string, date: string, endDate: string, status: EventReport['status']): EventReport => ({
+const event = (id: string, eventType: string, name: string, date: number, endDate: number, status: EventReport['status']): EventReport => ({
   id, eventType, name, eventDate: date, startDate: date, endDate, status, itemIds: [], plannedQuantities: {}, usedQuantities: {}, created: FIXTURE_TIME, updated: FIXTURE_TIME,
 });
 const events = [
-  event('ls-2026', 'LS', 'LightSim 2026', '2026-06-13', '2026-06-14', 'completed'),
-  event('ls-2027', 'LS', 'LightSim 2027', '2027-06-12', '2027-06-13', 'planned'),
-  event('de-2026', 'DE', 'Demo DE 2026', '2026-09-12', '2026-09-13', 'completed'),
+  event('ls-2026', 'LS', 'LightSim 2026', 1781308800000, 1781395200000, 'completed'),
+  event('ls-2027', 'LS', 'LightSim 2027', 1812758400000, 1812844800000, 'planned'),
+  event('de-2026', 'DE', 'Demo DE 2026', 1789171200000, 1789257600000, 'completed'),
 ];
 const factionOrder = (id: string, faction: string, status: FactionOrderStatus, extra: Partial<FactionOrder> = {}): FactionOrder => ({
-  kind: 'faction', id, orderCode: `LS27-${faction}-01`, factionKey: `LS:${faction.toLowerCase()}`, eventType: 'LS', faction, eventDate: '2027-06-12', eventOccurrenceId: 'ls-2027',
-  requestedPickupDate: '2027-06-10', status, itemIds: ['seal', 'fence'], requestedQuantities: { seal: 2, fence: 6 }, preparedQuantities: {},
+  kind: 'faction', id, orderCode: `LS27-${faction}-01`, factionKey: `LS:${faction.toLowerCase()}`, eventType: 'LS', faction, eventDate: 1812758400000, eventOccurrenceId: 'ls-2027',
+  requestedPickupDate: 1812585600000, status, itemIds: ['seal', 'fence'], requestedQuantities: { seal: 2, fence: 6 }, preparedQuantities: {},
   assemblyIds: ['power'], requestedAssemblyQuantities: { power: 1 }, preparedAssemblyQuantities: {}, assetAssignments: {}, reservedQuantities: {},
   notes: 'Bitte Zaunelemente gebündelt bereitstellen.', createdBy: 'preview', history: [], created: FIXTURE_TIME, updated: FIXTURE_TIME,
   // The API expands every line item, including assembly components (generator, fuel).
@@ -50,7 +50,7 @@ const factionOrder = (id: string, faction: string, status: FactionOrderStatus, e
 const factionOrders = [
   factionOrder('order-tera', 'TERA', 'preparing', { preparedQuantities: { seal: 2 } }),
   factionOrder('order-ucrf', 'UCRF', 'submitted'),
-  factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: '2026-06-13', requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, consumedQuantities: { seal: 1 }, preparedAssemblyQuantities: { power: 1 } }),
+  factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: 1781308800000, requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, consumedQuantities: { seal: 1 }, preparedAssemblyQuantities: { power: 1 } }),
 ];
 const generalOrder = (id: string, name: string, purpose: string, eventOccurrenceId: string, status: GeneralOrder['status'], extra: Partial<GeneralOrder>): GeneralOrder => ({
   kind: 'general', id, name, purpose, eventOccurrenceId, status, requestedQuantities: {}, preparedQuantities: {}, handedOverQuantities: {}, returnedQuantities: {},
