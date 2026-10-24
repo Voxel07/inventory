@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { Alert, Divider, Link, Paper, Stack, TextField, Typography } from '@mui/material';
-import CasinoIcon from '@mui/icons-material/Casino';
+import SendIcon from '@mui/icons-material/Send';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, IconButton } from './ActionButtons';
+import { Button } from './ActionButtons';
 import { useAuth } from '../../hooks/useAuth';
 import { useT } from '../../utils/naming';
 import { queryKeys } from '../../utils/queryKeys';
-import { getNotificationSettings, updateNotificationSettings, type NotificationSettings } from '../../services/notificationService';
+import { getNotificationSettings, sendNtfyTest, updateNotificationSettings, type NotificationSettings } from '../../services/notificationService';
 
 const TOPIC = /^[A-Za-z0-9_-]{1,64}$/;
 const WEBHOOK = /^https:\/\/[^\s/?#]+\S*$/i;
-
-function randomTopic() {
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
-  return `inventory-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
-}
 
 /** Personal delivery channels; the ntfy section is hidden while the deployment has no ntfy server configured. */
 export function NotificationSettingsCard() {
@@ -38,6 +33,7 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
     mutationFn: () => updateNotificationSettings({ ntfyTopic: trimmedTopic || null, webhookUrl: trimmedWebhook || null }),
     onSuccess: (saved) => client.setQueryData(queryKeys.notificationSettings(userId), saved),
   });
+  const test = useMutation({ mutationFn: sendNtfyTest });
   const server = settings.ntfyServer?.replace(/\/+$/, '');
 
   return (
@@ -56,19 +52,23 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
             <Divider />
             <Typography variant="subtitle1">{t('profile.ntfy.title')}</Typography>
             <Typography variant="body2" color="text.secondary">{t('profile.ntfy.description')}</Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-              <TextField fullWidth size="small" label={t('profile.ntfy.topic')} value={topic} error={topicInvalid} disabled={save.isPending}
-                helperText={t('profile.ntfy.topicHelp')} slotProps={{ htmlInput: { maxLength: 64 } }}
-                onChange={(event) => { setTopic(event.target.value); save.reset(); }} />
-              <IconButton title={t('profile.ntfy.generate')} disabled={save.isPending} onClick={() => { setTopic(randomTopic()); save.reset(); }}>
-                <CasinoIcon />
-              </IconButton>
-            </Stack>
+            <TextField fullWidth size="small" label={t('profile.ntfy.topic')} value={topic} error={topicInvalid} disabled={save.isPending}
+              helperText={t('profile.ntfy.topicHelp')} slotProps={{ htmlInput: { maxLength: 64 } }}
+              onChange={(event) => { setTopic(event.target.value); save.reset(); test.reset(); }} />
             {settings.ntfyTopic && (
-              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                {t('profile.ntfy.subscribe')}{' '}
-                <Link href={`${server}/${settings.ntfyTopic}`} target="_blank" rel="noopener noreferrer">{`${server}/${settings.ntfyTopic}`}</Link>
-              </Typography>
+              <>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  {t('profile.ntfy.subscribe')}{' '}
+                  <Link href={`${server}/${settings.ntfyTopic}`} target="_blank" rel="noopener noreferrer">{`${server}/${settings.ntfyTopic}`}</Link>
+                </Typography>
+                {/* Tests the saved topic, so it is only offered while the field still shows it. */}
+                <Button title={t('profile.ntfy.test')} variant="outlined" startIcon={<SendIcon />} sx={{ alignSelf: 'flex-start' }}
+                  disabled={test.isPending || save.isPending || trimmedTopic !== settings.ntfyTopic} onClick={() => test.mutate()}>
+                  {t('profile.ntfy.test')}
+                </Button>
+                {test.isSuccess && <Alert severity="success">{t('profile.ntfy.testSent')}</Alert>}
+                {test.error && <Alert severity="error">{test.error.message}</Alert>}
+              </>
             )}
           </>
         )}

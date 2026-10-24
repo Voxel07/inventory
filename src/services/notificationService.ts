@@ -23,3 +23,5 @@ export function getNotificationSettings(): Promise<NotificationSettings> { retur
 export function updateNotificationSettings(input: { ntfyTopic: string | null; webhookUrl: string | null }): Promise<NotificationSettings> {
   return apiRequest('/api/notifications/settings', { method: 'PUT', body: input });
 }
+/** Publishes a test message to the current user's saved ntfy topic. */
+export async function sendNtfyTest(): Promise<void> { await apiRequest('/api/notifications/settings/ntfy-test', { method: 'POST' }); }

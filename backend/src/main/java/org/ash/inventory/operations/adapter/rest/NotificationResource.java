@@ -7,18 +7,21 @@ import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.security.ActorService;
+import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,6 +76,24 @@ public class NotificationResource {
     @PUT @Path("/settings") @Consumes(MediaType.APPLICATION_JSON)
     public ApiResponses.NotificationSettingsResponse updateSettings(@jakarta.validation.constraints.NotNull @Valid ApiModels.NotificationSettingsInput input) {
         return settings(users.updateNotificationSettings(input));
+    }
+
+    /** Publishes a fixed test message to the current user's saved ntfy topic so they can check their subscription. */
+    @POST @Path("/settings/ntfy-test")
+    public void ntfyTest() {
+        var topic = actors.current().ntfyTopic;
+        if (ntfy.server().isEmpty()) throw ApiException.badRequest("ntfy is not configured for this deployment");
+        if (topic == null) throw ApiException.badRequest("Save an ntfy topic first");
+        try {
+            if (!ntfy.publish(new NtfyPublisher.Message(topic, "Inventory test notification",
+                    "Your ntfy notifications are set up correctly.", null, List.of("white_check_mark"))))
+                throw new ApiException(502, "The ntfy server rejected the test notification");
+        } catch (IOException | IllegalArgumentException exception) {
+            throw new ApiException(502, "The ntfy server is unavailable");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(503, "The test notification was interrupted");
+        }
     }
 
     private ApiResponses.NotificationSettingsResponse settings(UserAccount user) {
