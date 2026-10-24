@@ -12,7 +12,7 @@ const items = rows.filter((row) => row.Typ === 'Artikel').map((row, index) => ({
 } as Item));
 const factions: [EventType, string][] = [['DE', 'KGG'], ['DE', 'GOF'], ['DE', 'Enklave'], ['DE', 'Miliz'], ['LS', 'UCRF'], ['LS', 'TERA']];
 const reference: CsvReference = {
-  eventTypes: ['ASD', 'DE', 'LS', 'M24', 'TNO'],
+  eventTypes: ['ASD', 'DE', 'LA', 'LS', 'M24', 'PBG', 'TNO'],
   factions: factions.map(([eventType, name]) => ({ id: name, eventType, name, slug: name.toLowerCase() } as Faction)),
 };
 
@@ -48,7 +48,7 @@ test('orders past "ready" need an exact pickup point', () => {
 
 test('every sample event has valid attendees, travel times and preparation/game timings', () => {
   const events = parseEventReportsFromCsv(rows, items, reference);
-  expect(events).toHaveLength(14);
+  expect(events).toHaveLength(27);
   expect(events.filter((row) => row.status === 'error').map((row) => `${row.index}: ${row.statusMessage}`)).toEqual([]);
   for (const event of events) {
     expect(event.data.name).toBe(event.rawRow.Name);
@@ -56,11 +56,13 @@ test('every sample event has valid attendees, travel times and preparation/game 
     expect(event.data.endDate! > event.data.startDate!).toBe(true);
     expect(event.attendees).toHaveLength(6);
     expect(event.attendees.every((person) => person.arrivesAt && person.leavesAt && person.roles.length)).toBe(true);
-    expect(event.timeline).toHaveLength(4);
-    expect(new Set(event.timeline.map((entry) => entry.category))).toEqual(new Set(['in_game', 'preparation']));
+    expect(event.timeline.length).toBeGreaterThanOrEqual(4);
+    expect(event.timeline.some((entry) => entry.category === 'in_game')).toBe(true);
+    expect(event.timeline.some((entry) => entry.category === 'preparation')).toBe(true);
     expect(event.timeline.every((entry) => entry.status === event.data.status)).toBe(true);
   }
   expect(events.find((event) => event.data.eventType === 'DE')?.attendees[0].roles[0].factionId).toBe('KGG');
+  expect(events.find((event) => event.data.name === 'Tschernobyl 2027')?.timeline.filter((entry) => entry.category === 'catering')).toHaveLength(14);
 });
 
 test('downloadable combined template includes a valid event with logistics', () => {

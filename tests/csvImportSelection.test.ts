@@ -62,7 +62,7 @@ test('admin combined import bootstraps the sample from an empty reference catalo
   const result = buildCsvImportPlan({ csvContent: sample, tabType: 'combined', items: [], assemblies: [],
     storageLocations: [], updateExistingItems: false, reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
   expect(result.totalErrorsCount).toBe(0);
-  expect(result.validEventsCount).toBe(14);
+  expect(result.validEventsCount).toBe(27);
   expect(result.validOrdersCount).toBe(22);
   expect(result.validGeneralOrdersCount).toBe(11);
   expect(result.validCheckoutsCount).toBe(countType('Ausleihe'));
