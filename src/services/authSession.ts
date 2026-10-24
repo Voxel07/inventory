@@ -10,7 +10,7 @@ export type PersistedAuthSession = {
   tokenRevision: number;
   /** The account the server acts as; while impersonating, the impersonated account. */
   user: User | null;
-  /** Development only: the signed-in administrator while {@code user} is impersonated. */
+  /** Pre-launch only: the signed-in administrator while {@code user} is impersonated. */
   impersonator: User | null;
 };
 

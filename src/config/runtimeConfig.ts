@@ -62,7 +62,7 @@ export const DEV_LOGIN_AVAILABLE = !OIDC_CONFIG
 
 /**
  * Administrators may act as other accounts in the Vite dev server, or in a build whose runtime config sets
- * IMPERSONATION=true. The API decides independently (inventory.impersonation.enabled, never in prod).
+ * IMPERSONATION=true. The API decides independently (inventory.impersonation.enabled); pre-launch only.
  */
 export const IMPERSONATION_AVAILABLE = import.meta.env.DEV
   || value('IMPERSONATION', import.meta.env.VITE_IMPERSONATION).toLowerCase() === 'true';

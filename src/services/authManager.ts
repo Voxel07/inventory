@@ -17,7 +17,7 @@ export type AuthSnapshot = {
   generation: number;
   token: string;
   user: User | null;
-  /** Development only: the signed-in administrator while {@code user} is impersonated. */
+  /** Pre-launch only: the signed-in administrator while {@code user} is impersonated. */
   impersonator: User | null;
   error: string | null;
 };

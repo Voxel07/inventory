@@ -8,7 +8,7 @@ VITE_OIDC_REDIRECT_URI="${VITE_OIDC_REDIRECT_URI:-}"
 VITE_OIDC_SCOPE="${VITE_OIDC_SCOPE:-openid profile email offline_access}"
 # Local Docker development without OIDC only; the prod API profile refuses dev authentication anyway.
 VITE_DEV_LOGIN="${VITE_DEV_LOGIN:-false}"
-# Development only: offers administrators account impersonation; the API must enable it as well.
+# Pre-launch only: offers administrators account impersonation; the API must enable it as well.
 VITE_IMPERSONATION="${VITE_IMPERSONATION:-false}"
 CONFIG_PATH="${CONFIG_PATH:-/usr/share/nginx/html/config.js}"
 SECURITY_HEADERS_PATH="${SECURITY_HEADERS_PATH:-/etc/nginx/snippets/security-headers.conf}"

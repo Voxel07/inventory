@@ -108,9 +108,8 @@ class ActorServiceRoleTest {
 
     @Test
     void productionRejectsDevelopmentAuthenticationAndMissingOidc() {
-        assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(true, false, true));
-        assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(false, true, true));
-        assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(false, false, false));
-        ProductionAuthGuard.check(false, false, true);
+        assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(true, true));
+        assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(false, false));
+        ProductionAuthGuard.check(false, true);
     }
 }
