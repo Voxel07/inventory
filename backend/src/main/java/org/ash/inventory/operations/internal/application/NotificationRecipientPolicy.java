@@ -18,8 +18,8 @@ public class NotificationRecipientPolicy implements RecipientPolicy {
         boolean allowed=user!=null && user.active;
         if(allowed && orderId!=null)allowed=visible("order",orderId,user);
         if(allowed && itemId!=null)allowed=visible("item",itemId,user);
-        if(!allowed)return new Decision(false,null,null);
-        return new Decision(true,user.email==null || user.email.isBlank()?null:user.email,user.ntfyTopic);
+        if(!allowed)return new Decision(false,null,null,null);
+        return new Decision(true,user.email==null || user.email.isBlank()?null:user.email,user.ntfyTopic,user.webhookUrl);
     }
     private boolean visible(String kind,UUID id,UserAccount user) {
         return Boolean.TRUE.equals(em.createNativeQuery("select inventory_resource_visible(:kind,:id,:actor,:admin,:public)")

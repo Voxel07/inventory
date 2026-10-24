@@ -132,16 +132,16 @@ class DocsRemediationApiTest {
             return List.of(skipped.id,ready.id);
         });
         var ineligible=notices.claim();assertNotNull(ineligible);assertFalse(audience.resolve(ineligible.recipientId(),ineligible.orderId(),ineligible.itemId()).allowed());
-        notices.finish(ineligible,org.ash.inventory.notification.api.NotificationService.Outcome.SKIPPED);
+        notices.finish(ineligible,org.ash.inventory.notification.api.NotificationService.Outcome.SKIPPED,java.util.Set.of());
         var claimed=notices.claim();assertNotNull(claimed);assertEquals(ids.get(1),claimed.id());
         QuarkusTransaction.requiringNew().run(()->assertEquals("skipped",em.find(org.ash.inventory.notification.internal.Notification.class,ids.getFirst()).deliveryStatus));
-        notices.finish(new org.ash.inventory.notification.api.NotificationService.Delivery(claimed.id(),UUID.randomUUID(),claimed.recipientId(),claimed.orderId(),claimed.itemId()),org.ash.inventory.notification.api.NotificationService.Outcome.SENT);
+        notices.finish(new org.ash.inventory.notification.api.NotificationService.Delivery(claimed.id(),UUID.randomUUID(),claimed.recipientId(),claimed.orderId(),claimed.itemId(),java.util.Set.of()),org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of());
         QuarkusTransaction.requiringNew().run(()->assertEquals("sending",em.find(org.ash.inventory.notification.internal.Notification.class,claimed.id()).deliveryStatus));
-        notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT);
+        notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of());
         QuarkusTransaction.requiringNew().run(()->{
             var row=em.find(org.ash.inventory.notification.internal.Notification.class,claimed.id());assertEquals("sent",row.deliveryStatus);em.remove(row);
         });
-        assertDoesNotThrow(()->notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT));
+        assertDoesNotThrow(()->notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of()));
     }
 
     @Test void scheduledRemindersAreGenericAndDigestSqlExecutes(){

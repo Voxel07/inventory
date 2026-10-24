@@ -12,6 +12,8 @@ create table app_users (
     email varchar(255),
     -- Personal ntfy topic for push delivery; the server URL and credentials are deployment configuration.
     ntfy_topic varchar(64) check (ntfy_topic ~ '^[A-Za-z0-9_-]{1,64}$'),
+    -- Personal webhook URL; host reachability is validated by the application.
+    webhook_url varchar(2048) check (webhook_url like 'https://%'),
     issuer varchar(255) not null,
     external_subject varchar(255) not null,
     name varchar(255) not null,
@@ -546,6 +548,8 @@ create table notifications (
     type varchar(255) not null,
     payload jsonb not null,
     dedupe_key varchar(512),
+    -- Channels (gateway, webhook, ntfy) that acknowledged; retries skip them.
+    delivered_channels jsonb not null default '[]',
     primary key (id)
 );
 create unique index notifications_dedupe on notifications(recipient_id, type, dedupe_key) where dedupe_key is not null;

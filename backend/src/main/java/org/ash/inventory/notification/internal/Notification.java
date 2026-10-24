@@ -32,4 +32,6 @@ public class Notification extends BaseEntity {
     @Column(name="next_delivery_at") public Instant nextDeliveryAt;
     @Column(name="delivery_lease_until") public Instant deliveryLeaseUntil;
     @Column(name="delivery_lease") public java.util.UUID deliveryLease;
+    /** Channels that acknowledged this notice; retries only post to the others. */
+    @JdbcTypeCode(SqlTypes.JSON) @Column(name = "delivered_channels", columnDefinition = "jsonb", nullable = false) public java.util.Set<String> deliveredChannels = new java.util.TreeSet<>();
 }

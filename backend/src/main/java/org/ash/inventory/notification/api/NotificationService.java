@@ -18,7 +18,10 @@ public class NotificationService {
     public record Notice(UUID id, UUID recipientId, UUID orderId, String type, Map<String,Object> payload, Instant createdAt, Instant readAt) {
         public Notice { payload = Collections.unmodifiableMap(new LinkedHashMap<>(payload)); }
     }
-    public record Delivery(UUID id, UUID lease, UUID recipientId, UUID orderId, UUID itemId) {}
+    /** {@code delivered}: channels that acknowledged an earlier attempt. */
+    public record Delivery(UUID id, UUID lease, UUID recipientId, UUID orderId, UUID itemId, Set<String> delivered) {
+        public Delivery { delivered = Set.copyOf(delivered); }
+    }
     public enum Outcome { SENT, RETRY, SKIPPED }
     public UUID enqueue(UUID recipient, UUID order, String type, String dedupe, Map<String,Object> payload) {
         Objects.requireNonNull(recipient); Objects.requireNonNull(type); Objects.requireNonNull(payload);
@@ -66,16 +69,16 @@ public class NotificationService {
         n.deliveryAttempts++;n.deliveryStatus="sending";n.deliveryLease=UUID.randomUUID();n.deliveryLeaseUntil=Instant.now().plusSeconds(120);
         UUID item=null;try{if(n.payload.get("itemId")!=null)item=UUID.fromString(n.payload.get("itemId").toString());}
         catch(IllegalArgumentException invalid){n.deliveryStatus="skipped";n.deliveryLease=null;n.deliveryLeaseUntil=null;continue;}
-        return new Delivery(n.id,n.deliveryLease,n.recipientId,n.orderId,item);
+        return new Delivery(n.id,n.deliveryLease,n.recipientId,n.orderId,item,n.deliveredChannels);
         }
         return null;
     }
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void finish(Delivery delivery,Outcome outcome) {
+    public void finish(Delivery delivery,Outcome outcome,Set<String> delivered) {
         var n=em.find(Notification.class,delivery.id(),LockModeType.PESSIMISTIC_WRITE);
         if(n==null || !Objects.equals(n.deliveryLease,delivery.lease()) || !"sending".equals(n.deliveryStatus))return;
         n.deliveryStatus=outcome==Outcome.SENT?"sent":outcome==Outcome.SKIPPED?"skipped":n.deliveryAttempts>=8?"failed":"retry";
-        n.deliveredAt=outcome==Outcome.SENT?Instant.now():null;n.lastDeliveryError=outcome==Outcome.RETRY?"Gateway did not acknowledge delivery":null;
+        n.deliveredAt=outcome==Outcome.SENT?Instant.now():null;n.lastDeliveryError=outcome==Outcome.RETRY?"Not every channel acknowledged delivery":null;n.deliveredChannels=new TreeSet<>(delivered);
         n.nextDeliveryAt=Instant.now().plusSeconds(Math.min(3600,30L<<Math.min(n.deliveryAttempts,7)));n.deliveryLease=null;n.deliveryLeaseUntil=null;
     }
     public List<String> personalData(UUID recipient,int offset,int limit){

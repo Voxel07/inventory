@@ -507,8 +507,8 @@ public final class ApiResponses {
 
     public record OutboxStatusResponse(Map<String, Long> counts) {}
 
-    /** {@code server} is the configured ntfy server, null while ntfy delivery is disabled. */
-    public record NtfySettingsResponse(String server, String topic) {}
+    /** {@code ntfyServer} is the configured ntfy server, null while ntfy delivery is disabled. */
+    public record NotificationSettingsResponse(String ntfyServer, String ntfyTopic, String webhookUrl) {}
 
     public record NotificationResponse(
             UUID id,

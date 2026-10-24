@@ -73,7 +73,7 @@ Faction and general orders share `orders` (`kind=faction/general`), relational `
 
 | Table | Key data and relationships |
 |---|---|
-| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app; optional user-chosen `ntfy_topic`  active/deactivation/reason fields; revision-checked lifecycle |
+| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app; optional user-chosen `ntfy_topic` and HTTPS `webhook_url`  active/deactivation/reason fields; revision-checked lifecycle |
 | `revoked_sessions` | Access-token SHA-256 hash PK; user FK and expiry; expired hashes are purged hourly |
 | `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (binary public availability for privately owned items) and timestamps |
 | `inventory_access_groups` | UUID; optional owner user FK (null = admin group, usable by everyone); name unique per owner, case-insensitive; revision |
@@ -176,7 +176,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | Table | Key data and relationships |
 |---|---|
 | `member_requests` | UUID; requester/item/asset/location/handler links; kind/quantity/notes, status/response/time, unique command ID and revision |
-| `notifications` | UUID; scalar recipient/order IDs across module boundaries; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request  next attempt, lease UUID/expiry and bounded retry delivery state |
+| `notifications` | UUID; scalar recipient/order IDs across module boundaries; type/payload, delivery/read state and retry evidence; optional `dedupe_key` (unique per recipient/type) so an `item_requested` notice is sent once per order or request  next attempt, lease UUID/expiry and bounded retry delivery state; `delivered_channels` that already acknowledged |
 | `action_reminders` | UUID; user FK, action key and reminder time; unique user/action |
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
 | `operational_reports` | Report name PK; generation version/times, source token and JSON rows; eight snapshot kinds |

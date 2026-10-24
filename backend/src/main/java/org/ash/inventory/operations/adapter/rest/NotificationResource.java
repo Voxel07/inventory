@@ -5,6 +5,7 @@ import org.ash.inventory.operations.internal.application.ApiQueryService;
 import org.ash.inventory.operations.internal.application.UserService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
+import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.security.ActorService;
 
 import jakarta.validation.Valid;
@@ -63,14 +64,18 @@ public class NotificationResource {
         return queries.markNotificationRead(id);
     }
 
-    /** The current user's ntfy push topic; the server URL and credentials come from deployment configuration. */
-    @GET @Path("/ntfy")
-    public ApiResponses.NtfySettingsResponse ntfySettings() {
-        return new ApiResponses.NtfySettingsResponse(ntfy.server().orElse(null), actors.current().ntfyTopic);
+    /** The current user's delivery channels; the ntfy server URL and credentials come from deployment configuration. */
+    @GET @Path("/settings")
+    public ApiResponses.NotificationSettingsResponse settings() {
+        return settings(actors.current());
     }
 
-    @PUT @Path("/ntfy") @Consumes(MediaType.APPLICATION_JSON)
-    public ApiResponses.NtfySettingsResponse updateNtfySettings(@jakarta.validation.constraints.NotNull @Valid ApiModels.NtfySettingsInput input) {
-        return new ApiResponses.NtfySettingsResponse(ntfy.server().orElse(null), users.updateNtfyTopic(input.topic()).ntfyTopic);
+    @PUT @Path("/settings") @Consumes(MediaType.APPLICATION_JSON)
+    public ApiResponses.NotificationSettingsResponse updateSettings(@jakarta.validation.constraints.NotNull @Valid ApiModels.NotificationSettingsInput input) {
+        return settings(users.updateNotificationSettings(input));
+    }
+
+    private ApiResponses.NotificationSettingsResponse settings(UserAccount user) {
+        return new ApiResponses.NotificationSettingsResponse(ntfy.server().orElse(null), user.ntfyTopic, user.webhookUrl);
     }
 }

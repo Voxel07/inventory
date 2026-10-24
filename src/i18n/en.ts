@@ -228,6 +228,11 @@ export default {
     assignedFactions: 'Assigned factions',
     noAssignedFactions: 'No factions assigned',
     unknownUser: 'Unknown user',
+    notifications: {
+      title: 'Notification delivery',
+      description: 'Choose where your inventory notifications are sent in addition to the app. Messages only say that something needs your attention.',
+      saved: 'Notification settings saved.',
+    },
     ntfy: {
       title: 'Push notifications (ntfy)',
       description: 'Receive your inventory notifications in the ntfy app. Choose a topic that is hard to guess and subscribe to it in ntfy.',
@@ -235,7 +240,13 @@ export default {
       topicHelp: 'Letters, digits, - and _ (up to 64 characters). Leave empty to turn push notifications off.',
       generate: 'Generate random topic',
       subscribe: 'Subscribe in ntfy to:',
-      saved: 'Push settings saved.',
+    },
+    webhook: {
+      title: 'Personal webhook',
+      description: 'Notifications are posted as JSON (id, subject, text, content, url) to this URL, e.g. a Slack, Discord or Home Assistant webhook. Treat the URL like a password.',
+      url: 'Webhook URL',
+      urlHelp: 'Must start with https:// and point to a public host. Leave empty to turn webhook delivery off.',
+      invalid: 'The URL must start with https://',
     },
     roles: {
       admin: 'Inventory admin',

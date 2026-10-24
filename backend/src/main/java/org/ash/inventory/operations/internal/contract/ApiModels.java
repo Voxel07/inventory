@@ -142,8 +142,9 @@ public final class ApiModels {
             String certificateObjectKey) {}
 
     public record DevLoginInput(@NotBlank String email, String password) {}
-    /** Personal ntfy topic (ntfy topic syntax); null clears it. */
-    public record NtfySettingsInput(@jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{1,64}") String topic) {}
+    /** The current user's delivery channels: ntfy topic (ntfy topic syntax) and HTTPS webhook URL; null or blank clears one. */
+    public record NotificationSettingsInput(@jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{1,64}|") String ntfyTopic,
+            @jakarta.validation.constraints.Size(max = 2048) String webhookUrl) {}
     /** Role and faction memberships (`EVENT:slug`) set by the inventory admin. */
     public record UserAccessInput(@NotNull @jakarta.validation.constraints.Size(min = 1, max = 6) List<@NotBlank String> roles,
             @NotNull @jakarta.validation.constraints.Size(max = 100) List<String> factions,

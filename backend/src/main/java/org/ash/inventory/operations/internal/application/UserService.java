@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.integration.api.DomainEventService;
+import org.ash.inventory.notification.api.PersonalWebhookPublisher;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.UserAccount;
@@ -54,11 +55,17 @@ public class UserService {
         return user;
     }
 
-    /** The current user chooses their own ntfy topic; null or blank clears it. */
+    /** The current user chooses their own ntfy topic and webhook; null or blank clears one. */
     @Transactional
-    public UserAccount updateNtfyTopic(String topic) {
+    public UserAccount updateNotificationSettings(ApiModels.NotificationSettingsInput input) {
+        String webhook = input.webhookUrl() == null || input.webhookUrl().isBlank() ? null : input.webhookUrl();
+        if (webhook != null) {
+            try { webhook = PersonalWebhookPublisher.validate(webhook); }
+            catch (IllegalArgumentException invalid) { throw ApiException.badRequest(invalid.getMessage()); }
+        }
         var user = users.findLocked(actors.current().id);
-        user.ntfyTopic = topic == null || topic.isBlank() ? null : topic;
+        user.ntfyTopic = input.ntfyTopic() == null || input.ntfyTopic().isBlank() ? null : input.ntfyTopic();
+        user.webhookUrl = webhook;
         return user;
     }
 

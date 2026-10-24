@@ -28,6 +28,8 @@ public class UserAccount extends BaseEntity {
     public String email;
     /** Personal ntfy topic for push delivery; never exposed in user listings. */
     @Column(name = "ntfy_topic", length = 64) public String ntfyTopic;
+    /** Personal webhook for delivery; may embed a secret, so only its owner ever sees it. */
+    @Column(name = "webhook_url", length = 2048) public String webhookUrl;
     @Column(nullable = false) public boolean active = true;
     @Column(name = "deactivated_at") public java.time.Instant deactivatedAt;
     @Column(name = "offboarding_reason", length = 1000) public String offboardingReason;

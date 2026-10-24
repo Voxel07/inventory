@@ -230,6 +230,11 @@ export default {
     assignedFactions: 'Zugewiesene Fraktionen',
     noAssignedFactions: 'Keine Fraktionen zugewiesen',
     unknownUser: 'Unbekannter Benutzer',
+    notifications: {
+      title: 'Benachrichtigungszustellung',
+      description: 'Wählen Sie, wohin Ihre Inventar-Benachrichtigungen zusätzlich zur App gesendet werden. Nachrichten sagen nur, dass etwas Ihre Aufmerksamkeit braucht.',
+      saved: 'Benachrichtigungseinstellungen gespeichert.',
+    },
     ntfy: {
       title: 'Push-Benachrichtigungen (ntfy)',
       description: 'Erhalten Sie Ihre Inventar-Benachrichtigungen in der ntfy-App. Wählen Sie ein schwer zu erratendes Topic und abonnieren Sie es in ntfy.',
@@ -237,7 +242,13 @@ export default {
       topicHelp: 'Buchstaben, Ziffern, - und _ (bis zu 64 Zeichen). Leer lassen, um Push-Benachrichtigungen auszuschalten.',
       generate: 'Zufälliges Topic erzeugen',
       subscribe: 'In ntfy abonnieren:',
-      saved: 'Push-Einstellungen gespeichert.',
+    },
+    webhook: {
+      title: 'Persönlicher Webhook',
+      description: 'Benachrichtigungen werden als JSON (id, subject, text, content, url) an diese URL gesendet, z. B. an einen Slack-, Discord- oder Home-Assistant-Webhook. Behandeln Sie die URL wie ein Passwort.',
+      url: 'Webhook-URL',
+      urlHelp: 'Muss mit https:// beginnen und auf einen öffentlichen Host zeigen. Leer lassen, um Webhook-Benachrichtigungen auszuschalten.',
+      invalid: 'Die URL muss mit https:// beginnen',
     },
     roles: {
       admin: 'Inventar-Admin',

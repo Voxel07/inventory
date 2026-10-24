@@ -2,6 +2,7 @@ package org.ash.inventory.notification.internal;
 
 import org.ash.inventory.notification.api.NotificationService;
 import org.ash.inventory.notification.api.NtfyPublisher;
+import org.ash.inventory.notification.api.PersonalWebhookPublisher;
 import org.ash.inventory.notification.api.RecipientPolicy;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -12,11 +13,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.http.*;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.Callable;
 
 /**
- * Durable, at-least-once delivery to the webhook gateway (by email) and ntfy (by the recipient's own topic).
- * The webhook gateway must deduplicate the notification UUID. ntfy is posted last, so a webhook retry never
- * repeats an acknowledged ntfy message; a lost ntfy acknowledgement can still repeat one.
+ * Durable, at-least-once delivery to the webhook gateway (by email), the recipient's own webhook and ntfy
+ * (by the recipient's own topic). Each channel's acknowledgement is stored, so a retry only posts to channels
+ * that failed; a lost acknowledgement can still repeat a message. The gateway must deduplicate the notification
+ * UUID; personal webhooks receive it as {@code Idempotency-Key} too.
  */
 @ApplicationScoped
 public class NotificationDeliveryService {
@@ -25,6 +28,7 @@ public class NotificationDeliveryService {
     @Inject NotificationService notifications;
     @Inject RecipientPolicy audience;
     @Inject NtfyPublisher ntfy;
+    @Inject PersonalWebhookPublisher webhooks;
     @Inject org.ash.inventory.platform.runtime.WorkerRoles workers;
     @Inject ObjectMapper json;
     @ConfigProperty(name="inventory.notifications.webhook-url") Optional<String> endpoint;
@@ -34,27 +38,34 @@ public class NotificationDeliveryService {
 
     @Scheduled(every="30s", concurrentExecution=Scheduled.ConcurrentExecution.SKIP)
     public void deliver() {
-        if (!workers.enabled("notifications") || (endpoint.isEmpty() && ntfy.server().isEmpty())) return;
+        // Personal webhooks need no deployment configuration, so delivery always runs on notification workers.
+        if (!workers.enabled("notifications")) return;
         for (int count=0; count<20; count++) {
             var delivery = notifications.claim(); if (delivery == null) return;
             RecipientPolicy.Decision recipient;
             try { recipient=audience.resolve(delivery.recipientId(),delivery.orderId(),delivery.itemId()); }
-            catch(RuntimeException unavailable) { notifications.finish(delivery, NotificationService.Outcome.RETRY); continue; }
-            boolean webhook = endpoint.isPresent() && recipient.email() != null, push = ntfy.server().isPresent() && recipient.ntfyTopic() != null;
-            if(!recipient.allowed() || (!webhook && !push)) { notifications.finish(delivery,NotificationService.Outcome.SKIPPED); continue; }
-            boolean sent = false;
-            try {
-                // No task text, inventory identifiers, names or evidence leave the application.
-                sent = (!webhook || sendWebhook(delivery, recipient.email()))
-                        && (!push || ntfy.publish(new NtfyPublisher.Message(recipient.ntfyTopic(), SUBJECT, TEXT, publicUrl, List.of("package"))));
-            } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
-              catch (Exception exception) { /* Persist only a safe error; never credentials or gateway responses. */ }
-            notifications.finish(delivery, sent ? NotificationService.Outcome.SENT : NotificationService.Outcome.RETRY);
+            catch(RuntimeException unavailable) { notifications.finish(delivery, NotificationService.Outcome.RETRY, delivery.delivered()); continue; }
+            // No task text, inventory identifiers, names or evidence leave the application.
+            var channels = new LinkedHashMap<String, Callable<Boolean>>();
+            if (endpoint.isPresent() && recipient.email() != null) channels.put("gateway", () -> sendGateway(delivery, recipient.email()));
+            if (recipient.webhookUrl() != null) channels.put("webhook", () -> webhooks.publish(recipient.webhookUrl(), delivery.id(), SUBJECT, TEXT, publicUrl));
+            if (ntfy.server().isPresent() && recipient.ntfyTopic() != null)
+                channels.put("ntfy", () -> ntfy.publish(new NtfyPublisher.Message(recipient.ntfyTopic(), SUBJECT, TEXT, publicUrl, List.of("package"))));
+            if(!recipient.allowed() || channels.isEmpty()) { notifications.finish(delivery,NotificationService.Outcome.SKIPPED,delivery.delivered()); continue; }
+            var delivered = new TreeSet<>(delivery.delivered());
+            for (var channel : channels.entrySet()) {
+                if (delivered.contains(channel.getKey())) continue;
+                try { if (channel.getValue().call()) delivered.add(channel.getKey()); }
+                catch (InterruptedException exception) { Thread.currentThread().interrupt(); break; }
+                catch (Exception exception) { /* Persist only a safe error; never credentials, URLs or gateway responses. */ }
+            }
+            boolean sent = delivered.containsAll(channels.keySet());
+            notifications.finish(delivery, sent ? NotificationService.Outcome.SENT : NotificationService.Outcome.RETRY, delivered);
             if (Thread.currentThread().isInterrupted()) return;
         }
     }
 
-    private boolean sendWebhook(NotificationService.Delivery delivery, String email) throws Exception {
+    private boolean sendGateway(NotificationService.Delivery delivery, String email) throws Exception {
         var request = HttpRequest.newBuilder(NtfyPublisher.secure(endpoint.get())).timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json")
                 .header("Idempotency-Key", delivery.id().toString());
         token.ifPresent(value -> request.header("Authorization", "Bearer " + value));
