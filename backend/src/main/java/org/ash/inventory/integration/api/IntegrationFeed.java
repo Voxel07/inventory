@@ -26,10 +26,9 @@ public class IntegrationFeed {
     @Transactional
     public void register(String consumer,Registration input){
         validate(consumer);
-        if(input==null || input.since()==null || input.prefixes().isEmpty() || input.prefixes().size()>32
-                || input.prefixes().stream().anyMatch(p -> !p.matches("[a-z_]+\\.[a-z_]*")))
+        if(input==null || input.since()==null || !validPrefixes(input.prefixes()))
             throw ApiException.badRequest("Consumer requires a start time and 1 to 32 event prefixes");
-        String encoded;try{encoded=json.writeValueAsString(input.prefixes());}catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw new IllegalArgumentException(invalid);}
+        String encoded=encode(input.prefixes());
         var existing=em.createNativeQuery("select 1 from integration_subscriptions where name=:name")
                 .setParameter("name",consumer).getResultList();
         if(!existing.isEmpty())throw ApiException.conflict("Consumer already registered; use a new consumer name to change its replay scope");
@@ -70,6 +69,15 @@ public class IntegrationFeed {
         return new Batch(oldest,List.copyOf(deliveries));
     }
 
+    /** In-process consumers declare their scope on every start; replay begins at the first declaration. */
+    @Transactional
+    public void subscribe(String consumer,List<String> prefixes){
+        validate(consumer);
+        if(prefixes==null || !validPrefixes(prefixes))throw new IllegalArgumentException("Consumer requires 1 to 32 event prefixes");
+        em.createNativeQuery("insert into integration_subscriptions(name,prefixes,since) values(:name,cast(:prefixes as jsonb),(extract(epoch from now()) * 1000)::bigint) on conflict(name) do update set prefixes=excluded.prefixes,enabled=true")
+                .setParameter("name",consumer).setParameter("prefixes",encode(prefixes)).executeUpdate();
+    }
+
     /** External consumers commit their effects plus local event-ID inbox before acknowledging. */
     @Transactional
     public void acknowledge(String consumer,Receipt receipt){
@@ -102,5 +110,11 @@ public class IntegrationFeed {
     }
     @Transactional
     public void remove(String consumer){validate(consumer);em.createNativeQuery("delete from integration_subscriptions where name=:consumer").setParameter("consumer",consumer).executeUpdate();}
+    private static boolean validPrefixes(List<String> prefixes){
+        return !prefixes.isEmpty() && prefixes.size()<=32 && prefixes.stream().allMatch(p -> p!=null && p.matches("[a-z_]+\\.[a-z_]*"));
+    }
+    private String encode(List<String> prefixes){
+        try{return json.writeValueAsString(prefixes);}catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw new IllegalArgumentException(invalid);}
+    }
     private void validate(String consumer){if(consumer==null || !consumer.matches("[a-z][a-z0-9_-]{0,127}"))throw ApiException.badRequest("Invalid consumer name");}
 }

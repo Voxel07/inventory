@@ -54,12 +54,22 @@ public class UserService {
         return user;
     }
 
+    /** The current user chooses their own ntfy topic; null or blank clears it. */
+    @Transactional
+    public UserAccount updateNtfyTopic(String topic) {
+        var user = users.findLocked(actors.current().id);
+        user.ntfyTopic = topic == null || topic.isBlank() ? null : topic;
+        return user;
+    }
+
     @Transactional
     public UserAccount devLogin(ApiModels.DevLoginInput input) {
         var user = users.findByIdentity(ActorService.DEV_ISSUER, input.email());
         if (user != null) return user;
         String name = input.email().contains("@") ? input.email().substring(0, input.email().indexOf('@')) : input.email();
-        return users.provision(ActorService.DEV_ISSUER, input.email(), name, input.email(),
+        var provisioned = users.provision(ActorService.DEV_ISSUER, input.email(), name, input.email(),
                 java.util.Set.of(DomainEnums.UserRole.admin), java.util.List.of());
+        if (provisioned.created()) actors.recordCreated(provisioned.user());
+        return provisioned.user();
     }
 }

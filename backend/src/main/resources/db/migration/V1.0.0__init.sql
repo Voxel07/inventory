@@ -10,6 +10,8 @@ create table app_users (
     updated_at bigint not null,
     id uuid not null,
     email varchar(255),
+    -- Personal ntfy topic for push delivery; the server URL and credentials are deployment configuration.
+    ntfy_topic varchar(64) check (ntfy_topic ~ '^[A-Za-z0-9_-]{1,64}$'),
     issuer varchar(255) not null,
     external_subject varchar(255) not null,
     name varchar(255) not null,

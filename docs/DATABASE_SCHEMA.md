@@ -73,7 +73,7 @@ Faction and general orders share `orders` (`kind=faction/general`), relational `
 
 | Table | Key data and relationships |
 |---|---|
-| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app  active/deactivation/reason fields; revision-checked lifecycle |
+| `app_users` | UUID; unique `(issuer, external_subject)`; name/email from OIDC; role (`tenant`, `read_only`, `faction_leader`, `ash`, `warehouse_crew`, `admin`), JSON assigned `roles`, JSON faction memberships and `access_revision`, managed in the app; optional user-chosen `ntfy_topic`  active/deactivation/reason fields; revision-checked lifecycle |
 | `revoked_sessions` | Access-token SHA-256 hash PK; user FK and expiry; expired hashes are purged hourly |
 | `inventory_access_policies` | UUID; owner user FK; revision, `public_use` (binary public availability for privately owned items) and timestamps |
 | `inventory_access_groups` | UUID; optional owner user FK (null = admin group, usable by everyone); name unique per owner, case-insensitive; revision |

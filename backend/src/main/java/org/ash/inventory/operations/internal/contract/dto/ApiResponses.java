@@ -507,6 +507,9 @@ public final class ApiResponses {
 
     public record OutboxStatusResponse(Map<String, Long> counts) {}
 
+    /** {@code server} is the configured ntfy server, null while ntfy delivery is disabled. */
+    public record NtfySettingsResponse(String server, String topic) {}
+
     public record NotificationResponse(
             UUID id,
             String type,

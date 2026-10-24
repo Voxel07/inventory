@@ -283,7 +283,7 @@ public class CatalogService {
             positions.apply(tx);
             orm.persist(tx);
         }
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "created");
         return item;
     }
 
@@ -332,7 +332,7 @@ public class CatalogService {
                     .filter(image -> !retainedImages.contains(image))
                     .forEach(media::deleteAfterCommit);
         }
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
         return item;
     }
 
@@ -346,7 +346,7 @@ public class CatalogService {
         if (!obligations.isEmpty())
             throw ApiException.conflict("Item cannot be retired while it has " + String.join(", ", obligations));
         item.active = false;
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "deleted");
     }
 
     private void apply(Item item, ApiModels.ItemInput input) {
@@ -451,7 +451,7 @@ public class CatalogService {
         var location = newLocation(input.name(), Boolean.TRUE.equals(input.privateResource()) || (parent != null && parent.accessPolicy != null));
         apply(location, parent, input);
         inheritance.refreshLocationSubtree(location);
-        catalogChanged("storage-locations", location.id);
+        catalogChanged("storage-locations", location.id, "created");
         return location;
     }
 
@@ -465,7 +465,7 @@ public class CatalogService {
             throw ApiException.badRequest("Choose either keepParent or a new parent");
         apply(location, Boolean.TRUE.equals(input.keepParent()) ? location.parent : parentLocation(input.parentLocationId()), input);
         inheritance.refreshLocationSubtree(location);
-        catalogChanged("storage-locations", location.id);
+        catalogChanged("storage-locations", location.id, "updated");
         return location;
     }
 
@@ -496,7 +496,7 @@ public class CatalogService {
         hierarchy.apply(root, null, input.code(), null);
         saveNodes(root, input.sections());
         inheritance.refreshLocationSubtree(root);
-        catalogChanged("storage-locations", root.id);
+        catalogChanged("storage-locations", root.id, "updated");
         return orm.locationsIn(hierarchy.subtreeIds(root.id)).stream().filter(actorService::canViewLocation).toList();
     }
 
@@ -546,7 +546,7 @@ public class CatalogService {
         actorService.requireLocationEdit(location);
         if (!location.active) throw ApiException.notFound("Storage location not found");
         hierarchy.deactivate(location);
-        catalogChanged("storage-locations", location.id);
+        catalogChanged("storage-locations", location.id, "deleted");
     }
 
     private void apply(StorageLocation target, StorageLocation parent, ApiModels.StorageLocationInput input) {
@@ -579,7 +579,7 @@ public class CatalogService {
         orm.persist(assembly);
         replaceComponents(assembly, input);
         applyAssemblyImage(assembly, input);
-        catalogChanged("assemblies", assembly.id);
+        catalogChanged("assemblies", assembly.id, "created");
         return assembly;
     }
 
@@ -592,7 +592,7 @@ public class CatalogService {
         apply(assembly, input);
         replaceComponents(assembly, input);
         applyAssemblyImage(assembly, input);
-        catalogChanged("assemblies", assembly.id);
+        catalogChanged("assemblies", assembly.id, "updated");
         return assembly;
     }
 
@@ -603,7 +603,7 @@ public class CatalogService {
         getVisibleAssemblyComponents(assembly);
         actorService.requireAssemblyEdit(assembly);
         assembly.active = false;
-        catalogChanged("assemblies", assembly.id);
+        catalogChanged("assemblies", assembly.id, "deleted");
     }
 
     private void apply(Assembly target, ApiModels.AssemblyInput input) {
@@ -667,7 +667,7 @@ public class CatalogService {
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
         if (input.usedQuantities() != null) event.usedQuantities = eventQuantities(input.usedQuantities());
         orm.persist(event);
-        catalogChanged("events", event.id);
+        catalogChanged("events", event.id, "created");
         return event;
     }
 
@@ -689,7 +689,7 @@ public class CatalogService {
         event.orderDeadline = input.orderDeadline();
         if (input.plannedQuantities() != null) event.plannedQuantities = eventQuantities(input.plannedQuantities());
         if (input.usedQuantities() != null && event.closed()) event.usedQuantities = eventQuantities(input.usedQuantities());
-        catalogChanged("events", event.id);
+        catalogChanged("events", event.id, "updated");
         return event;
     }
 
@@ -703,7 +703,7 @@ public class CatalogService {
         }
         orm.deletePlanningOverrides(id);
         orm.remove(event);
-        catalogChanged("events", id);
+        catalogChanged("events", id, "deleted");
     }
 
     @Transactional
@@ -720,7 +720,7 @@ public class CatalogService {
         faction.slug = input.slug() == null || input.slug().isBlank() ? slug(input.name()) : slug(input.slug());
         faction.active = input.active() == null || input.active();
         orm.persist(faction);
-        catalogChanged("factions", faction.id);
+        catalogChanged("factions", faction.id, "created");
         return faction;
     }
 
@@ -875,7 +875,7 @@ public class CatalogService {
                     Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
         }
         orm.flush();
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
         return assets;
     }
 
@@ -886,7 +886,7 @@ public class CatalogService {
         var item = orm.requireLocked(Item.class, itemId, "Item");
         if (item.accessPolicy == null) actorService.requireAdmin(); else actorService.requireItemEdit(item);
         for (var asset : ownedActiveAssets(item, assetIds)) writeOff(item, asset);
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
     }
 
     private List<AssetInstance> ownedActiveAssets(Item item, List<UUID> assetIds) {
@@ -913,7 +913,7 @@ public class CatalogService {
         tx.occurredAt = Instant.now();
         orm.persist(tx);
 
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
         events.record("asset.created", "item", item.id, actorService.current().id, null,
                 Map.of("itemId", item.id.toString(), "count", count));
     }
@@ -957,7 +957,7 @@ public class CatalogService {
         if (input.operatingHours() != null)
             runtime.record(item, asset, input.operatingHours(), null, null, RuntimeEntry.Source.correction, "Meter reading corrected");
         if (input.notes() != null) asset.notes = input.notes();
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
         events.record("asset.updated", "asset", asset.id, actorService.current().id, null,
                 Map.of("itemId", item.id.toString(), "assetCode", asset.assetCode));
         orm.flush();
@@ -973,7 +973,7 @@ public class CatalogService {
         if (!asset.item.id.equals(item.id)) throw ApiException.badRequest("Asset does not belong to item");
         if (!asset.active) return;
         writeOff(item, asset);
-        catalogChanged("items", item.id);
+        catalogChanged("items", item.id, "updated");
     }
 
     private void writeOff(Item item, AssetInstance asset) {
@@ -1094,9 +1094,10 @@ public class CatalogService {
         return sku;
     }
 
-    private void catalogChanged(String resource, UUID id) {
+    /** {@code action}: created, updated or deleted (retired); the ntfy admin feeds filter on it. */
+    private void catalogChanged(String resource, UUID id, String action) {
         events.record("catalog.changed", resource, id, actorService.current().id, null,
-                Map.of("resource", resource, "id", id.toString()));
+                Map.of("resource", resource, "id", id.toString(), "action", action));
     }
 
     private String slug(String value) {

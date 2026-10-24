@@ -21,16 +21,20 @@ public class UserOrm {
 
     public UserOrm(EntityManager entityManager, ObjectMapper json) { this.entityManager = entityManager; this.json = json; }
 
+    public record Provisioned(UserAccount user, boolean created) {}
+
     /**
      * Returns the account for {@code (issuer, subject)}, creating it on first contact. Parallel first
      * requests of one account all miss the lookup; the losing insert waits for the winner's commit and
      * skips, so every request continues with the single row instead of failing on the identity key.
+     * {@code created} is true only for the request whose insert won.
      */
-    public UserAccount provision(String issuer, String subject, String name, String email,
+    public Provisioned provision(String issuer, String subject, String name, String email,
             Set<DomainEnums.UserRole> roles, Collection<String> factions) {
         var assigned = new TreeSet<>(roles);
+        int inserted;
         try {
-            entityManager.createNativeQuery("""
+            inserted = entityManager.createNativeQuery("""
                     insert into app_users (id, created_at, updated_at, issuer, external_subject, name, email, role, roles, factions, access_revision)
                     values (:id, (extract(epoch from now()) * 1000)::bigint, (extract(epoch from now()) * 1000)::bigint, :issuer, :subject, :name, cast(:email as varchar), :role, cast(:roles as jsonb), cast(:factions as jsonb), 0)
                     on conflict (issuer, external_subject) do nothing""")
@@ -39,7 +43,7 @@ public class UserOrm {
                     .setParameter("roles", json.writeValueAsString(assigned)).setParameter("factions", json.writeValueAsString(factions))
                     .executeUpdate();
         } catch (JsonProcessingException e) { throw new IllegalStateException(e); }
-        return findByIdentity(issuer, subject);
+        return new Provisioned(findByIdentity(issuer, subject), inserted == 1);
     }
 
     public UserAccount findByIdentity(String issuer, String subject) {

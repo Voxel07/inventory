@@ -1,5 +1,6 @@
 package org.ash.inventory.operations.internal.security;
 
+import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.application.AuthSessionService;
 import org.ash.inventory.operations.internal.model.Assembly;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -43,6 +44,7 @@ public class ActorService {
 
     @jakarta.inject.Inject InventoryAccess privateAccess;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
+    @jakarta.inject.Inject DomainEventService events;
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
@@ -118,9 +120,11 @@ public class ActorService {
         if (cached != null && !cached.active) throw ApiException.forbidden("This inventory account is deactivated");
         boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email);
         if (cached == null) {
-            cached = users.provision(issuer, subject, name, email,
+            var provisioned = users.provision(issuer, subject, name, email,
                     headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only),
                     headerFactions == null ? List.of() : headerFactions);
+            cached = provisioned.user();
+            if (provisioned.created()) recordCreated(cached);
         } else {
             if (!Objects.equals(cached.name, name)) cached.name = name;
             if (email != null && !Objects.equals(cached.email, email)) cached.email = email;
@@ -132,6 +136,12 @@ public class ActorService {
             }
         }
         return cached;
+    }
+
+    /** First contact of an identity; the account provisions itself, so it is its own actor. */
+    public void recordCreated(UserAccount user) {
+        events.record("user.created", "user", user.id, user.id, null,
+                java.util.Map.of("roles", List.copyOf(user.roles), "factions", List.copyOf(user.factions)));
     }
 
     /** Membership in the access group admits an account to the inventory system. */

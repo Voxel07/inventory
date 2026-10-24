@@ -26,6 +26,8 @@ public class UserAccount extends BaseEntity {
     @Column(nullable = false)
     public String name;
     public String email;
+    /** Personal ntfy topic for push delivery; never exposed in user listings. */
+    @Column(name = "ntfy_topic", length = 64) public String ntfyTopic;
     @Column(nullable = false) public boolean active = true;
     @Column(name = "deactivated_at") public java.time.Instant deactivatedAt;
     @Column(name = "offboarding_reason", length = 1000) public String offboardingReason;

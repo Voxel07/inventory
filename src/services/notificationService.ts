@@ -15,3 +15,11 @@ export async function getUnreadNotificationCount(): Promise<number> {
   return (await apiRequest<{ count: number }>('/api/notifications/unread-count')).count;
 }
 export function markNotificationRead(id: string): Promise<AppNotification> { return apiRequest(`/api/notifications/${id}/read`, { method: 'PATCH' }); }
+
+/** {@code server} is null while ntfy delivery is not configured for this deployment. */
+export type NtfySettings = { server: string | null; topic: string | null };
+export function getNtfySettings(): Promise<NtfySettings> { return apiRequest('/api/notifications/ntfy'); }
+/** Sets the current user's personal topic; null clears it. */
+export function updateNtfySettings(topic: string | null): Promise<NtfySettings> {
+  return apiRequest('/api/notifications/ntfy', { method: 'PUT', body: { topic } });
+}

@@ -58,7 +58,7 @@ public class CategoryMaintenanceService {
         var items = orm.items(name);
         for (var item : items) apply(item);
         events.record("catalog.changed", "category-maintenance", policy == null ? UUID.randomUUID() : policy.id,
-                actors.current().id, null, Map.of("resource", "category-maintenance", "category", name));
+                actors.current().id, null, Map.of("resource", "category-maintenance", "category", name, "action", "updated"));
         return new Policy(name, input.intervalDays());
     }
     @Transactional

@@ -228,6 +228,15 @@ export default {
     assignedFactions: 'Assigned factions',
     noAssignedFactions: 'No factions assigned',
     unknownUser: 'Unknown user',
+    ntfy: {
+      title: 'Push notifications (ntfy)',
+      description: 'Receive your inventory notifications in the ntfy app. Choose a topic that is hard to guess and subscribe to it in ntfy.',
+      topic: 'Topic',
+      topicHelp: 'Letters, digits, - and _ (up to 64 characters). Leave empty to turn push notifications off.',
+      generate: 'Generate random topic',
+      subscribe: 'Subscribe in ntfy to:',
+      saved: 'Push settings saved.',
+    },
     roles: {
       admin: 'Inventory admin',
       warehouseCrew: 'Warehouse crew',

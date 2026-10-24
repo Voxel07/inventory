@@ -230,6 +230,15 @@ export default {
     assignedFactions: 'Zugewiesene Fraktionen',
     noAssignedFactions: 'Keine Fraktionen zugewiesen',
     unknownUser: 'Unbekannter Benutzer',
+    ntfy: {
+      title: 'Push-Benachrichtigungen (ntfy)',
+      description: 'Erhalten Sie Ihre Inventar-Benachrichtigungen in der ntfy-App. Wählen Sie ein schwer zu erratendes Topic und abonnieren Sie es in ntfy.',
+      topic: 'Topic',
+      topicHelp: 'Buchstaben, Ziffern, - und _ (bis zu 64 Zeichen). Leer lassen, um Push-Benachrichtigungen auszuschalten.',
+      generate: 'Zufälliges Topic erzeugen',
+      subscribe: 'In ntfy abonnieren:',
+      saved: 'Push-Einstellungen gespeichert.',
+    },
     roles: {
       admin: 'Inventar-Admin',
       warehouseCrew: 'Lagerteam',

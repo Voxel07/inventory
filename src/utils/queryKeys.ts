@@ -5,6 +5,7 @@ export const queryKeys = {
   equipment: (itemId: string) => ['items', itemId, 'equipment'] as const,
   equipmentAvailability: (eventId?: string) => ['items', 'equipment-availability', eventId] as const,
   inbox: (userId?: string) => ['action-inbox', userId] as const,
+  ntfySettings: (userId?: string) => ['ntfy-settings', userId] as const,
   member: (kind: 'custody' | 'storage' | 'requests', userId?: string) => [`member-${kind}`, userId] as const,
   memberAssignments: () => ['member-assignments'] as const,
   reportDefinitions: () => ['reports', 'definitions'] as const,

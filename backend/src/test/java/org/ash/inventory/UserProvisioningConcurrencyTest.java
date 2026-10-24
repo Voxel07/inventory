@@ -49,6 +49,6 @@ class UserProvisioningConcurrencyTest {
 
     private UserAccount provision(String subject) {
         return users.provision("test", subject, "Concurrent first contact", null,
-                Set.of(DomainEnums.UserRole.ash, DomainEnums.UserRole.read_only), List.of("DE:kgg"));
+                Set.of(DomainEnums.UserRole.ash, DomainEnums.UserRole.read_only), List.of("DE:kgg")).user();
     }
 }

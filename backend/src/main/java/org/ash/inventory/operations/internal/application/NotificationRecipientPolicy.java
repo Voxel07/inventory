@@ -15,10 +15,11 @@ public class NotificationRecipientPolicy implements RecipientPolicy {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Decision resolve(UUID recipientId,UUID orderId,UUID itemId) {
         var user=em.find(UserAccount.class,recipientId);
-        boolean allowed=user!=null && user.active && user.email!=null && !user.email.isBlank();
+        boolean allowed=user!=null && user.active;
         if(allowed && orderId!=null)allowed=visible("order",orderId,user);
         if(allowed && itemId!=null)allowed=visible("item",itemId,user);
-        return new Decision(allowed,allowed?user.email:null);
+        if(!allowed)return new Decision(false,null,null);
+        return new Decision(true,user.email==null || user.email.isBlank()?null:user.email,user.ntfyTopic);
     }
     private boolean visible(String kind,UUID id,UserAccount user) {
         return Boolean.TRUE.equals(em.createNativeQuery("select inventory_resource_visible(:kind,:id,:actor,:admin,:public)")
