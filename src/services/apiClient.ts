@@ -1,7 +1,7 @@
 import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
 import type { User } from '../types';
 import { API_URL, AUTH_CONFIGURATION_ERROR, OIDC_CONFIG } from '../config/runtimeConfig';
-import { enqueueOfflineAction, flushOfflineQueue, type OfflineCommand } from './offlineQueue';
+import { enqueueOfflineAction, flushOfflineQueue, getOfflineQueueCount, type OfflineCommand } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
 import { decodeServerChange, localWriteChange, type ApiChangeDetail } from './apiChanges';
 import type { Page } from './apiPagination';
@@ -24,6 +24,7 @@ import {
   restorePersistedSession,
   setAuthError,
   setDevelopmentSession,
+  setImpersonation,
   setOidcSession,
   subscribeAuth,
   updateAuthUser,
@@ -113,6 +114,25 @@ export async function refreshCurrentUser(): Promise<User | null> {
   } catch (error) {
     if (context.generation === getAuthSnapshot().generation && error instanceof ApiError && (error.status === 401 || error.status === 403)) clearAuth('Your session has expired. Please sign in again.');
     return null;
+  }
+}
+
+/**
+ * Development only: an administrator acts as {@code target} (null switches back). Switching needs the server and an
+ * empty offline queue, so queued commands never replay as another account.
+ */
+export async function switchImpersonation(target: User | null): Promise<void> {
+  if (!navigator.onLine) throw new Error(translate('services.apiClient.impersonationNeedsConnection'));
+  if (await getOfflineQueueCount()) throw new Error(translate('services.apiClient.impersonationNeedsEmptyQueue'));
+  setImpersonation(target);
+  const context = captureAuthSession();
+  try {
+    const user = await apiRequest<User>('/api/auth/me', { session: context });
+    assertAuthSession(context);
+    updateAuthUser(user);
+  } catch (error) {
+    if (target && context.generation === getAuthSnapshot().generation) setImpersonation(null);
+    throw error;
   }
 }
 

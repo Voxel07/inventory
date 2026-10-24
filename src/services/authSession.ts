@@ -8,11 +8,14 @@ export type PersistedAuthSession = {
   expiresAt: number | null;
   /** Monotonic per browser: a login or refresh writes a revision above every stored one. */
   tokenRevision: number;
+  /** The account the server acts as; while impersonating, the impersonated account. */
   user: User | null;
+  /** Development only: the signed-in administrator while {@code user} is impersonated. */
+  impersonator: User | null;
 };
 
 export function emptyAuthSession(): PersistedAuthSession {
-  return { accessToken: '', refreshToken: '', idToken: '', expiresAt: null, tokenRevision: 0, user: null };
+  return { accessToken: '', refreshToken: '', idToken: '', expiresAt: null, tokenRevision: 0, user: null, impersonator: null };
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -38,6 +41,7 @@ export function decodeAuthSession(value: unknown): PersistedAuthSession | null {
   if (typeof accessToken !== 'string' || typeof refreshToken !== 'string' || typeof idToken !== 'string'
     || !(expiresAt === null || typeof expiresAt === 'number') || typeof tokenRevision !== 'number') return null;
   const user = decodeUser(value.user);
-  if (user === undefined) return null;
-  return { accessToken, refreshToken, idToken, expiresAt, tokenRevision, user };
+  const impersonator = decodeUser(value.impersonator);
+  if (user === undefined || impersonator === undefined) return null;
+  return { accessToken, refreshToken, idToken, expiresAt, tokenRevision, user, impersonator };
 }

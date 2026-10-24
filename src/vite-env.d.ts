@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_OIDC_REDIRECT_URI?: string;
   readonly VITE_OIDC_SCOPE?: string;
   readonly VITE_DEV_LOGIN?: string;
+  readonly VITE_IMPERSONATION?: string;
   readonly VITE_APP_URL: string;
 }
 
@@ -24,5 +25,6 @@ interface Window {
     OIDC_REDIRECT_URI?: string;
     OIDC_SCOPE?: string;
     DEV_LOGIN?: string;
+    IMPERSONATION?: string;
   };
 }

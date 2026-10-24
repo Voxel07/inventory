@@ -425,7 +425,7 @@ test('a refresh adopts a token generation another tab already rotated', async ()
   const calls: string[] = [];
   refresh = async (token) => { calls.push(token); return tokens('never'); };
   auth.setOidcSession({ ...tokens('A'), expiresAt: Date.now() - 1 });
-  loadSession = async () => ({ ...tokens('A2'), expiresAt: Date.now() + 600_000, tokenRevision: Date.now() + 60_000, user: null });
+  loadSession = async () => ({ ...tokens('A2'), expiresAt: Date.now() + 600_000, tokenRevision: Date.now() + 60_000, user: null, impersonator: null });
   connectivity.onLine = true;
   try {
     expect(await auth.getValidAccessToken()).toBe('A2');
@@ -440,7 +440,7 @@ test('an older stored token generation is never adopted', async () => {
   refresh = async (token) => { calls.push(token); return { ...tokens('A3'), expiresAt: Date.now() + 600_000 }; };
   auth.setOidcSession({ ...tokens('A'), expiresAt: Date.now() - 1 });
   // A delayed write from another tab left an earlier generation behind.
-  loadSession = async () => ({ ...tokens('A0'), expiresAt: Date.now() + 600_000, tokenRevision: 1, user: null });
+  loadSession = async () => ({ ...tokens('A0'), expiresAt: Date.now() + 600_000, tokenRevision: 1, user: null, impersonator: null });
   connectivity.onLine = true;
   try {
     expect(await auth.getValidAccessToken()).toBe('A3');

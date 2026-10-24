@@ -2867,6 +2867,11 @@ export default {
       newPickupsReturnsAndReviewsWillAppearHere: 'New pickups, returns and reviews will appear here.',
     },
     userManagement: {
+      impersonate: 'Impersonate',
+      actAsThisAccount: 'Act as this account (development only)',
+      viewingAsName: 'Viewing as {{name}}. Everything you do is recorded as this account.',
+      stopImpersonating: 'Back to {{name}}',
+      switchingBlockedOffline: 'Switching accounts is unavailable while offline or while offline actions are queued.',
       email: 'Email',
       searchUsers: 'Search by name or email',
       filterByRole: 'Filter by role',
@@ -2901,6 +2906,8 @@ export default {
   },
   services: {
     apiClient: {
+      impersonationNeedsConnection: 'Switching accounts requires an online connection.',
+      impersonationNeedsEmptyQueue: 'Sync or discard the queued offline actions before switching accounts.',
       oIDCSignInFailed: 'OIDC sign-in failed',
       thisActionRequiresAnOnlineConnectionItHasNotBeen: 'This action requires an online connection. It has not been queued.',
       invalidMediaURL: 'Invalid media URL',

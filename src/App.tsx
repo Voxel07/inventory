@@ -22,6 +22,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { deDE as pickersDE, enUS as pickersEN } from '@mui/x-date-pickers/locales';
 import 'dayjs/locale/de';
+import { ImpersonationBanner } from './components/users/ImpersonationBanner';
 import 'dayjs/locale/en-gb';
 
 const Items = lazy(() => import('./pages/Items').then((m) => ({ default: m.Items })));
@@ -126,6 +127,7 @@ function AppContent() {
         }}
       >
         <Toolbar />
+        <ImpersonationBanner />
         <ErrorBoundary>
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>

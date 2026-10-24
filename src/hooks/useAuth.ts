@@ -7,6 +7,7 @@ export function useAuth() {
     generation: auth.generation,
     token: auth.token,
     user: auth.user,
+    impersonator: auth.impersonator,
     error: auth.error,
     isAuthenticated: Boolean(auth.token && auth.user),
     login,

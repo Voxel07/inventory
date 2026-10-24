@@ -60,6 +60,13 @@ export const OIDC_CONFIG: OidcRuntimeConfig | null = oidcAuthorityValue && oidcC
 export const DEV_LOGIN_AVAILABLE = !OIDC_CONFIG
   && (import.meta.env.DEV || value('DEV_LOGIN', import.meta.env.VITE_DEV_LOGIN).toLowerCase() === 'true');
 
+/**
+ * Administrators may act as other accounts in the Vite dev server, or in a build whose runtime config sets
+ * IMPERSONATION=true. The API decides independently (inventory.impersonation.enabled, never in prod).
+ */
+export const IMPERSONATION_AVAILABLE = import.meta.env.DEV
+  || value('IMPERSONATION', import.meta.env.VITE_IMPERSONATION).toLowerCase() === 'true';
+
 export const AUTH_CONFIGURATION_ERROR = OIDC_CONFIG || DEV_LOGIN_AVAILABLE
   ? null
   : 'Sign-in is not configured: set OIDC_AUTHORITY and OIDC_CLIENT_ID.';

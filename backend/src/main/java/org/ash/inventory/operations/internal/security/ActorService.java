@@ -41,10 +41,13 @@ import java.util.TreeSet;
 public class ActorService {
     /** Issuer recorded for header-based development accounts. */
     public static final String DEV_ISSUER = "dev";
+    /** Development only: an administrator acts as the account with this ID for the request. */
+    public static final String IMPERSONATE_HEADER = "X-Impersonate-User";
 
     @jakarta.inject.Inject InventoryAccess privateAccess;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
     @jakarta.inject.Inject DomainEventService events;
+    @ConfigProperty(name = "inventory.impersonation.enabled", defaultValue = "false") boolean impersonationEnabled;
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
@@ -53,6 +56,7 @@ public class ActorService {
     private final Set<String> bootstrapAdmins;
 
     private UserAccount cached;
+    private UserAccount authenticated;
     private int privateMutationDepth;
     private int usageDepth;
 
@@ -135,7 +139,33 @@ public class ActorService {
                 var restored = new TreeSet<>(cached.roles); restored.add(DomainEnums.UserRole.admin); cached.setRoles(restored);
             }
         }
+        authenticated = cached;
+        String target = header(IMPERSONATE_HEADER, null);
+        if (target != null) {
+            // A rejected impersonation must not leave the administrator cached for later calls in this request.
+            cached = null;
+            cached = impersonate(authenticated, target);
+        }
         return cached;
+    }
+
+    /** The signed-in account, which differs from {@link #current()} only while an administrator impersonates. */
+    public UserAccount authenticated() {
+        current();
+        return authenticated;
+    }
+
+    /** Everything the impersonated account does is recorded as that account. */
+    private UserAccount impersonate(UserAccount admin, String target) {
+        if (!impersonationEnabled) throw ApiException.badRequest("Impersonation is disabled");
+        if (!admin.role.atLeast(DomainEnums.UserRole.admin)) throw ApiException.forbidden("Only administrators may impersonate accounts");
+        java.util.UUID id;
+        try { id = java.util.UUID.fromString(target.trim()); }
+        catch (IllegalArgumentException invalid) { throw ApiException.badRequest("Invalid impersonation target"); }
+        var user = users.find(id);
+        if (user == null) throw ApiException.notFound("Impersonated account not found");
+        if (!user.active) throw ApiException.conflict("Deactivated accounts cannot be impersonated");
+        return user;
     }
 
     /** First contact of an identity; the account provisions itself, so it is its own actor. */

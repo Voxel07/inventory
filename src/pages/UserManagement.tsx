@@ -9,10 +9,15 @@ import { Dialog } from '../components/shared/ClosableDialog';
 import { ActionMenu } from '../components/shared/ActionBar';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
+import SwitchAccountIcon from '@mui/icons-material/SwitchAccount';
 import { useAuth } from '../hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
-import { refreshCurrentUser } from '../services/apiClient';
+import { refreshCurrentUser, switchImpersonation } from '../services/apiClient';
+import { IMPERSONATION_AVAILABLE } from '../config/runtimeConfig';
+import { useOfflineStatus } from '../hooks/useOfflineStatus';
+import { useUIStore } from '../store/uiStore';
+import { useNavigate } from 'react-router-dom';
 import { updateUserAccess } from '../services/userService';
 import { ROLE_LADDER } from '../types';
 import type { AccessRole, Faction, User } from '../types';
@@ -81,8 +86,33 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
   </Dialog>;
 }
 
+/** Development only: offered for other active accounts; switching is blocked offline or with queued offline actions. */
+function useImpersonation(user: User) {
+  const t = useT();
+  const navigate = useNavigate();
+  const { user: me, impersonator } = useAuth();
+  const { online, queued } = useOfflineStatus();
+  const [pending, setPending] = useState(false);
+  if (!IMPERSONATION_AVAILABLE || !user.active || user.id === me?.id || user.id === impersonator?.id) return null;
+  const blocked = !online || queued > 0;
+  return {
+    title: blocked ? t('pages.userManagement.switchingBlockedOffline') : t('pages.userManagement.actAsThisAccount'),
+    disabled: blocked || pending,
+    start: () => {
+      setPending(true);
+      switchImpersonation(user)
+        .then(() => navigate('/'))
+        .catch((error: unknown) => {
+          setPending(false);
+          useUIStore.getState().showSnackbar(error instanceof Error ? error.message : String(error), 'error');
+        });
+    },
+  };
+}
+
 function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; factions: Faction[]; compact: boolean; onEdit: () => void; onHistory: () => void }) {
   const t = useT();
+  const impersonation = useImpersonation(user);
   const factionLabel = (key: string) => {
     const faction = factions.find((candidate) => factionKeyOf(candidate) === key);
     return faction ? `${faction.eventType} · ${faction.name}` : key;
@@ -103,9 +133,13 @@ function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; f
       {compact ? <TableCell padding="checkbox" align="right"><ActionMenu actions={[
         { key: 'edit', label: t('pages.userManagement.changeRoleAndFactions'), icon: <EditIcon fontSize="small" />, onClick: onEdit },
         { key: 'history', label: t('pages.userManagement.accessHistory'), icon: <HistoryIcon fontSize="small" />, onClick: onHistory },
+        ...(impersonation ? [{ key: 'impersonate', label: t('pages.userManagement.impersonate'), icon: <SwitchAccountIcon fontSize="small" />,
+          title: impersonation.title, onClick: impersonation.start, disabled: impersonation.disabled }] : []),
       ]} /></TableCell> : <TableCell><Stack direction="row" spacing={0.5}>
         <Button title={t('pages.userManagement.changeRoleAndFactions')} size="small" onClick={onEdit}>{t('common.edit')}</Button>
         <Button title={t('pages.userManagement.accessHistory')} size="small" onClick={onHistory}>{t('common.history')}</Button>
+        {impersonation && <Button title={impersonation.title} size="small" disabled={impersonation.disabled}
+          onClick={impersonation.start}>{t('pages.userManagement.impersonate')}</Button>}
       </Stack></TableCell>}
     </TableRow>
   );

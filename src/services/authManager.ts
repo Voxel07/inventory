@@ -17,6 +17,8 @@ export type AuthSnapshot = {
   generation: number;
   token: string;
   user: User | null;
+  /** Development only: the signed-in administrator while {@code user} is impersonated. */
+  impersonator: User | null;
   error: string | null;
 };
 
@@ -44,6 +46,8 @@ export function assertAuthSession(context: AuthSessionContext): void {
 }
 
 const emptySession = emptyAuthSession;
+/** Tokens belong to the signed-in account, which is the impersonator while impersonating. */
+const tokenOwner = (value: PersistedAuthSession) => value.impersonator?.id ?? value.user?.id;
 
 function loadSession(): PersistedAuthSession {
   try {
@@ -58,13 +62,13 @@ function loadSession(): PersistedAuthSession {
 
 let session = loadSession();
 let generation = 0;
-let snapshot: AuthSnapshot = { generation, token: session.accessToken, user: session.user, error: null };
+let snapshot: AuthSnapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, error: null };
 let refreshPromise: Promise<string> | null = null;
 let persistence: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function publish(error: string | null = null): void {
-  snapshot = { generation, token: session.accessToken, user: session.user, error };
+  snapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, error };
   listeners.forEach((listener) => listener());
 }
 
@@ -89,7 +93,7 @@ async function writeDurable(snapshot: PersistedAuthSession, endedRevision: numbe
     const current = await loadStoredAuthSession();
     if (current && current.tokenRevision > snapshot.tokenRevision) {
       // Keep the newer tokens; only a same-account profile update may still apply.
-      if (current.user?.id === snapshot.user?.id) await saveStoredAuthSession({ ...current, user: snapshot.user });
+      if (tokenOwner(current) === tokenOwner(snapshot)) await saveStoredAuthSession({ ...current, user: snapshot.user, impersonator: snapshot.impersonator });
       return;
     }
     await saveStoredAuthSession(snapshot);
@@ -165,7 +169,7 @@ async function adoptRotatedSession(): Promise<boolean> {
   await persistence;
   const stored = await loadStoredAuthSession();
   if (!stored?.refreshToken || stored.tokenRevision <= session.tokenRevision) return false;
-  if (stored.user?.id !== session.user?.id) return false;
+  if (tokenOwner(stored) !== tokenOwner(session)) return false;
   replaceTokens(stored, stored.tokenRevision, 'none');
   return true;
 }
@@ -206,6 +210,21 @@ export function updateAuthUser(user: User): void {
   publish();
 }
 
+/**
+ * Development only: acts as {@code target} until called with null. Starts a new session generation, so caches,
+ * open requests and the realtime stream switch over; the server re-checks administrator rights on every request.
+ */
+export function setImpersonation(target: User | null): void {
+  const impersonator = session.impersonator ?? session.user;
+  if (!impersonator) return;
+  advanceSession();
+  session = target && target.id !== impersonator.id
+    ? { ...session, user: target, impersonator }
+    : { ...session, user: impersonator, impersonator: null };
+  void persist();
+  publish();
+}
+
 export function setAuthError(error: string | null): void {
   publish(error);
 }
@@ -241,7 +260,7 @@ type AuthMessage = { type?: string; userId?: string; tokens?: OidcTokenSet; toke
 const authChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('ash-inventory-auth');
 authChannel?.addEventListener('message', (event: MessageEvent<AuthMessage>) => {
   if (event.data?.type === 'logout' && (session.accessToken || session.refreshToken)) void clearAuth();
-  if (event.data?.type === 'tokens' && event.data.tokens && session.refreshToken && event.data.userId === session.user?.id
+  if (event.data?.type === 'tokens' && event.data.tokens && session.refreshToken && event.data.userId === tokenOwner(session)
     && (event.data.tokenRevision ?? 0) > session.tokenRevision) replaceTokens(event.data.tokens, event.data.tokenRevision ?? 0, 'none');
 });
 
@@ -288,7 +307,7 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
         replaceTokens(tokens, revision, 'locked');
         // Durable before the lock is released, so the next tab reads this generation.
         await persistence;
-        authChannel?.postMessage({ type: 'tokens', userId: session.user?.id, tokens, tokenRevision: revision } satisfies AuthMessage);
+        authChannel?.postMessage({ type: 'tokens', userId: tokenOwner(session), tokens, tokenRevision: revision } satisfies AuthMessage);
         return tokens.accessToken;
       } catch (error) {
         assertAuthSession(context);
@@ -322,10 +341,12 @@ export async function getAuthorizationHeaders(signal?: AbortSignal): Promise<Rec
   assertAuthSession(context);
   if (!token) return {};
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  const account = session.impersonator ?? session.user;
   if (token.startsWith('dev:')) {
     headers['X-Actor-Id'] = token.slice(4);
-    headers['X-Actor-Name'] = session.user?.name || 'Development Admin';
-    headers['X-Actor-Role'] = String(session.user?.role || 'admin').trim().toLowerCase();
+    headers['X-Actor-Name'] = account?.name || 'Development Admin';
+    headers['X-Actor-Role'] = String(account?.role || 'admin').trim().toLowerCase();
   }
+  if (session.impersonator && session.user) headers['X-Impersonate-User'] = session.user.id;
   return headers;
 }

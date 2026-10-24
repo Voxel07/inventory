@@ -44,7 +44,7 @@ public class UserResource {
     @GET @Path("/auth/me")
     public ApiResponses.UserResponse me() { return mapper.user(actors.current()); }
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
-    @POST @Path("/auth/logout") public void logout() { sessions.logout(actors.current().id); }
+    @POST @Path("/auth/logout") public void logout() { sessions.logout(actors.authenticated().id); }
 
     @POST @Path("/auth/dev-login") @Transactional
     public ApiResponses.DevLoginResponse devLogin(@Valid ApiModels.DevLoginInput input) {

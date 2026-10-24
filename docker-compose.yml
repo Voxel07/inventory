@@ -68,6 +68,7 @@ services:
       OIDC_CLIENT_ID: ${BACKEND_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-inventory}}
       OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      IMPERSONATION_ENABLED: ${IMPERSONATION_ENABLED:-false}
       OIDC_REQUIRE_INTROSPECTION: ${OIDC_REQUIRE_INTROSPECTION:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3333}
       PROXY_ADDRESS_FORWARDING: ${PROXY_ADDRESS_FORWARDING:-false}
@@ -120,6 +121,7 @@ services:
       VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3333/}
       VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-openid profile email offline_access}
       VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
+      VITE_IMPERSONATION: ${VITE_IMPERSONATION:-false}
     depends_on:
       inventory-api:
         condition: service_started

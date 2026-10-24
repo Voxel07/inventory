@@ -2869,6 +2869,11 @@ export default {
       newPickupsReturnsAndReviewsWillAppearHere: 'Neue Abholungen, Rückgaben und Prüfungen erscheinen hier.',
     },
     userManagement: {
+      impersonate: 'Als Benutzer anmelden',
+      actAsThisAccount: 'Als dieses Konto handeln (nur Entwicklung)',
+      viewingAsName: 'Sie handeln als {{name}}. Alle Aktionen werden für dieses Konto aufgezeichnet.',
+      stopImpersonating: 'Zurück zu {{name}}',
+      switchingBlockedOffline: 'Kontowechsel ist offline oder mit ausstehenden Offline-Aktionen nicht möglich.',
       email: 'E-Mail',
       searchUsers: 'Nach Name oder E-Mail suchen',
       filterByRole: 'Nach Rolle filtern',
@@ -2903,6 +2908,8 @@ export default {
   },
   services: {
     apiClient: {
+      impersonationNeedsConnection: 'Kontowechsel erfordert eine Online-Verbindung.',
+      impersonationNeedsEmptyQueue: 'Synchronisieren oder verwerfen Sie die offline gespeicherten Aktionen vor dem Kontowechsel.',
       oIDCSignInFailed: 'OIDC-Anmeldung fehlgeschlagen',
       thisActionRequiresAnOnlineConnectionItHasNotBeen: 'Diese Aktion erfordert eine Online-Verbindung. Sie wurde nicht vorgemerkt.',
       invalidMediaURL: 'Ungültige Medien-URL',
