@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LogoutRevocationTest {
     @Inject EntityManager em;
     @Inject UserOrm users;
+    @Inject org.ash.inventory.integration.api.DomainEventService events;
     @Test void logoutRejectsTheBearerOnTheNextRequestAndStreamRecheck() {
         String subject="logout-"+UUID.randomUUID();
         var claims=Map.<String,Object>of("iss","https://identity.example.test","sub",subject,"exp",Instant.now().plusSeconds(300).getEpochSecond(),"raw_token","isolated-fixture-"+UUID.randomUUID());
@@ -28,8 +29,8 @@ class LogoutRevocationTest {
             @SuppressWarnings("unchecked") public <T>T getClaim(String name){return (T)claims.get(name);}
         };
         var identity=QuarkusSecurityIdentity.builder().setPrincipal(token).addRole("inventory").build();
-        var actor=new ActorService(identity,null,users,false,"inventory",Optional.empty());
-        var sessions=new AuthSessionService(em,identity);actor.sessions=sessions;
+        var actor=new ActorService(identity,new io.quarkus.vertx.http.runtime.CurrentVertxRequest(),users,false,"inventory",Optional.empty());
+        var sessions=new AuthSessionService(em,identity);actor.sessions=sessions;actor.events=events;
         UUID id=QuarkusTransaction.requiringNew().call(()->actor.current().id);
         QuarkusTransaction.requiringNew().run(()->{
             assertTrue(sessions.streamAllowed(id,AuthSessionService.fingerprint(token)));
@@ -37,7 +38,7 @@ class LogoutRevocationTest {
             assertTrue(sessions.revoked(token));
             assertFalse(sessions.streamAllowed(id,AuthSessionService.fingerprint(token)));
         });
-        var nextRequest=new ActorService(identity,null,users,false,"inventory",Optional.empty());nextRequest.sessions=sessions;
+        var nextRequest=new ActorService(identity,new io.quarkus.vertx.http.runtime.CurrentVertxRequest(),users,false,"inventory",Optional.empty());nextRequest.sessions=sessions;
         var failure=assertThrows(ApiException.class,()->QuarkusTransaction.requiringNew().run(nextRequest::current));
         assertEquals(401,failure.status);
     }

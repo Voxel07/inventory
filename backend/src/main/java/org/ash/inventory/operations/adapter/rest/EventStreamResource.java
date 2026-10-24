@@ -53,7 +53,8 @@ public class EventStreamResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<Map<String, Object>> stream() {
-        var actorId = actors.current().id;
+        // The session belongs to the signed-in account, also while an administrator impersonates.
+        var actorId = actors.authenticated().id;
         String tokenHash = identity.getPrincipal() instanceof JsonWebToken token ? org.ash.inventory.operations.internal.application.AuthSessionService.fingerprint(token) : null;
         Duration lifetime = lifetime(identity.isAnonymous() ? null : identity.getPrincipal(), Instant.now());
         if (lifetime.isZero()) throw new ApiException(401, "Token expired");

@@ -36,14 +36,14 @@ class ActorServiceRoleTest {
                 });
         var users = new org.ash.inventory.operations.internal.persistence.UserOrm(null, null) {
             @Override public org.ash.inventory.operations.internal.model.UserAccount findByIdentity(String issuer, String subject) { return null; }
-            @Override public org.ash.inventory.operations.internal.model.UserAccount provision(String issuer, String subject, String name, String email,
+            @Override public Provisioned provision(String issuer, String subject, String name, String email,
                     Set<DomainEnums.UserRole> roles, java.util.Collection<String> factions) {
                 var user = new org.ash.inventory.operations.internal.model.UserAccount();
                 user.setRoles(roles);
-                return user;
+                return new Provisioned(user, false);
             }
         };
-        var actor = new ActorService(identity, null, users, false, "inventory", java.util.Optional.empty());
+        var actor = new ActorService(identity, new io.quarkus.vertx.http.runtime.CurrentVertxRequest(), users, false, "inventory", java.util.Optional.empty());
         assertEquals(DomainEnums.UserRole.read_only, actor.current().role);
     }
     @Test

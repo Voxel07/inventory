@@ -175,8 +175,11 @@ class StorageQueryRegressionTest {
         var identity = QuarkusSecurityIdentity.builder()
                 .setPrincipal(token)
                 .addRole("inventory").build();
-        // The authenticated identity path does not need an HTTP request.
-        return new ActorService(identity, null, users, false, "inventory", java.util.Optional.empty());
+        // No HTTP request is active; the impersonation header lookup sees none. The hand-built actor has no
+        // injected event service, so first contact skips the user.created event.
+        return new ActorService(identity, new io.quarkus.vertx.http.runtime.CurrentVertxRequest(), users, false, "inventory", java.util.Optional.empty()) {
+            @Override public void recordCreated(UserAccount user) {}
+        };
     }
 
     @Test
