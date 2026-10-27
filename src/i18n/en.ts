@@ -297,6 +297,7 @@ export default {
       adjusted: 'Adjusted',
       reserved: 'Reserved',
       reservation_released: 'Reservation released',
+      putaway: 'Put away',
       transfer_out: 'Transfer out',
       transfer_in: 'Transfer in',
       staged: 'Staged',
@@ -1675,6 +1676,7 @@ export default {
       theReservedItemsWillNowBeHandedOver: 'The reserved items will now be handed over.',
     },
     generalOrders: {
+      withoutEvent: 'Without event',
       statusLabels: {
         preparing: 'Preparing',
         draft: 'Draft',

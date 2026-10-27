@@ -34,7 +34,6 @@ import { type GeneralOrderSummary, type Item } from '../../types';
 import { formatQuantity } from '../../utils/stock';
 import { translate, useT } from '../../utils/naming';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
-import { Link as RouterLink } from 'react-router-dom';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityControl } from './QuantityControl';
@@ -203,7 +202,7 @@ export function GeneralOrders() {
           <TextField autoFocus required label={t('profile.name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
           <TextField required multiline minRows={2} label={t('orders.generalOrders.purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
           <TextField select label={t('nav.currentEvent')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
-            <MenuItem value="">{t('orders.generalOrders.selectEvent')}</MenuItem>
+            <MenuItem value="">{t('orders.generalOrders.withoutEvent')}</MenuItem>
             {eventTypes.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
               return occurrences.length ? [
@@ -212,7 +211,6 @@ export function GeneralOrders() {
               ] : [];
             })}
           </TextField>
-          {!activeEvents.length && <Alert severity="info" action={<Button title={translate('orders.generalOrders.openTheEventOverview')} component={RouterLink} to="/events" onClick={() => setEditing(null)}>{t('orders.generalOrders.openEvents')}</Button>}>{t('orders.generalOrders.createAnEventFirst')}</Alert>}
           <Divider />
           <Typography variant="h6">{t('orders.generalOrders.requestedItems')}</Typography>
           <CatalogSearchField label={t('common.searchItems')} value={itemSearch} onChange={setItemSearch} />
@@ -236,7 +234,7 @@ export function GeneralOrders() {
           <Button title={editing === 'new'
             ? translate('orders.generalOrders.createThisOrderWithTheEnteredQuantities')
             : translate('orders.generalOrders.updateThisOrderWithTheChangedQuantities')}
-            type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !eventId || !Object.values(quantities).some((value) => Number(value) > 0)}>
+            type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !Object.values(quantities).some((value) => Number(value) > 0)}>
             {editing === 'new' ? t('orders.generalOrders.createOrder') : t('orders.generalOrders.updateOrder')}
           </Button></DialogActions>
       </Box>

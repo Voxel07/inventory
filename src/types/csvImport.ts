@@ -108,6 +108,7 @@ export interface ParsedReturnRow {
 }
 
 export interface ParsedCheckoutRow {
+  itemId?: string;
   index: number;
   itemName: string;
   quantity: number;

@@ -9,7 +9,9 @@ export type Option = { value: string; label: string };
  * `itemFilter` narrows its matches. `type: 'dateRange'` edits `key` (start) and `endKey` (end) in one connected picker.
  */
 export type Field = {
-  key: string; label: string; type?: 'number' | 'date' | 'datetime-local' | 'dateRange' | 'checkbox' | 'text' | 'item'; required?: boolean;
+  key: string; label: string; type?: 'number' | 'quantity' | 'date' | 'datetime-local' | 'dateRange' | 'checkbox' | 'text' | 'item'; required?: boolean;
+  /** Quantity values stay in the item's integer steps; the control explains their physical measure. */
+  measure?: Pick<Item, 'unit' | 'quantityDecimals' | 'unitCapacity'> | null;
   endKey?: string; endLabel?: string;
   min?: number; max?: number; step?: number; options?: Option[]; multiline?: boolean; help?: string; reset?: Values;
   itemFilter?: (item: Item) => boolean;

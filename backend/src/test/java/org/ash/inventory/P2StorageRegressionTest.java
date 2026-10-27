@@ -193,7 +193,7 @@ class P2StorageRegressionTest {
         tx(item, user, DomainEnums.TransactionType.written_off, 2, true);
         tx(item, user, DomainEnums.TransactionType.missing, 3, false);
         tx(item, other, DomainEnums.TransactionType.checkout, 9, false);
-        em.flush(); em.clear(); stats().clear(); var rows = custody.directBalances(user.id, null);
+        em.flush(); em.clear(); stats().clear(); var rows = custody.directBalances(user.id, null, List.of());
         assertEquals(1, rows.size()); assertEquals(5, rows.getFirst().quantity()); assertNull(rows.getFirst().event());
         assertEquals(3, stats().getPrepareStatementCount(), "Aggregate plus two metadata batches, regardless of history length");
     }
@@ -299,6 +299,7 @@ class P2StorageRegressionTest {
 
     @Test @TestTransaction
     void sourceSelectionStatementsStayBoundedAsLocationsGrow() { // audit H08
+        actors.current();
         var user = person();
         var counts = new ArrayList<Long>();
         for (int locations : new int[] {2, 12}) {
@@ -314,8 +315,8 @@ class P2StorageRegressionTest {
             var managed = em.find(Item.class, item.id);
             stats().clear();
             var capacity = allocation.capacity(managed, null);
-            var source = allocation.defaultSource(managed, capacity, locations);
-            assertEquals(locations, capacity.availableAt(source) + (source.id.equals(managed.storageLocation.id) ? 1 : 0));
+            var selected = allocation.allocate(managed, capacity, locations, null);
+            assertEquals(locations, selected.values().stream().mapToInt(Integer::intValue).sum());
             counts.add(stats().getPrepareStatementCount());
         }
         assertEquals(counts.get(0), counts.get(1), "Statements must not grow with the number of stock locations");

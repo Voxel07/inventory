@@ -356,6 +356,10 @@ public class CatalogOrm extends EntityOrm {
         return entityManager.createQuery("select count(a) from AssetInstance a where a.item = :item and a.active = true", Long.class)
                 .setParameter("item", item).getSingleResult();
     }
+    public boolean hasPendingReturns(Item item) {
+        return entityManager.createQuery("select count(r) from ReturnSubmission r where r.item = :item and r.status = pending", Long.class)
+                .setParameter("item", item).getSingleResult() > 0;
+    }
 
     public long countTransactions(Item item) {
         return entityManager.createQuery("select count(tx) from StockTransaction tx where tx.item = :item", Long.class)

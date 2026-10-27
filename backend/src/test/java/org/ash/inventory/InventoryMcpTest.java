@@ -298,7 +298,10 @@ class InventoryMcpTest {
             em.persist(order);
             var reservation = new StockReservation();
             reservation.order = order; reservation.orderLine = line; reservation.item = line.item;
-            reservation.location = line.sourceLocation; reservation.createdBy = order.createdBy;
+            reservation.location = line.sourceLocation;
+            reservation.position = em.createQuery("from InventoryPosition p where p.item = :item and p.location = :location", InventoryPosition.class)
+                    .setParameter("item", line.item).setParameter("location", line.sourceLocation).getSingleResult();
+            reservation.createdBy = order.createdBy;
             reservation.requestedQuantity = 3; reservation.reservedQuantity = 3;
             em.persist(reservation);
         });
@@ -328,6 +331,8 @@ class InventoryMcpTest {
             reservation.orderLine = line;
             reservation.item = line.item;
             reservation.location = em.find(StorageLocation.class, location.id);
+            reservation.position = em.createQuery("from InventoryPosition p where p.item = :item and p.location = :location", InventoryPosition.class)
+                    .setParameter("item", line.item).setParameter("location", reservation.location).getSingleResult();
             reservation.createdBy = order.createdBy;
             reservation.requestedQuantity = 3;
             reservation.reservedQuantity = 3;

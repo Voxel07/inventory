@@ -16,7 +16,7 @@ import java.time.Instant;
 
 /**
  * Materialized quantity state for bulk or lot stock at one location. The ledger remains authoritative. Reservations are
- * not stored here: they are computed from live order reservations ({@code PositionOrm.reservedByLocation}).
+ * not stored here: they are computed from live order reservations ({@code PositionOrm.reservedByPosition}).
  */
 @Entity
 @Table(name = "inventory_positions", uniqueConstraints =

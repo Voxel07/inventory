@@ -1,3 +1,8 @@
+import { useCompleteList } from '../../hooks/usePagedList';
+import { useStockLookups } from '../../hooks/useStockLookups';
+import { operationsApi } from '../../services/operationsService';
+import { QueryFeedback } from '../common/QueryFeedback';
+import { formatQuantity, usesPercentage } from '../../utils/stock';
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { Autocomplete, Box, Chip, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
@@ -41,24 +46,30 @@ export function DamageReportForm({
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(needsAsset ? selectedItem?.id : undefined);
     const activeAssets = itemAssets.filter((asset) => asset.active);
     const selectedAsset = preselectedAsset ?? activeAssets.find((asset) => asset.id === formData.assetInstanceId) ?? null;
-    const effectiveMaxAmount = needsAsset ? 1 : maxAmount;
+    const positions = useCompleteList(['operations', `damage-positions:${selectedItem?.id ?? ''}`], operationsApi.positions({ itemId: selectedItem?.id }), { enabled: Boolean(selectedItem && !needsAsset) });
+    const lookup = useStockLookups();
+    const candidates = (positions.data ?? []).filter(position => position.quantityOnHand > position.quantityDamaged + position.quantityQuarantined);
+    const positionId = formData.positionId ?? (candidates.length === 1 ? candidates[0].id : undefined);
+    const position = candidates.find(position => position.id === positionId);
+    const effectiveMaxAmount = needsAsset ? 1 : position ? Math.min(maxAmount ?? Infinity, position.quantityOnHand - position.quantityDamaged - position.quantityQuarantined) : maxAmount;
+    const positionMissing = Boolean(selectedItem && !needsAsset && (!positions.isComplete || candidates.length > 0 && !position));
 
     function selectItem(item: Item | null) {
         setAmountInput('1');
-        setFormData((previous) => ({ ...previous, itemId: item?.id, assemblyId: undefined, assetInstanceId: undefined, amount: 1 }));
+        setFormData((previous) => ({ ...previous, itemId: item?.id, assemblyId: undefined, assetInstanceId: undefined, positionId: undefined, amount: 1 }));
     }
 
     function selectAssembly(assembly: Assembly | null) {
         setAmountInput('1');
-        setFormData((previous) => ({ ...previous, itemId: undefined, assemblyId: assembly?.id, assetInstanceId: undefined, amount: 1 }));
+        setFormData((previous) => ({ ...previous, itemId: undefined, assemblyId: assembly?.id, assetInstanceId: undefined, positionId: undefined, amount: 1 }));
     }
 
     function handleSubmit(event: React.FormEvent) {
         event.preventDefault();
         const amount = Number(amountInput);
         if (!Number.isInteger(amount) || amount < 1 || (!formData.itemId && !formData.assemblyId)) return;
-        if (needsAsset && !formData.assetInstanceId) return;
-        onSubmit({ ...formData, amount });
+        if (needsAsset && !formData.assetInstanceId || positionMissing) return;
+        onSubmit({ ...formData, amount, positionId });
     }
 
     const invalidAmount = amountInput === '' || !Number.isInteger(Number(amountInput)) || Number(amountInput) < 1
@@ -100,13 +111,24 @@ export function DamageReportForm({
                     />
                 )}
 
+                {selectedItem && !needsAsset && <>
+                    <QueryFeedback error={positions.error} isLoading={!positions.isComplete && !positions.error} />
+                    {candidates.length > 0 && <TextField select required label={t('common.storageLocation')} value={positionId ?? ''}
+                        onChange={event => setFormData(previous => ({ ...previous, positionId: event.target.value }))}>
+                        {candidates.map(position => <MenuItem key={position.id} value={position.id}>
+                            {lookup.locationOptions.find(location => location.value === position.locationId)?.label ?? position.locationId}
+                            {position.lotId ? ` · ${position.lotId}` : ''} · {formatQuantity(selectedItem, position.quantityOnHand - position.quantityDamaged - position.quantityQuarantined)}
+                        </MenuItem>)}
+                    </TextField>}
+                </>}
+
                 <TextField select label={t('common.severity')} value={formData.severity} onChange={(event) => setFormData((previous) => ({ ...previous, severity: event.target.value as DamageSeverity }))} required fullWidth>
                     {severities.map((severity) => <MenuItem key={severity.value} value={severity.value}>{severity.label}</MenuItem>)}
                 </TextField>
-                <TextField label={t('common.quantity')} type="number" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} slotProps={{ htmlInput: { min: 1, max: effectiveMaxAmount, step: 1 } }} helperText={needsAsset ? t('forms.damageReportForm.aSerializedAssetAlwaysHasQuantity1') : undefined} disabled={needsAsset} required fullWidth />
+                <TextField label={usesPercentage(selectedItem) ? `${t('common.quantity')} (%)` : t('common.quantity')} type="number" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} slotProps={{ htmlInput: { min: 1, max: effectiveMaxAmount, step: 1 } }} helperText={needsAsset ? t('forms.damageReportForm.aSerializedAssetAlwaysHasQuantity1') : selectedItem ? formatQuantity(selectedItem, Number(amountInput) || 0) : undefined} disabled={needsAsset} required fullWidth />
                 <TextField label={t('common.description')} value={formData.description} onChange={(event) => setFormData((previous) => ({ ...previous, description: event.target.value }))} multiline rows={4} required fullWidth />
 
-                <Button title={translate('forms.damageReportForm.submitTheDamageReportWithQuantityAndDescription')} type="submit" variant="contained" color="error" disabled={isLoading || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
+                <Button title={translate('forms.damageReportForm.submitTheDamageReportWithQuantityAndDescription')} type="submit" variant="contained" color="error" disabled={isLoading || positionMissing || (!formData.itemId && !formData.assemblyId) || (needsAsset && !formData.assetInstanceId) || !formData.description.trim() || invalidAmount} sx={{ minHeight: 48 }}>
                     {t('forms.damageReportForm.submitDamageReport')}
                 </Button>
             </Stack>

@@ -45,7 +45,7 @@ public class CountService {
 
     @Transactional
     public List<CountDtos.CountResponse> list(String status, int page, int size) {
-        actors.requireWarehouse();
+        actors.current();
         try { return responses(orm.sessions(status, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown count status"); }
     }
@@ -54,7 +54,6 @@ public class CountService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse create(CountDtos.CountInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var location = input.locationId() == null ? null : orm.require(StorageLocation.class, input.locationId(), "Location");
         var item = input.itemId() == null ? null : orm.require(Item.class, input.itemId(), "Item");
         var session = new InventoryCountSession();
@@ -93,6 +92,8 @@ public class CountService {
             orm.persist(line);
             lines.add(line);
         }
+        for (var line : lines) { actors.requireItemEdit(line.item); actors.requireLocationEdit(line.location); }
+        if (item == null && location == null) actors.requireWarehouse();
         if (lines.isEmpty()) throw ApiException.conflict("No inventory matches the requested count scope");
         events.record("count.created", "inventory_count", session.id, actor.id, null,
                 Map.of("sessionNumber", session.sessionNumber, "lineCount", lines.size()));
@@ -102,8 +103,9 @@ public class CountService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse start(UUID id, CountDtos.CountCommandInput input) {
-        actors.requireWarehouse();
+        actors.current();
         var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
+        requireOperation(session);
         if (session.status == DomainEnums.CountStatus.counting) return response(session, orm.lockedLines(session));
         if (session.status != DomainEnums.CountStatus.draft) throw ApiException.conflict("Inventory count cannot be started");
         session.status = DomainEnums.CountStatus.counting;
@@ -116,8 +118,8 @@ public class CountService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse submit(UUID id, CountDtos.CountSubmissionInput input, boolean recount) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
+        requireOperation(session);
         var expectedStatus = recount ? DomainEnums.CountStatus.awaiting_recount : DomainEnums.CountStatus.counting;
         if (session.status != expectedStatus) throw ApiException.conflict("Inventory count is not ready for this submission");
         var lines = orm.lockedLines(session);
@@ -157,17 +159,19 @@ public class CountService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse approve(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
-        actors.requireAdmin();
         var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
+        requireOperation(session);
         if (session.status != DomainEnums.CountStatus.awaiting_approval) {
             throw ApiException.conflict("Inventory count is not awaiting approval");
         }
         var lines = orm.lockedLines(session);
+        boolean organization = lines.stream().anyMatch(line -> line.item.accessPolicy == null || line.location.accessPolicy == null);
+        if (organization) actors.requireAdmin();
         for (var line : lines) {
             line.approvedQuantity = line.recountedQuantity == null ? line.countedQuantity : line.recountedQuantity;
             if (line.approvedQuantity == null) throw ApiException.conflict("Count line has no submitted quantity");
             line.varianceQuantity = line.approvedQuantity - line.expectedQuantity;
-            if (line.varianceQuantity != 0 && line.countedBy != null && line.countedBy.id.equals(actor.id)) {
+            if (organization && line.varianceQuantity != 0 && line.countedBy != null && line.countedBy.id.equals(actor.id)) {
                 throw ApiException.forbidden("A different administrator must approve a count variance");
             }
         }
@@ -184,8 +188,8 @@ public class CountService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse post(UUID id, CountDtos.CountCommandInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
+        requireOperation(session);
         if (session.status == DomainEnums.CountStatus.posted) return response(session, orm.lockedLines(session));
         if (session.status != DomainEnums.CountStatus.approved) throw ApiException.conflict("Inventory count is not approved");
         var lines = orm.lockedLines(session);
@@ -237,8 +241,9 @@ public class CountService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public CountDtos.CountResponse cancel(UUID id, CountDtos.CountCommandInput input) {
-        actors.requireWarehouse();
+        actors.current();
         var session = orm.requireLockedFresh(InventoryCountSession.class, id, "Inventory count");
+        requireOperation(session);
         if (session.status == DomainEnums.CountStatus.cancelled) return response(session, orm.lockedLines(session));
         if (session.status == DomainEnums.CountStatus.posted) throw ApiException.conflict("Posted counts cannot be cancelled");
         session.status = DomainEnums.CountStatus.cancelled;
@@ -246,6 +251,12 @@ public class CountService {
         events.record("count.cancelled", "inventory_count", session.id, actors.current().id, null,
                 Map.of("sessionNumber", session.sessionNumber));
         return response(session, orm.lockedLines(session));
+    }
+
+    private void requireOperation(InventoryCountSession session) {
+        for (var line : orm.lockedLines(session)) {
+            actors.requireItemEdit(line.item); actors.requireLocationEdit(line.location);
+        }
     }
 
     private void appendAdjustment(InventoryCountSession session, InventoryCountLine line, UserAccount actor) {

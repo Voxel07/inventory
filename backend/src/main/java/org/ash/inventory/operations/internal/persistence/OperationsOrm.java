@@ -155,7 +155,8 @@ public class OperationsOrm extends EntityOrm {
         if (itemIds.isEmpty()) return totals;
         var custody = new LinkedHashMap<UUID, Long>();
         for (var row : entityManager.createQuery("""
-                select tx.item.id, tx.type, sum(tx.quantity),
+                select tx.item.id, tx.type,
+                    sum(case when tx.type = missing and tx.relatedEntityType = 'inventory_transfer' then 0 else tx.quantity end),
                     sum(case when tx.custodyWriteOff = true then tx.quantity else 0 end)
                 from StockTransaction tx where tx.item.id in :itemIds
                 group by tx.item.id, tx.type

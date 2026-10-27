@@ -16,7 +16,7 @@ function csv(header: readonly string[], rows: Record<string, string>[]): string 
 
 /** `Lagerort` takes a location code (`L1-ELE-R2`), a path (`Lager 1 / Elektro / Regal 2`) or a unique name; `Position` is the place inside it. */
 export function generateSampleItemsCsv(): string {
-  const header = ['Artikel', 'Kategorie', 'Unterkategorie', 'Bestand', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Lieferant', 'Verbrauchsmaterial', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes', 'Lots'] as const;
+  const header = ['Artikel', 'Kategorie', 'Unterkategorie', 'Bestand', 'Mindestbestand', 'Einzelwert', 'Lagerort', 'Position', 'Lieferant', 'Verbrauchsmaterial', 'Events', 'Hinweis', 'TrackingMode', 'AssetCodes', 'Lots', 'SKU', 'Unit', 'QuantityDecimals', 'UnitCapacity'] as const;
   return csv(header, [
     { Artikel: 'Stromerzeuger 2kW', Kategorie: 'Elektro', Unterkategorie: 'Generatoren', Bestand: '4', Mindestbestand: '2', Einzelwert: '349,00', Lagerort: 'Lager 1 / Elektro / Regal 1', Lieferant: 'Honda', Verbrauchsmaterial: 'Nein', Events: 'DE,TNO', Hinweis: 'Vor Erstinbetriebnahme Ölstand prüfen', TrackingMode: 'serialized', AssetCodes: quote('GEN-001, GEN-002, GEN-003, GEN-004') },
     { Artikel: 'Kabeltrommel 50m', Kategorie: 'Elektro', Unterkategorie: 'Kabel', Bestand: '10', Mindestbestand: '5', Einzelwert: '59,95', Lagerort: 'Lager 1 / Elektro / Regal 2', Position: 'Unten', Lieferant: 'Brennenstuhl', Verbrauchsmaterial: 'Nein', Events: 'DE,TNO,LS', Hinweis: 'Nach Gebrauch trocken aufrollen', TrackingMode: 'bulk' },

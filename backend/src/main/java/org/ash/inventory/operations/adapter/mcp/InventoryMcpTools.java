@@ -53,7 +53,7 @@ public class InventoryMcpTools {
 
     @Blocking @Tool(description = "Prepare either order kind with the shared REST PreparationInput; warehouse access required")
     public com.fasterxml.jackson.databind.JsonNode prepare_order(@ToolArg(description = "Order UUID", required = true) UUID orderId,
-            @ToolArg(description = "PreparationInput: preparedQuantities, assetAssignments, sourceLocations and idempotencyKey", required = true) ApiModels.PreparationInput input) {
+            @ToolArg(description = "PreparationInput: preparedQuantities, assetAssignments, sourceAllocations and idempotencyKey", required = true) ApiModels.PreparationInput input) {
         return call("prepare_order", () -> service.prepareOrder(orderId, input));
     }
 

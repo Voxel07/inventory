@@ -44,7 +44,7 @@ public class InventoryReceiptService {
             throw ApiException.badRequest("Invalid receipt quantities");
         var item = orm.requireLockedFresh(Item.class, input.itemId(), "Item");
         var location = orm.require(StorageLocation.class, input.locationId(), "Receiving location");
-        LocationHierarchyService.requireStockLocation(location);
+        LocationHierarchyService.requireActiveStockLocation(location);
         var lot = input.lotId() == null ? null : orm.require(InventoryLot.class, input.lotId(), "Lot");
         if (lot != null && !lot.item.id.equals(item.id)) throw ApiException.badRequest("Lot does not belong to receipt item");
         int quantity = Math.addExact(input.receivedQuantity(), input.damagedQuantity());

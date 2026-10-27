@@ -18,12 +18,12 @@ public class PositionOrm {
     private final EntityManager em;
     public PositionOrm(EntityManager em) { this.em = em; }
     public List<InventoryPosition> positions(Item item) {
-        return em.createQuery("from InventoryPosition p left join fetch p.lot where p.item = :item order by p.lot.expiryDate nulls last, p.lot.bestBeforeDate nulls last, p.id", InventoryPosition.class)
+        return em.createQuery("from InventoryPosition p left join fetch p.lot join fetch p.location location left join fetch location.accessPolicy where p.item = :item order by least(p.lot.expiryDate, p.lot.bestBeforeDate) nulls last, p.id", InventoryPosition.class)
                 .setParameter("item", item).getResultList();
     }
     public List<InventoryPosition> positions(Collection<UUID> itemIds) {
         if (itemIds.isEmpty()) return List.of();
-        return em.createQuery("from InventoryPosition p join fetch p.item left join fetch p.lot join fetch p.location location where p.item.id in :ids order by p.lot.expiryDate nulls last, p.lot.bestBeforeDate nulls last, p.id", InventoryPosition.class)
+        return em.createQuery("from InventoryPosition p join fetch p.item left join fetch p.lot join fetch p.location location where p.item.id in :ids order by least(p.lot.expiryDate, p.lot.bestBeforeDate) nulls last, p.id", InventoryPosition.class)
                 .setParameter("ids", itemIds).getResultList();
     }
     public InventoryPosition position(Item item, StorageLocation location, InventoryLot lot) {
@@ -34,25 +34,34 @@ public class PositionOrm {
     }
     public <T> T find(Class<T> type, UUID id) { return accessActor.protect(em.find(type, id), false); }
     public void lock(Item item) { em.lock(item, LockModeType.PESSIMISTIC_WRITE); }
-    /**
-     * Open reservations per item and source location in one grouped query. A reservation without a source
-     * counts at the item's default location. {@code exceptOrder} excludes the order being prepared.
-     */
-    public Map<UUID, Map<UUID, Integer>> reservedByLocation(Collection<UUID> itemIds, UUID exceptOrder) {
-        var result = new HashMap<UUID, Map<UUID, Integer>>();
-        if (itemIds.isEmpty()) return result;
+    public void persist(Object value) { em.persist(value); }
+    public Map<UUID, Integer> reservedByPosition(Collection<UUID> itemIds, UUID exceptOrder) {
+        if (itemIds.isEmpty()) return Map.of();
+        var result = new HashMap<UUID, Integer>();
         for (var row : em.createQuery("""
-                select i.id, coalesce(l.id, d.id), r.order.id, sum(r.reservedQuantity - r.releasedQuantity)
-                from StockReservation r join r.item i left join r.location l left join i.storageLocation d
-                where i.id in :ids and r.status in :statuses group by i.id, coalesce(l.id, d.id), r.order.id
-                """, Object[].class).setParameter("ids", itemIds).setParameter("statuses", openReservationStatuses()).getResultList()) {
-            if (row[1] != null && !row[2].equals(exceptOrder)) add(result, row);
-        }
+                select r.position.id, r.order.id, sum(r.reservedQuantity - r.releasedQuantity)
+                from StockReservation r where r.item.id in :ids and r.position is not null
+                and r.status in :statuses group by r.position.id, r.order.id
+                """, Object[].class).setParameter("ids", itemIds).setParameter("statuses", openReservationStatuses()).getResultList())
+            if (!row[1].equals(exceptOrder)) result.merge((UUID) row[0], Math.toIntExact(((Number) row[2]).longValue()), Math::addExact);
         return result;
     }
-    private static void add(Map<UUID, Map<UUID, Integer>> result, Object[] row) {
-        int quantity = ((Number) row[3]).intValue();
-        if (quantity > 0) result.computeIfAbsent((UUID) row[0], ignored -> new HashMap<>()).merge((UUID) row[1], quantity, Integer::sum);
+    public int unlocatedBulk(Item item) {
+        long onHand = em.createQuery("""
+                select coalesce(sum(case
+                    when t.type in (added, received, adjusted, checkin, transfer_in) then t.quantity
+                    when t.type in (checkout, transfer_out) or (t.type = written_off and t.custodyWriteOff = false) then -t.quantity
+                    else 0 end), 0) from StockTransaction t where t.item = :item
+                """, Long.class).setParameter("item", item).getSingleResult();
+        int located = positions(item).stream().mapToInt(p -> p.quantityOnHand).sum();
+        return Math.toIntExact(Math.max(0, onHand - located));
+    }
+    public List<org.ash.inventory.operations.internal.model.DamageReport> unlocatedDamage(Item item) {
+        return em.createQuery("""
+                from DamageReport d where d.item = :item and d.assetInstance is null and d.order is null
+                and d.quantity > d.repairedQuantity + d.writtenOffQuantity
+                """, org.ash.inventory.operations.internal.model.DamageReport.class).setParameter("item", item).getResultList()
+                .stream().filter(d -> d.positionQuantities.isEmpty()).toList();
     }
     private List<DomainEnums.ReservationStatus> openReservationStatuses() {
         return List.of(DomainEnums.ReservationStatus.active, DomainEnums.ReservationStatus.partially_released);

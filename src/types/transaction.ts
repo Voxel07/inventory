@@ -40,7 +40,7 @@ export interface StockTransaction {
 }
 
 
-export const TRANSACTION_TYPES = ['received', 'adjusted', 'reserved', 'reservation_released', 'transfer_out', 'transfer_in', 'staged', 'checkout', 'checkin', 'added', 'consumed', 'damaged', 'missing', 'repaired', 'written_off'] as const;
+export const TRANSACTION_TYPES = ['received', 'adjusted', 'putaway', 'reserved', 'reservation_released', 'transfer_out', 'transfer_in', 'staged', 'checkout', 'checkin', 'added', 'consumed', 'damaged', 'missing', 'repaired', 'written_off'] as const;
 export type TransactionType = typeof TRANSACTION_TYPES[number];
 
 export interface TransactionFormData {

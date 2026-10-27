@@ -1,3 +1,4 @@
+import { createItemLookup } from './reference';
 import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
@@ -10,12 +11,7 @@ export function parseFactionOrdersFromCsv(
   items: Item[],
   reference: CsvReference,
 ): ParsedFactionOrderRow[] {
-  const itemLookup = new Map<string, Item>();
-  for (const item of items) {
-    itemLookup.set(item.name.toLowerCase().trim(), item);
-    itemLookup.set(item.id.toLowerCase().trim(), item);
-    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
-  }
+  const itemLookup = createItemLookup(items);
 
   const results: ParsedFactionOrderRow[] = [];
   for (let index = 0; index < rows.length; index++) {
@@ -130,12 +126,7 @@ export function parseFactionOrdersFromCsv(
 
 /** General order rows can simulate the same submit, pickup, and return flow as the UI. */
 export function parseGeneralOrdersFromCsv(rows: Record<string, string>[], items: Item[], reference: CsvReference): ParsedGeneralOrderRow[] {
-  const lookup = new Map<string, Item>();
-  for (const item of items) {
-    lookup.set(item.id.toLowerCase(), item);
-    lookup.set(item.name.toLowerCase().trim(), item);
-    if (item.sku) lookup.set(item.sku.toLowerCase().trim(), item);
-  }
+  const lookup = createItemLookup(items);
   const resolve = (value?: string): ParsedAssemblyComponent[] => parseInlineComponents(value ?? '').map((component) => {
     const item = lookup.get(component.name.toLowerCase().trim());
     return { itemName: item?.name ?? component.name, itemId: item?.id, quantity: component.quantity, matched: Boolean(item) };

@@ -1,3 +1,4 @@
+import { createItemLookup } from './reference';
 import { type Item, type Assembly, type EventType } from '../../types';
 import { type ParsedAssemblyRow, type ParsedAssemblyComponent } from '../../types/csvImport';
 import type { CsvReference } from './reference';
@@ -12,12 +13,7 @@ export function parseAssembliesFromCsv(
   existingAssemblies: Assembly[],
   reference: CsvReference,
 ): ParsedAssemblyRow[] {
-  const itemLookup = new Map<string, Item>();
-  for (const item of items) {
-    itemLookup.set(item.name.toLowerCase().trim(), item);
-    itemLookup.set(item.id.toLowerCase().trim(), item);
-    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
-  }
+  const itemLookup = createItemLookup(items);
 
   const existingMap = new Map<string, Assembly>();
   for (const assem of existingAssemblies) {

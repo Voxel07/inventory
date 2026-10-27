@@ -11,7 +11,7 @@ import { PageHeader } from '../components/shared/PageHeader';
 import { StateMessage } from '../components/common/StateMessage';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
+import { canCreateInventory, canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
 import { translate, useT } from '../utils/naming';
 import { TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
 import { RepairsPanel, SchedulesPanel } from '../components/operations/LifecycleOperations';
@@ -30,11 +30,11 @@ export function Operations() {
     { key: 'picking', label: t('pages.operations.picking'), sections: warehouse ? [
       { key: 'order-preparation', label: t('pages.operations.ordersToPrepare'), component: <OrderPreparationPanel /> },
     ] : [] },
-    { key: 'stock', label: t('common.stock'), sections: warehouse ? [
+    { key: 'stock', label: t('common.stock'), sections: canCreateInventory(user) ? [
       { key: 'transfers', label: t('pages.operations.transfers'), component: <TransfersPanel /> },
       { key: 'counts', label: t('pages.operations.stockCounts'), component: <CountsPanel /> },
       { key: 'lots', label: t('pages.operations.lots'), component: <LotsPanel /> },
-      { key: 'loans', label: t('pages.operations.borrowingRental'), component: <LoansPanel /> },
+      ...(warehouse ? [{ key: 'loans', label: t('pages.operations.borrowingRental'), component: <LoansPanel /> }] : []),
     ] : [] },
     { key: 'purchasing', label: t('pages.operations.purchasing'), sections: [
       ...(purchasing ? [{ key: 'purchases', label: t('pages.operations.purchaseOrders'), component: <PurchasingPanel /> }] : []),

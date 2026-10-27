@@ -218,7 +218,7 @@ public class OperationalReportSource implements ReportSource {
                     "eventId", p.eventOccurrence == null ? null : p.eventOccurrence.id, "status", p.status, "expectedDelivery", p.expectedDeliveryDate,
                     "ordered", line.orderedQuantity, "received", line.receivedQuantity,
                     "openDelivery", Set.of(DomainEnums.PurchaseOrderStatus.ordered, DomainEnums.PurchaseOrderStatus.partially_received).contains(p.status) ? line.remainingQuantity() : 0,
-                    "valueCents", (long) line.orderedQuantity * line.unitPriceCents);
+                    "valueCents", line.orderedValueCents());
             item(row, line.item); rows.add(row);
         }
         return rows;

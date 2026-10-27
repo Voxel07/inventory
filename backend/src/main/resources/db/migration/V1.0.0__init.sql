@@ -412,7 +412,8 @@ create table inventory_positions (
     lot_id uuid,
     primary key (id),
     -- One bulk (lot-less) position per item and location as well: NULL lots are not distinct.
-    constraint uq_position_item_location_lot unique nulls not distinct (item_id, location_id, lot_id)
+    constraint uq_position_item_location_lot unique nulls not distinct (item_id, location_id, lot_id),
+    constraint uq_position_item unique (id, item_id)
 );
 
 create table inventory_transfer_lines (
@@ -661,6 +662,7 @@ create table return_submissions (
 );
 
 create table stock_reservations (
+    position_id uuid,
     released_quantity integer not null,
     requested_quantity integer not null,
     reserved_quantity integer not null,
@@ -682,6 +684,7 @@ create table stock_reservations (
 );
 
 create table stock_transactions (
+    issue_quantities JSONB NOT NULL DEFAULT '{}',
     position_quantities JSONB NOT NULL DEFAULT '{}',
     lot_id UUID,
     custody_write_off boolean not null default false,
@@ -708,7 +711,7 @@ create table stock_transactions (
     notes varchar(255),
     reason varchar(255),
     related_entity_type varchar(255),
-    type varchar(255) not null check ((type in ('received','adjusted','reserved','reservation_released','transfer_out','transfer_in','staged','checkout','checkin','added','consumed','damaged','missing','repaired','written_off'))),
+    type varchar(255) not null check ((type in ('received','adjusted','putaway','reserved','reservation_released','transfer_out','transfer_in','staged','checkout','checkin','added','consumed','damaged','missing','repaired','written_off'))),
     primary key (id)
 );
 
@@ -1034,6 +1037,7 @@ alter table if exists stock_reservations add constraint FK197w8jtwynn96u4y024k7f
 alter table if exists stock_reservations add constraint FKadmgnd316fdte197amsw2xx3i foreign key (location_id) references storage_locations;
 alter table if exists stock_reservations add constraint FK1a7hux5wufjtwsc14qj5uteuc foreign key (order_id) references orders;
 alter table if exists stock_reservations add constraint FKapq17godoxbfyitel0wsbbikk foreign key (order_line_id) references order_lines;
+alter table stock_reservations add constraint fk_reservation_position_item foreign key (position_id, item_id) references inventory_positions(id, item_id);
 alter table if exists stock_transactions add constraint FKg4i4s6t7270puviqpdi3uqa2h foreign key (asset_instance_id) references asset_instances;
 alter table if exists stock_transactions add constraint FKhb608yt9ysaw9s0b2fcedis1c foreign key (damage_report_id) references damage_reports;
 alter table if exists stock_transactions add constraint FK8onwouvrscju1hqxh73p0caxt foreign key (destination_location_id) references storage_locations;
@@ -1265,11 +1269,13 @@ begin
   and not exists(select 1 from assembly_items c where c.assembly_id=a.id and not inventory_resource_visible('item',c.item_id,actor_id,is_admin,sees_public)));
  when 'order' then return exists(select 1 from orders o where o.id=resource_id and sees_public
   and inventory_resource_visible('location',o.pickup_location_id,actor_id,is_admin,sees_public)
+  and not exists(select 1 from stock_reservations r join inventory_positions p on p.id=r.position_id
+   where r.order_id=o.id and not inventory_resource_visible('location',p.location_id,actor_id,is_admin,sees_public))
   and not exists(select 1 from order_lines l where l.order_id=o.id and
    (not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)
     or not inventory_resource_visible('location',l.source_location_id,actor_id,is_admin,sees_public)
     or not inventory_resource_visible('assembly',l.source_assembly_id,actor_id,is_admin,sees_public))));
- when 'count' then return exists(select 1 from inventory_count_sessions c where c.id=resource_id and sees_public
+ when 'count' then return exists(select 1 from inventory_count_sessions c where c.id=resource_id
   and inventory_resource_visible('item',c.item_id,actor_id,is_admin,sees_public)
   and inventory_resource_visible('location',c.location_id,actor_id,is_admin,sees_public)
   and not exists(select 1 from inventory_count_lines l where l.count_session_id=c.id and
@@ -1280,7 +1286,7 @@ begin
   and inventory_resource_visible('purchase',r.purchase_order_id,actor_id,is_admin,sees_public)
   and inventory_resource_visible('location',r.receiving_location_id,actor_id,is_admin,sees_public)
   and not exists(select 1 from goods_receipt_lines l where l.goods_receipt_id=r.id and not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)));
- when 'transfer' then return exists(select 1 from inventory_transfers t where t.id=resource_id and sees_public
+ when 'transfer' then return exists(select 1 from inventory_transfers t where t.id=resource_id
   and inventory_resource_visible('location',t.source_location_id,actor_id,is_admin,sees_public)
   and inventory_resource_visible('location',t.destination_location_id,actor_id,is_admin,sees_public)
   and not exists(select 1 from inventory_transfer_lines l where l.transfer_id=t.id and not inventory_resource_visible('item',l.item_id,actor_id,is_admin,sees_public)));

@@ -29,6 +29,7 @@ public class StockReservation extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "asset_instance_id") public AssetInstance assetInstance;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "location_id") public StorageLocation location;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "position_id") public InventoryPosition position;
     @Column(name = "requested_quantity", nullable = false) public int requestedQuantity;
     @Column(name = "reserved_quantity", nullable = false) public int reservedQuantity;
     @Column(name = "released_quantity", nullable = false) public int releasedQuantity;

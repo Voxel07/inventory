@@ -140,7 +140,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     // Step 2: Import Items
     const createdItemsMap = new Map<string, Item>();
     for (const item of items) {
-      createdItemsMap.set(item.name.toLowerCase().trim(), item);
+      createdItemsMap.set(item.id, item);
     }
 
     if (tabType !== 'assemblies') {
@@ -170,7 +170,8 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
             assertAuthSession(context);
             for (const [position, item] of saved.entries()) {
               const row = chunk[position];
-              createdItemsMap.set(item.name.toLowerCase().trim(), item);
+              createdItemsMap.set(item.id, item);
+              createdItemsMap.set(`csv-new-${row.index}`, item);
               if (row.isExisting) updatedItems++;
               else successItems++;
               if (row.lots?.length) {
@@ -217,8 +218,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         let allMatched = true;
 
         for (const comp of row.components) {
-          const isTempId = comp.itemId?.startsWith('csv-new-');
-          const item = (!isTempId && comp.itemId) ? items.find((i) => i.id === comp.itemId) : createdItemsMap.get(comp.itemName.toLowerCase().trim());
+          const item = createdItemsMap.get(comp.itemId ?? '');
           if (item) {
             finalItemIds.push(item.id);
             finalQuantities[item.id] = (finalQuantities[item.id] ?? 0) + comp.quantity;
@@ -258,10 +258,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
       const resolveQuantities = (components: ParsedEventReportRow['usedItems']) => {
         const quantities: Record<string, number> = {};
         for (const component of components) {
-          const isTempId = component.itemId?.startsWith('csv-new-');
-          const item = (!isTempId && component.itemId)
-            ? items.find((candidate) => candidate.id === component.itemId)
-            : createdItemsMap.get(component.itemName.toLowerCase().trim());
+          const item = createdItemsMap.get(component.itemId ?? '');
           if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
           quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
         }
@@ -311,7 +308,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     const historyTypes = new Set(['stock', 'damage', 'repair', 'repair_transition']);
     const firstWorkflow = operations.findIndex((row) => !historyTypes.has(row.operation) || !row.data.occurredAt);
     const historyEnd = firstWorkflow < 0 ? operations.length : firstWorkflow;
-    const importOperation = createCsvOperationImporter([...createdItemsMap.values()], locCache, existingEvents);
+    const importOperation = createCsvOperationImporter([...new Map([...createdItemsMap.values()].map(item => [item.id, item])).values()], locCache, existingEvents);
     async function applyOperation(row: ParsedOperationRow) {
       setImportStatusText(t('services.csvImportService.importingActionName', { name: String(row.name) }));
       try {
@@ -335,10 +332,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
       try {
         const requestedQuantities: Record<string, number> = {};
         for (const component of row.requestedItems) {
-          const isTempId = component.itemId?.startsWith('csv-new-');
-          const item = (!isTempId && component.itemId)
-            ? items.find((candidate) => candidate.id === component.itemId)
-            : createdItemsMap.get(component.itemName.toLowerCase().trim());
+          const item = createdItemsMap.get(component.itemId ?? '');
           if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
           requestedQuantities[item.id] = (requestedQuantities[item.id] ?? 0) + component.quantity;
         }
@@ -367,7 +361,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           if (finalOrder.status === 'submitted') {
             const assetAssignments: Record<string, string[]> = {};
             for (const [id, quantity] of Object.entries(finalOrder.requestedQuantities || {})) {
-              const item = [...createdItemsMap.values()].find((candidate) => candidate.id === id);
+              const item = [...new Map([...createdItemsMap.values()].map(item => [item.id, item])).values()].find((candidate) => candidate.id === id);
               if (item?.trackingMode !== 'serialized') continue;
               const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
@@ -418,8 +412,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         const resolve = (components: ParsedGeneralOrderRow['requestedItems']) => {
           const quantities: Record<string, number> = {};
           for (const component of components) {
-            const item = items.find((candidate) => candidate.id === component.itemId)
-              ?? createdItemsMap.get(component.itemName.toLowerCase().trim());
+            const item = createdItemsMap.get(component.itemId ?? '');
             if (!item) throw new Error(translate('services.csvImportService.itemItemNameCouldNotBeFound', { itemName: String(component.itemName) }));
             quantities[item.id] = (quantities[item.id] ?? 0) + component.quantity;
           }
@@ -445,7 +438,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         if (['ready', 'picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) {
           const assetAssignments: Record<string, string[]> = {};
           for (const [id, quantity] of Object.entries(requestedQuantities)) {
-            const item = items.find((candidate) => candidate.id === id) ?? [...createdItemsMap.values()].find((candidate) => candidate.id === id);
+            const item = items.find((candidate) => candidate.id === id) ?? [...new Map([...createdItemsMap.values()].map(item => [item.id, item])).values()].find((candidate) => candidate.id === id);
             if (item?.trackingMode === 'serialized') {
               const available = (await getAllItemAssets(id))
                 .filter((asset) => asset.availabilityStatus === 'available');
@@ -476,7 +469,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
       setImportStatusText(t('services.csvImportService.importingReturnForItemName', { itemName: String(ret.itemName) }));
 
       try {
-        const item = items.find((candidate) => candidate.id === ret.itemId) || createdItemsMap.get(ret.itemName.toLowerCase().trim());
+        const item = createdItemsMap.get(ret.itemId ?? '');
         if (!item) throw new Error(translate('services.csvImportService.itemItemNameNotFound', { itemName: String(ret.itemName) }));
 
         if (ret.generalOrderName) {
@@ -540,7 +533,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
     for (const row of parsedCheckouts.filter((entry) => entry.status === 'valid')) {
       setImportStatusText(t('services.csvImportService.importingCheckoutForItemName', { itemName: String(row.itemName) }));
       try {
-        const item = createdItemsMap.get(row.itemName.toLowerCase().trim());
+        const item = createdItemsMap.get(row.itemId ?? '');
         if (!item) throw new Error(translate('services.csvImportService.itemItemNameNotFound', { itemName: String(row.itemName) }));
         const marker = `CSV checkout row ${row.index}`;
         const previous = await loadAllPages((page, size) => getTransactions({ itemId: item.id }, page, size));

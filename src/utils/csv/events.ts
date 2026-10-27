@@ -1,3 +1,4 @@
+import { createItemLookup } from './reference';
 import { type Item, type EventReportStatus } from '../../types';
 import { csvDate, isCsvDate, parseEventAttendees, parseEventTimeline } from './eventLogistics';
 import type { EventAttendeeInput, EventTimelineInput } from '../../types/eventLogistics';
@@ -14,12 +15,7 @@ export function parseEventReportsFromCsv(
   items: Item[],
   reference: CsvReference,
 ): ParsedEventReportRow[] {
-  const itemLookup = new Map<string, Item>();
-  for (const item of items) {
-    itemLookup.set(item.name.toLowerCase().trim(), item);
-    itemLookup.set(item.id.toLowerCase().trim(), item);
-    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
-  }
+  const itemLookup = createItemLookup(items);
 
   function resolve(value: string | undefined): { components: ParsedAssemblyComponent[]; quantities: Record<string, number> } {
     const components: ParsedAssemblyComponent[] = [];

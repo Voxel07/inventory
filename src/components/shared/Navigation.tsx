@@ -45,7 +45,7 @@ import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { LanguageSelector } from './LanguageSelector';
 import { useT } from '../../utils/naming';
-import { canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog, canViewOrganization } from '../../utils/access';
+import { canCreateInventory, canAccessProcurement, canManageInventory, canManageUsers, canManagePurchasing, canOperateWarehouse, canPerformMaintenance, canViewCatalog, canViewOrganization } from '../../utils/access';
 import type { User } from '../../types';
 
 const DRAWER_WIDTH = 256;
@@ -58,7 +58,7 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
     const t = useT();
     const manager = canManageInventory(user);
     const catalog = manager || canViewCatalog(user);
-    const operations = canOperateWarehouse(user) || canManagePurchasing(user) || canPerformMaintenance(user);
+    const operations = canCreateInventory(user) || canOperateWarehouse(user) || canManagePurchasing(user) || canPerformMaintenance(user);
     const organization = canViewOrganization(user);
     const groups: NavGroup[] = [
         { label: t('common.overview'), items: [
@@ -71,9 +71,9 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
             ...(manager ? [{ label: t('shared.navigation.labelsQRCodes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
             { label: t('common.sharingGroups'), path: '/sharing', icon: <GroupsOutlinedIcon /> },
         ] : [] },
-        { label: t('shared.navigation.ordersReturns'), items: organization ? [
-            { label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> },
-            ...(manager ? [
+        { label: t('shared.navigation.ordersReturns'), items: catalog ? [
+            ...(organization ? [{ label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> }] : []),
+            ...(canCreateInventory(user) ? [
                 { label: t('shared.navigation.checkedOut'), path: '/checked-out', icon: <OutputIcon /> },
                 { label: t('shared.navigation.reviewReturns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
             ] : []),

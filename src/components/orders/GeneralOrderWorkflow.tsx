@@ -46,7 +46,7 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
   const hoursField = (key: string, label: string): Field => ({ key, label: `${label} · ${t('items.runtimeReturnField.hoursRun')}`, type: 'number', min: 0, step: 0.1, required: true, help: hoursHelp });
   const fields = (values: Values): Field[] => ids.flatMap((id): Field[] => {
     const item = items.find((value) => value.id === id); const name = order.itemNames?.[id] ?? item?.name ?? id;
-    // No source choice: the backend takes the item's default location, or the location with free stock.
+    // Automatic preparation allocates usable stock across accessible positions in FEFO order.
     if (action === 'prepare') return [
       { key: `prepare:${id}`, label: `${name} · ${t('common.prepared')}${usesPercentage(item) ? ' (%)' : ''}`, type: 'number', min: 0, max: order.requestedQuantities[id], required: true,
         help: [usesPercentage(item) && t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }), `${t('orders.generalOrderWorkflow.requested')}: ${formatQuantity(item, order.requestedQuantities[id])}`].filter(Boolean).join(' ') },

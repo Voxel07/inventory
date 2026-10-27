@@ -45,6 +45,7 @@ export const OPEN_DAMAGE_STATUSES: readonly DamageStatus[] = ['reported', 'triag
 export const CLOSED_DAMAGE_STATUSES: readonly DamageStatus[] = ['repaired', 'verified', 'returned_to_service', 'written_off', 'resolved'];
 
 export interface DamageReportFormData {
+  positionId?: string;
   occurredAt?: number;
   itemId?: string;
   assemblyId?: string;

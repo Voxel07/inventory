@@ -111,7 +111,7 @@ public class MemberService {
             // Serialized damage belongs to the asset: it marks its condition and reaches the asset page and return review.
             if (input.severity() == null) throw ApiException.badRequest("Choose the damage severity");
             r.damageReport = inventory.createDamage(new ApiModels.DamageInput(item.id, 1, r.notes, input.severity(),
-                    held == null ? null : held.orderId(), input.commandId(), r.asset.id, null, false, null, null));
+                    held == null ? null : held.orderId(), input.commandId(), r.asset.id, null, false, null, null, null));
         }
         orm.persist(r);
         events.record("member_request.created", "member_request", r.id, actor.id, input.commandId(), Map.of("kind", r.kind, "itemId", item.id.toString()));

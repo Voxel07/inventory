@@ -150,6 +150,7 @@ public class OrderOrm extends EntityOrm {
 
     public void deleteLines(InventoryOrder order) {
         for (var reservation : reservations(order)) entityManager.remove(reservation);
+        order.reservations.clear();
         removeAssetAssignments(order);
         order.lines.clear();
     }

@@ -17,6 +17,7 @@ import java.util.*;
 /** Location movements run inside the same item lock and transaction as the stock ledger. */
 @ApplicationScoped
 public class PositionService {
+    @jakarta.inject.Inject IssueAllocationService issueAllocations;
     @jakarta.inject.Inject EquipmentPolicy equipment;
     private final PositionOrm orm;
     public PositionService(PositionOrm orm) { this.orm = orm; }
@@ -64,7 +65,7 @@ public class PositionService {
         public int availableAt(StorageLocation source) {
             if (source == null) return Integer.MAX_VALUE;
             return Math.max(0, positions.stream().filter(p -> p.location.id.equals(source.id))
-                    .mapToInt(InventoryPosition::availableQuantity).sum() - reserved.getOrDefault(source.id, 0));
+                    .mapToInt(p -> Math.max(0, p.availableQuantity() - reservedAt(p))).sum());
         }
 
         /** Locations currently holding stock of the item, in FEFO position order. */
@@ -77,20 +78,13 @@ public class PositionService {
 
         /** FEFO share of the location's reservations held by one position. */
         public int reservedAt(InventoryPosition position) {
-            int left = reserved.getOrDefault(position.location.id, 0);
-            for (var p : positions) {
-                if (!p.location.id.equals(position.location.id)) continue;
-                int share = Math.min(left, p.availableQuantity());
-                if (p.id.equals(position.id)) return share;
-                left -= share;
-            }
-            return 0;
+            return reserved.getOrDefault(position.id, 0);
         }
     }
 
     public Capacity capacity(Item item, UUID exceptOrder) {
         return new Capacity(orm.positions(item),
-                orm.reservedByLocation(List.of(item.id), exceptOrder).getOrDefault(item.id, Map.of()));
+                orm.reservedByPosition(List.of(item.id), exceptOrder));
     }
 
     public int availableAt(Item item, StorageLocation source, UUID exceptOrder) {
@@ -104,30 +98,33 @@ public class PositionService {
 
     /** Same FEFO allocation as reservedAt(position), materialized once for a report batch. */
     public Map<UUID, Integer> reservedAt(List<Item> items, List<InventoryPosition> orderedPositions) {
-        var reserved = orm.reservedByLocation(items.stream().map(item -> item.id).toList(), null);
-        var remaining = new HashMap<String, Integer>();
-        reserved.forEach((itemId, byLocation) -> byLocation.forEach((locationId, quantity) -> remaining.put(itemId + ":" + locationId, quantity)));
-        var result = new LinkedHashMap<UUID, Integer>();
-        for (var position : orderedPositions) {
-            String key = position.item.id + ":" + position.location.id;
-            int left = remaining.getOrDefault(key, 0);
-            int amount = Math.min(left, position.availableQuantity());
-            result.put(position.id, amount); remaining.put(key, left - amount);
-        }
-        return result;
+        return orm.reservedByPosition(items.stream().map(item -> item.id).toList(), null);
     }
 
-    public void reportDamage(DamageReport report) {
-        if (report.item == null || report.item.trackingMode == DomainEnums.TrackingMode.serialized) return;
-        int left = report.quantity;
-        var held = new LinkedHashMap<String, Integer>();
-        for (var p : orm.positions(report.item)) {
-            int amount = Math.min(left, Math.max(0, p.quantityOnHand - p.quantityDamaged));
-            if (amount <= 0) continue;
-            p.quantityDamaged += amount; held.put(p.id.toString(), amount); left -= amount;
-            if (left == 0) break;
+    public void reportDamage(DamageReport report, UUID positionId) {
+        if (report.item == null || report.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            if (positionId != null) throw ApiException.badRequest("Select a stock position only for bulk or lot damage");
+            return;
         }
-        report.positionQuantities = held;
+        var candidates = orm.positions(report.item).stream()
+                .filter(p -> p.quantityOnHand - p.quantityDamaged - p.quantityQuarantined > 0).toList();
+        if (positionId == null && candidates.size() > 1)
+            throw ApiException.badRequest("Select the physical stock position where the damage occurred");
+        var position = positionId == null ? candidates.stream().findFirst().orElse(null)
+                : candidates.stream().filter(p -> p.id.equals(positionId)).findFirst()
+                    .orElseThrow(() -> ApiException.badRequest("Damage position does not hold undamaged stock of this item"));
+        if (position == null) {
+            int alreadyDamaged = orm.unlocatedDamage(report.item).stream().filter(d -> d != report)
+                    .mapToInt(d -> d.quantity - d.repairedQuantity - d.writtenOffQuantity).sum();
+            if (report.item.trackingMode != DomainEnums.TrackingMode.bulk || orm.unlocatedBulk(report.item) - alreadyDamaged < report.quantity)
+                throw ApiException.conflict("No stored stock matches the damage; report issued damage through its custody/return workflow");
+            return;
+        }
+        orm.find(InventoryPosition.class, position.id); // Enforce the selected place's permissions as well.
+        if (report.quantity > position.quantityOnHand - position.quantityDamaged - position.quantityQuarantined)
+            throw ApiException.badRequest("Damage exceeds stock at the selected position");
+        position.quantityDamaged += report.quantity;
+        report.positionQuantities = Map.of(position.id.toString(), report.quantity);
     }
 
     /** Returned damage belongs to the exact positions credited by its check-in. */
@@ -165,7 +162,14 @@ public class PositionService {
     }
 
     public void apply(StockTransaction tx) {
-        if (tx.item.trackingMode == DomainEnums.TrackingMode.serialized || tx.custodyWriteOff) return;
+        if (tx.item.trackingMode == DomainEnums.TrackingMode.serialized) {
+            if (tx.type == DomainEnums.TransactionType.checkin) LocationHierarchyService.requireActiveStockLocation(tx.destinationLocation);
+            return;
+        }
+        if (tx.type == DomainEnums.TransactionType.checkin || tx.custodyWriteOff) {
+            issueAllocations.settle(tx);
+            return;
+        }
         if (resolveLocatedDamage(tx)) return;
         int direction = switch (tx.type) {
             case added, adjusted, checkin -> 1;
@@ -175,8 +179,12 @@ public class PositionService {
         if (direction == 0) return;
         if (direction > 0) {
             var destination = tx.destinationLocation == null ? tx.item.storageLocation : tx.destinationLocation;
+            if (tx.item.trackingMode == DomainEnums.TrackingMode.lot_tracked && (destination == null || tx.lot == null))
+                throw ApiException.badRequest("Lot-tracked stock requires a lot and a receiving location");
             if (destination == null) return; // Unlocated stock remains visible in the item total.
-            LocationHierarchyService.requireStockLocation(destination);
+            LocationHierarchyService.requireActiveStockLocation(destination);
+            if (tx.item.trackingMode == DomainEnums.TrackingMode.lot_tracked && tx.lot == null)
+                throw ApiException.badRequest("Select a lot for lot-tracked stock additions");
             tx.destinationLocation = destination;
             var p = orm.position(tx.item, destination, tx.lot);
             p.quantityOnHand += tx.quantity;
@@ -186,6 +194,7 @@ public class PositionService {
         var source = tx.sourceLocation == null ? tx.item.storageLocation : tx.sourceLocation;
         if (tx.type == DomainEnums.TransactionType.checkout) equipment.assertSource(tx.item, source);
         var all = orm.positions(tx.item);
+        var reserved = orm.reservedByPosition(List.of(tx.item.id), tx.order == null ? null : tx.order.id);
         if (tx.type == DomainEnums.TransactionType.checkout && source != null
                 && tx.quantity > availableAt(tx.item, source, tx.order == null ? null : tx.order.id)) {
             throw ApiException.conflict("Stock at the source is reserved or unavailable");
@@ -197,7 +206,7 @@ public class PositionService {
             if (tx.lot != null && (p.lot == null || !p.lot.id.equals(tx.lot.id))) continue;
             boolean loss = tx.type == DomainEnums.TransactionType.written_off;
             if (!loss && (!usable(p.lot) || (tx.item.trackingMode == DomainEnums.TrackingMode.lot_tracked && p.lot == null))) continue;
-            int available = loss ? p.quantityOnHand : p.availableQuantity();
+            int available = loss ? p.quantityOnHand : Math.max(0, p.availableQuantity() - reserved.getOrDefault(p.id, 0));
             int quantity = Math.min(remaining, available);
             if (quantity <= 0) continue;
             // One checkout uses one physical source, with FEFO across its lots.
@@ -209,5 +218,26 @@ public class PositionService {
         }
         if (remaining > 0) throw ApiException.conflict("Insufficient usable stock at the selected source for " + tx.item.name + "; transfer stock or choose another location");
         tx.sourceLocation = source; tx.positionQuantities = allocations;
+    }
+
+    /** Assigning a home puts previously unlocated bulk stock away without increasing owned stock. */
+    public void putAwayUnlocated(Item item, org.ash.inventory.operations.internal.model.UserAccount actor) {
+        if (item.trackingMode != DomainEnums.TrackingMode.bulk || item.storageLocation == null) return;
+        int quantity = orm.unlocatedBulk(item);
+        if (quantity == 0) return;
+        LocationHierarchyService.requireActiveStockLocation(item.storageLocation);
+        var target = orm.position(item, item.storageLocation, null);
+        target.quantityOnHand = Math.addExact(target.quantityOnHand, quantity);
+        for (var damage : orm.unlocatedDamage(item)) {
+            int unresolved = damage.quantity - damage.repairedQuantity - damage.writtenOffQuantity;
+            target.quantityDamaged = Math.addExact(target.quantityDamaged, unresolved);
+            damage.positionQuantities = Map.of(target.id.toString(), unresolved);
+        }
+        var tx = new StockTransaction();
+        tx.item = item; tx.user = actor; tx.type = DomainEnums.TransactionType.putaway; tx.quantity = quantity;
+        tx.destinationLocation = item.storageLocation;
+        tx.reason = "Unlocated stock put away";
+        tx.positionQuantities = Map.of(target.id.toString(), quantity);
+        orm.persist(tx);
     }
 }

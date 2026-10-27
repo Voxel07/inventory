@@ -64,17 +64,16 @@ public class InventoryOperationsService {
         this.events = events;
     }
 
-    /** The interceptor authorizes every referenced private resource across the whole batch. */
+    /** Each delegated command authorizes its resources; any rejected row rolls back the whole batch. */
     @Transactional
-    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public List<StockTransaction> transactBatch(List<ApiModels.TransactionInput> inputs) {
-        actors.requireWarehouse();
+        actors.current();
         if (inputs == null || inputs.isEmpty() || inputs.size() > 200) throw ApiException.badRequest("Provide 1 to 200 transactions");
         itemLocks.lock(inputs.stream().map(ApiModels.TransactionInput::itemId).filter(java.util.Objects::nonNull).distinct().toList());
         return inputs.stream().sorted(java.util.Comparator.comparing(ApiModels.TransactionInput::itemId)).map(this::transact).toList();
     }
 
-    /** Direct stock command; authorization follows the transaction type (checkout: ASH, otherwise item edit). */
+    /** Direct stock command; checkout accepts private editors or the organization takeout role. */
     @Transactional
     public StockTransaction transact(ApiModels.TransactionInput input) {
         return input.transactionType() == DomainEnums.TransactionType.checkout
@@ -84,7 +83,6 @@ public class InventoryOperationsService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand(usage = true)
     public StockTransaction checkout(ApiModels.TransactionInput input) {
-        actors.requireTakeout();
         if (input.transactionType() != DomainEnums.TransactionType.checkout) throw ApiException.badRequest("Checkout transaction required");
         return recordTransaction(input);
     }
@@ -97,7 +95,7 @@ public class InventoryOperationsService {
     }
 
     private void requireTransactionAccess(Item item, ApiModels.TransactionInput input) {
-        if (input.transactionType() == DomainEnums.TransactionType.checkout) actors.requireItemAccess(item);
+        if (input.transactionType() == DomainEnums.TransactionType.checkout) actors.requireItemCheckout(item);
         else actors.requireItemEdit(item);
     }
 
@@ -476,7 +474,7 @@ public class InventoryOperationsService {
             report.handover = orm.require(CustodyHandover.class, input.handoverId(), "Custody handover");
         }
         orm.persist(report);
-        positions.reportDamage(report);
+        positions.reportDamage(report, input.positionId());
         var payload = new LinkedHashMap<String, Object>();
         if (report.item != null) payload.put("itemId", report.item.id.toString());
         if (report.assembly != null) payload.put("assemblyId", report.assembly.id.toString());

@@ -4,7 +4,7 @@ export type OrderStatus = 'draft' | 'submitted' | 'preparing' | 'ready' | 'picke
 export interface OrderPreparationInput {
   preparedQuantities: Record<string, number>;
   assetAssignments?: Record<string, string[]>;
-  sourceLocations?: Record<string, string>;
+  sourceAllocations?: Record<string, Record<string, number>>;
   acknowledgeShortages?: boolean;
   idempotencyKey?: string;
   notes?: string | null;

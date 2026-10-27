@@ -1,3 +1,4 @@
+import { createItemLookup } from './reference';
 import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item, type StorageLocation } from '../../types';
 import { knownEventType, knownFaction, type CsvReference } from './reference';
@@ -13,12 +14,7 @@ export function parseReturnsFromCsv(
   storageLocations: StorageLocation[],
   reference: CsvReference,
 ): ParsedReturnRow[] {
-  const itemLookup = new Map<string, Item>();
-  for (const item of items) {
-    itemLookup.set(item.name.toLowerCase().trim(), item);
-    itemLookup.set(item.id.toLowerCase().trim(), item);
-    if (item.sku) itemLookup.set(item.sku.toLowerCase().trim(), item);
-  }
+  const itemLookup = createItemLookup(items);
 
   const locationIndex = buildLocationIndex(storageLocations);
 
@@ -105,24 +101,25 @@ export function parseReturnsFromCsv(
 
 /** Explicit checkout rows make imported sample stock usable for return flows. */
 export function parseCheckoutsFromCsv(rows: Record<string, string>[], items: Item[], reference: CsvReference): ParsedCheckoutRow[] {
-  const names = new Set(items.map((item) => item.name.toLowerCase().trim()));
+  const lookup = createItemLookup(items);
   return rows.flatMap((raw, index) => {
     const type = getField(raw, ['type', 'typ', 'art'])?.toLowerCase().trim();
     if (!['checkout', 'ausleihe', 'ausgabe'].includes(type ?? '')) return [];
     const itemName = getField(raw, ITEM_NAME_ALIASES) ?? '';
+    const item = lookup.get(itemName.toLowerCase().trim());
     const quantity = Math.round(parseNumber(getField(raw, AMOUNT_ALIASES), 1));
     const assetCodes = parseAssetCodes(getField(raw, ASSET_CODE_ALIASES));
     const event = getField(raw, EVENT_REPORT_TYPE_ALIASES)?.toUpperCase().trim();
     const eventType = knownEventType(reference, event);
     const faction = getField(raw, ORDER_FACTION_ALIASES);
     const notes = getField(raw, HINT_ALIASES) ?? '';
-    const statusMessage = !names.has(itemName.toLowerCase().trim()) ? `Artikel "${itemName}" nicht gefunden`
+    const statusMessage = !item ? `Artikel "${itemName}" nicht gefunden`
       : quantity < 1 ? 'Menge muss mindestens 1 sein'
       : !eventType || !faction ? 'Eventtyp und Fraktion sind erforderlich'
       : !knownFaction(reference, eventType, faction) ? `Fraktion "${faction}" gehört nicht zum Eventtyp ${eventType}`
       : assetCodes.length > 0 && assetCodes.length !== quantity ? 'AssetCodes müssen der Menge entsprechen'
       : undefined;
-    return [{ index: index + 1, itemName, quantity, assetCodes, eventType, faction, notes,
+    return [{ index: index + 1, itemName: item?.name ?? itemName, itemId: item?.id, quantity, assetCodes, eventType, faction, notes,
       status: statusMessage ? 'error' as const : 'valid' as const, statusMessage }];
   });
 }

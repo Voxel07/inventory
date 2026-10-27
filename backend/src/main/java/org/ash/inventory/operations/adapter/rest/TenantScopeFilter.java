@@ -25,7 +25,9 @@ public class TenantScopeFilter implements ContainerRequestFilter {
     private static final List<String> TENANT_PATHS = List.of(
             "api/items", "api/assets/by-code", "api/storage-locations", "api/assemblies", "api/access",
             "api/notifications", "api/media", "api/action-inbox", "api/events/stream", "api/event-types",
-            "api/inventory-positions", "api/inventory-assets", "api/inventory-lots");
+            "api/inventory-positions", "api/inventory-assets", "api/inventory-lots",
+            "api/transfers", "api/inventory-counts", "api/returns", "api/custody-balances",
+            "api/equipment-availability", "api/transactions");
     /** Histories that are scoped to one of the tenant's resources by the service. */
     private static final List<String> TENANT_HISTORY = List.of("api/transactions", "api/damage-reports", "api/maintenance");
 
@@ -38,8 +40,9 @@ public class TenantScopeFilter implements ContainerRequestFilter {
         if (!path.startsWith("api/") || path.startsWith("api/auth/")) return;
         if (ActorService.seesOrganization(actors.current())) return;
         if (TENANT_PATHS.stream().anyMatch(prefix -> matches(path, prefix))) return;
+        if (path.equals("api/sync") && request.getMethod().equals("POST")) return;
         if (TENANT_HISTORY.contains(path)) {
-            // Own-item stock bookings and item/asset histories; the batch endpoint stays closed.
+            // Each stock booking, including batch rows, checks its item's operation permissions.
             var query = request.getUriInfo().getQueryParameters();
             if ("GET".equals(request.getMethod()) ? query.containsKey("itemId") || query.containsKey("assetInstanceId")
                     : "POST".equals(request.getMethod()) && path.equals("api/transactions")) return;

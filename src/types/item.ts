@@ -146,6 +146,7 @@ export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
 type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_service';
 
 export interface ItemFormData {
+  sku?: string;
   privateResource?: boolean;
   publicUse?: boolean;
   name: string;

@@ -1,3 +1,4 @@
+import { createItemLookup } from '../utils/csv/reference';
 import { csvDate } from '../utils/csv/eventLogistics';
 import { optionalNumber } from '../utils/inputValues';
 import { calendarDate } from '../utils/dateFormat';
@@ -23,6 +24,7 @@ import { csvCommandId } from './csvImportIdentity';
 export function createCsvOperationImporter(items: Item[], locations: Map<string, string>, events: EventReport[]) {
   const context = captureAuthSession();
   const outputs = new Map<string, string>();
+  const itemLookup = createItemLookup(items);
   const today = new Date();
   const date = (offset: number, timestamp: boolean) => {
     const value = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, 12);
@@ -38,7 +40,7 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     }
     if (typeof value !== 'string' || !value.startsWith('@')) return value;
     let result: string | number | undefined;
-    if (value.startsWith('@item:')) result = items.find((item) => item.name.toLowerCase().trim() === value.slice(6).toLowerCase().trim())?.id;
+    if (value.startsWith('@item:')) result = itemLookup.get(value.slice(6).toLowerCase().trim())?.id;
     else if (value.startsWith('@location:')) result = locations.get(normalizeLocationRef(value.slice(10)));
     else if (value.startsWith('@event:')) {
       const [type, start] = value.slice(7).split(':');

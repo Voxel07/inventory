@@ -6,7 +6,7 @@ export type GeneralOrderCommands = { prepare: OrderPreparationInput; pickup: Ord
 
 export interface GeneralOrder {
   kind: 'general';
-  sourceLocations?: Record<string, string>;
+  sourceAllocations?: Record<string, Record<string, number>>;
   id: string;
   name: string;
   purpose: string;

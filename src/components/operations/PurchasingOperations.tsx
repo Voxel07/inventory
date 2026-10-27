@@ -1,3 +1,4 @@
+import { formatQuantity, usesPercentage } from '../../utils/stock';
 import { calendarDate, formatDate, formatDateTime } from '../../utils/dateFormat';
 import { Dialog } from '../shared/ClosableDialog';
 import { formatCents } from '../../utils/money';
@@ -32,6 +33,7 @@ import { formatStatus } from '../../utils/formatters';
 export function PurchasingPanel() {
   const t = useT(); const { user } = useAuth();
   const orders = useOperationList('purchases', getPurchaseOrders);
+  const measures = useStockLookups([...new Set((orders.data ?? []).flatMap(order => order.lines.map(line => line.itemId)))]);
   const [edit, setEdit] = useState<PurchaseOrder | 'new' | null>(null);
   const [receive, setReceive] = useState<PurchaseOrder | null>(null);
   const [transition, setTransition] = useState<{ order: PurchaseOrder; status: 'ordered' | 'cancelled' } | null>(null);
@@ -52,7 +54,7 @@ export function PurchasingPanel() {
           title: translate('operations.purchasingOperations.showOrHideGoodsReceiptsAndTheirDocuments'), onClick: () => setHistory(history === order.id ? null : order.id) },
       ]} title={<>{order.orderNumber} · {order.vendorName}</>} status={order.status}><Typography>{t('operations.purchasingOperations.orderDate')}: {formatDate(order.orderDate)} · {t('operations.purchasingOperations.expected')}: {formatDate(order.expectedDeliveryDate)}</Typography>
       <Typography>{t('operations.purchasingOperations.createdBy')}: {order.createdByName}</Typography>
-      <OperationLines label={t('operations.purchasingOperations.purchaseLines')} headers={[t('common.item'), t('enum.value.ordered'), t('enum.value.received'), t('common.remaining'), t('operations.purchasingOperations.unitPrice')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, line.orderedQuantity, line.receivedQuantity, line.remainingQuantity, formatCents(line.unitPriceCents)] }))} />
+      <OperationLines label={t('operations.purchasingOperations.purchaseLines')} headers={[t('common.item'), t('enum.value.ordered'), t('enum.value.received'), t('common.remaining'), t('operations.purchasingOperations.unitPrice')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, ...[line.orderedQuantity, line.receivedQuantity, line.remainingQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity)), `${formatCents(line.unitPriceCents)} / ${formatQuantity(measures.items.find(item => item.id === line.itemId), usesPercentage(measures.items.find(item => item.id === line.itemId)) ? 100 : 1)}`] }))} />
       {order.notes && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
 
       {history === order.id && <><ReceiptsPanel purchaseOrderId={order.id} /><DocumentsPanel order={order} /></>}
@@ -68,6 +70,7 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? selectedRows?.map((row) => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock), price: 0 })) ?? [{ itemId: selected?.itemId ?? '', orderedQuantity: selected ? Math.max(1, selected.netDeficit - selected.orderedStock) : 1, price: 0 }]);
+  const measures = useStockLookups(lines.map(line => String(line.itemId || '')));
   const [newVendor, setNewVendor] = useState(false);
   return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" onSubmit={(event) => {
     event.preventDefault();
@@ -82,7 +85,7 @@ export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose 
     ]} />
     <Button title={translate('operations.purchasingOperations.createANewSupplier')} onClick={() => setNewVendor(true)}>{t('operations.purchasingOperations.newSupplier')}</Button>
     {lines.map((line, index) => <Card key={index}><CardContent><Stack spacing={1}><Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
-      { key: 'itemId', label: t('common.item'), type: 'item', required: true }, { key: 'orderedQuantity', label: t('common.quantity'), type: 'number', min: 1, required: true }, { key: 'price', label: t('operations.purchasingOperations.unitPrice2'), type: 'number', min: 0, step: 0.01, required: true },
+      { key: 'itemId', label: t('common.item'), type: 'item', required: true }, { key: 'orderedQuantity', label: t('common.quantity'), type: 'quantity', measure: measures.items.find(item => item.id === line.itemId), min: 1, required: true }, { key: 'price', label: usesPercentage(measures.items.find(item => item.id === line.itemId)) ? t('forms.itemForm.fullUnitValue') : t('operations.purchasingOperations.unitPrice2'), type: 'number', min: 0, step: 0.01, required: true },
     ]} /><Button title={translate('operations.purchasingOperations.removeThisLineFromThePurchaseDraft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('operations.purchasingOperations.removeLine')}</Button></Stack></CardContent></Card>)}
     <Button title={translate('operations.purchasingOperations.addAnItemLineToThePurchaseDraft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1, price: 0 }])}>{t('common.addItem')}</Button>
   </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} disabled={command.isPending} onClick={onClose}>{t('common.cancel')}</Button><Button title={translate('operations.purchasingOperations.saveThePurchaseDraft')} variant="contained" type="submit" disabled={command.isPending}>{t('operations.purchasingOperations.saveDraft')}</Button></DialogActions></Box>
@@ -137,9 +140,9 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
       const received = Number(values[`accepted:${line.id}`] || 0) + Number(values[`damaged:${line.id}`] || 0);
       const newLot = values[`lot:${line.id}`] === '__new__';
       return [
-        { key: `accepted:${line.id}`, label: `${line.itemName} · ${t('operations.purchasingOperations.accepted')}`, type: 'number', min: 0, max: line.remainingQuantity, required: true, help: `${t('operations.purchasingOperations.outstanding')}: ${line.remainingQuantity}` },
-        { key: `damaged:${line.id}`, label: t('enum.itemStatus.damaged'), type: 'number', min: 0, max: line.remainingQuantity, required: true },
-        { key: `rejected:${line.id}`, label: t('enum.value.rejected'), type: 'number', min: 0, max: line.remainingQuantity, required: true },
+        { key: `accepted:${line.id}`, label: `${line.itemName} · ${t('operations.purchasingOperations.accepted')}`, type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true, help: `${t('operations.purchasingOperations.outstanding')}: ${formatQuantity(lookup.items.find(item => item.id === line.itemId), line.remainingQuantity)}` },
+        { key: `damaged:${line.id}`, label: t('enum.itemStatus.damaged'), type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
+        { key: `rejected:${line.id}`, label: t('enum.value.rejected'), type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
         ...(tracking === 'serialized' ? [{ key: `codes:${line.id}`, label: t('operations.purchasingOperations.assetCodesAcceptedFirstDamagedLastOnePerLine'), multiline: true, required: received > 0 }] : []),
         ...(tracking === 'lot_tracked' ? [
           { key: `lot:${line.id}`, label: t('operations.purchasingOperations.batchOfThisDelivery'), required: received > 0,
@@ -187,7 +190,8 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
 
 export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string }) {
   const t = useT(); const receipts = useOperationList(`receipts:${purchaseOrderId ?? ''}`, operationsApi.receipts(purchaseOrderId));
-  return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.receiptHistory')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <OperationListEntry key={receipt.id} title={<>{receipt.receiptNumber} · {formatDateTime(receipt.receivedAt)}</>} status={receipt.status}><OperationLines label={t('operations.purchasingOperations.receiptLines')} headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]} rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>, line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity] }))} /></OperationListEntry>)}<LoadMore list={receipts} /></Stack>;
+  const measures = useStockLookups([...new Set((receipts.data ?? []).flatMap(receipt => receipt.lines.map(line => line.itemId)))]);
+  return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.receiptHistory')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <OperationListEntry key={receipt.id} title={<>{receipt.receiptNumber} · {formatDateTime(receipt.receivedAt)}</>} status={receipt.status}><OperationLines label={t('operations.purchasingOperations.receiptLines')} headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]} rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>, ...[line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity))] }))} /></OperationListEntry>)}<LoadMore list={receipts} /></Stack>;
 }
 
 export function VendorsPanel() {

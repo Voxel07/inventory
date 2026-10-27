@@ -24,6 +24,7 @@ public class CountOrm extends EntityOrm {
         var jpql = status == null || status.isBlank()
                 ? "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where 1=1" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc"
                 : "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc";
+        if (!accessActor.atLeast(org.ash.inventory.operations.internal.model.DomainEnums.UserRole.warehouse_crew)) jpql = jpql.replace(" order by", " and not exists (select l.id from InventoryCountLine l where l.session = session and (l.item.accessPolicy is null or l.location.accessPolicy is null)) order by");
         var query = entityManager.createQuery(jpql, InventoryCountSession.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.CountStatus.valueOf(status));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();

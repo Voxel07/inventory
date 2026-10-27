@@ -52,6 +52,7 @@ public class CatalogService {
     @Inject EventMetricsService eventMetrics;
     @Inject RuntimeService runtime;
     @Inject LifecycleService lifecycle;
+    @Inject CustodyBalanceService custodyBalances;
     private final org.ash.inventory.operations.internal.media.MediaService media;
     private final ActorService actorService;
     private final CatalogOrm orm;
@@ -196,6 +197,7 @@ public class CatalogService {
             String code = value.trim().toUpperCase(Locale.ROOT);
             if (!known.add(code)) continue;
             if (orm.assetCodeExists(code)) throw ApiException.conflict("Asset code " + code + " already exists");
+            LocationHierarchyService.requireActiveStockLocation(item.storageLocation);
             var asset = new AssetInstance();
             asset.item = item;
             asset.assetCode = code;
@@ -235,6 +237,9 @@ public class CatalogService {
         bookMeterReading(item, input, "Opening meter reading");
         persistImages(item, input.images());
         int initialAmount = input.amount() == null ? 0 : input.amount();
+        if (initialAmount > 0) LocationHierarchyService.requireActiveStockLocation(item.storageLocation);
+        if (initialAmount > 0 && item.trackingMode == DomainEnums.TrackingMode.lot_tracked && item.storageLocation == null)
+            throw ApiException.badRequest("Choose a receiving location for lot-tracked opening stock");
         boolean codePattern = (input.assetCodePrefix() != null && !input.assetCodePrefix().isBlank()) || input.assetStartNumber() != null;
         if (codePattern && item.trackingMode != DomainEnums.TrackingMode.serialized)
             throw ApiException.badRequest("Asset code generation only applies to serialized items");
@@ -299,22 +304,28 @@ public class CatalogService {
             throw ApiException.badRequest("Maintenance schedules of an existing item are managed through /api/maintenance-schedules");
         }
         var targetTrackingMode = input.trackingMode() != null ? input.trackingMode() : item.trackingMode;
+        var targetRole = input.inventoryRole() != null ? input.inventoryRole() : item.inventoryRole;
         int targetDecimals = input.quantityDecimals() != null ? input.quantityDecimals() : item.quantityDecimals;
         var targetCapacity = targetDecimals == 2 ? (input.unitCapacity() != null ? input.unitCapacity() : item.unitCapacity) : null;
         boolean capacityChanged = item.unitCapacity == null ? targetCapacity != null
                 : targetCapacity == null || item.unitCapacity.compareTo(targetCapacity) != 0;
-        if (targetTrackingMode != item.trackingMode || targetDecimals != item.quantityDecimals || capacityChanged) {
+        if (targetTrackingMode != item.trackingMode || targetRole != item.inventoryRole || targetDecimals != item.quantityDecimals || capacityChanged) {
             long assetCount = orm.countAssets(item);
             long txCount = orm.countTransactions(item);
             if (assetCount > 0 || txCount > 0) {
-                throw ApiException.badRequest("Cannot change tracking mode, percentage usage or full-unit capacity for an item with existing stock or transaction history");
+                throw ApiException.badRequest("Cannot change tracking mode, inventory role, percentage usage or full-unit capacity for an item with existing stock or transaction history");
             }
         }
         String previousCategory = item.category;
         String previousName = item.name;
         var previousLocation = item.storageLocation;
+        var previousReturnLocation = item.returnLocation;
         boolean previousPublicUse = item.accessPolicy != null && item.accessPolicy.publicUse;
         apply(item, input);
+        if ((!java.util.Objects.equals(previousLocation, item.storageLocation)
+                || !java.util.Objects.equals(previousReturnLocation, item.returnLocation)) && orm.hasPendingReturns(item))
+            throw ApiException.conflict("Review pending returns before changing their storage or return location");
+        if (!java.util.Objects.equals(previousLocation, item.storageLocation)) positions.putAwayUnlocated(item, actorService.current());
         if (item.accessPolicy != null && previousPublicUse != item.accessPolicy.publicUse)
             events.record("access.changed", "items", item.id, actorService.current().id, null,
                     Map.of("beforePublicUse", previousPublicUse, "publicUse", item.accessPolicy.publicUse));
@@ -816,7 +827,7 @@ public class CatalogService {
         asset.conditionStatus = input.conditionStatus() == null ? DomainEnums.ConditionStatus.good : input.conditionStatus();
         asset.availabilityStatus = DomainEnums.AssetState.available;
         asset.currentLocation = input.currentLocationId() == null ? item.storageLocation : orm.require(StorageLocation.class, input.currentLocationId(), "Storage location");
-        LocationHierarchyService.requireStockLocation(asset.currentLocation);
+        LocationHierarchyService.requireActiveStockLocation(asset.currentLocation);
         if (input.operatingHours() != null) asset.operatingHours = input.operatingHours();
         asset.purchaseDate = input.purchaseDate();
         asset.purchasePriceCents = cents(input.purchasePrice());
@@ -971,11 +982,10 @@ public class CatalogService {
     }
 
     private void writeOff(Item item, AssetInstance asset) {
-        if (asset.availabilityStatus == DomainEnums.AssetState.reserved
-                || asset.availabilityStatus == DomainEnums.AssetState.staged
-                || asset.availabilityStatus == DomainEnums.AssetState.in_custody
-                || asset.availabilityStatus == DomainEnums.AssetState.in_field) {
-            throw ApiException.conflict("Asset " + asset.assetCode + " must be released from reservations and custody before write-off");
+        if (!java.util.Set.of(DomainEnums.AssetState.available, DomainEnums.AssetState.damaged,
+                DomainEnums.AssetState.in_repair, DomainEnums.AssetState.in_maintenance, DomainEnums.AssetState.lost).contains(asset.availabilityStatus)
+                || custodyBalances.hasOutstandingAsset(asset.id)) {
+            throw ApiException.conflict("Reconcile the asset's reservation, custody, transfer or pending return before write-off");
         }
         var actor = actorService.current();
         var transaction = new StockTransaction();
@@ -1010,7 +1020,7 @@ public class CatalogService {
             throw ApiException.conflict("Asset cannot be relocated while it is " + asset.availabilityStatus);
         }
         var destination = orm.require(StorageLocation.class, input.locationId(), "Storage location");
-        LocationHierarchyService.requireStockLocation(destination);
+        LocationHierarchyService.requireActiveStockLocation(destination);
         if (asset.currentLocation != null && asset.currentLocation.id.equals(destination.id)) return asset;
         var actor = actorService.current();
         var transaction = new StockTransaction();

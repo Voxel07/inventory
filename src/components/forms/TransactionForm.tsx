@@ -30,7 +30,7 @@ import { formatQuantity, fromSteps, getItemStock, quantityScale, toSteps, usesPe
 import { translate, useNames, useT } from '../../utils/naming';
 import { formatStatus } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
-import { canOperateWarehouse, canTakeOut } from '../../utils/access';
+import { canOperateWarehouse, canCheckoutItem, canTakeOut } from '../../utils/access';
 import { factionOrderOf, generalOrderOf } from '../../utils/custody';
 import { RestockCheckoutForm, type RestockCheckoutData } from './RestockCheckoutForm';
 
@@ -89,7 +89,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const [restocking, setRestocking] = useState(false);
     const selectedItem = items.find((item) => item.id === formData.itemId);
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
-    const canCheckout = canTakeOut(user) && (!selectedItem?.access?.privateResource || selectedItem.access.canEdit || selectedItem.access.publicUse);
+    const canCheckout = canCheckoutItem(user, selectedItem);
     const lots = useCompleteList(['operations', `transaction-lots:${formData.itemId}`], operationsApi.lots({ itemId: formData.itemId }), { enabled: Boolean(formData.itemId) });
     const isSerialized = selectedItem?.trackingMode === 'serialized';
     const isConsumable = Boolean(selectedItem?.isConsumable);

@@ -253,6 +253,17 @@ public class ActorService {
         if (item.accessPolicy == null) requireWarehouse();
         else privateAccess.require(item.accessPolicy, current(), true, inUsageCommand());
     }
+
+    /** Owners/editors operate private stock; shared organization takeout retains its role requirement. */
+    public void requireItemCheckout(Item item) {
+        requireItemAccess(item);
+        if (item.accessPolicy != null && privateAccess.allows(item.accessPolicy, current(), true)) return;
+        requireTakeout();
+        if (item.accessPolicy != null && !item.accessPolicy.publicUse) privateAccess.require(item.accessPolicy, current(), true);
+    }
+    public boolean canEditPrivateItem(Item item) {
+        return item != null && item.accessPolicy != null && privateAccess.allows(item.accessPolicy, current(), true);
+    }
     /** Private assemblies follow their own policy; public ones are catalog data managed by inventory staff. */
     public void requireAssemblyEdit(org.ash.inventory.operations.internal.model.Assembly assembly) {
         if (assembly == null) throw ApiException.notFound("Assembly not found");

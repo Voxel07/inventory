@@ -8,11 +8,23 @@ import { DialogForm, FormDialog } from '../shared/FormDialog';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { PagedAutocomplete } from '../shared/PagedAutocomplete';
 import type { Field, Values } from '../../types/operationForm';
+import { formatQuantity, usesPercentage } from '../../utils/stock';
+import { useT } from '../../utils/naming';
 
 export function Fields({ fields, values, onChange }: { fields: Field[]; values: Values; onChange: (values: Values) => void }) {
+  const t = useT();
   return <Stack spacing={2}>{fields.map((field) => {
     const value = values[field.key] ?? '';
     const update = (next: string | number | boolean) => onChange({ ...values, ...field.reset, [field.key]: next });
+    if (field.type === 'quantity') {
+      const percentage = usesPercentage(field.measure);
+      const label = percentage ? `${field.label} (%)` : field.measure?.unit ? `${field.label} (${field.measure.unit})` : field.label;
+      const help = [percentage && t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(field.measure, 100) }),
+        value !== '' && formatQuantity(field.measure, Number(value)), field.help].filter(Boolean).join(' · ');
+      return <TextField key={field.key} fullWidth type="number" label={label} value={value} required={field.required} helperText={help}
+        slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: field.min ?? 0, max: field.max, step: 1 } }}
+        onChange={(event) => { const next = event.target.value; if (next === '' || Number.isSafeInteger(Number(next))) update(next); }} />;
+    }
     if (field.type === 'item') return <ItemAutocomplete key={field.key} label={field.label} required={field.required} helperText={field.help}
       value={value === '' ? null : String(value)} filter={field.itemFilter} onChange={(item) => update(item?.id ?? '')} />;
     if (field.type === 'dateRange' && field.endKey) {

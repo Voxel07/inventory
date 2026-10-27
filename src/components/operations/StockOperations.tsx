@@ -84,7 +84,7 @@ export function TransfersPanel() {
   const transfers = useOperationList('transfers', operationsApi.transfers);
   const [chooseItem, setChooseItem] = useState(false);
   const [itemId, setItemId] = useState('');
-  const lookup = useStockLookups(itemId ? [itemId] : []);
+  const lookup = useStockLookups([...new Set([...(itemId ? [itemId] : []), ...(transfers.data ?? []).flatMap(transfer => transfer.lines.map(line => line.itemId))])]);
   const item = lookup.items.find((value) => value.id === itemId);
   const [action, setAction] = useState<{ transfer: Transfer; type: 'dispatch' | 'receive' | 'cancel'; key: string } | null>(null);
   const [createKey, setCreateKey] = useState('');
@@ -100,7 +100,7 @@ export function TransfersPanel() {
           title: translate('operations.stockOperations.recordTheQuantitiesReceivedInThisTransfer'), pinned: true, onClick: () => setAction({ transfer, type: 'receive', key: crypto.randomUUID() }) },
       ]} title={<>{transfer.transferNumber}</>} status={transfer.status}>
       <Typography>{lookup.locations.find((value) => value.id === transfer.sourceLocationId)?.name} → {lookup.locations.find((value) => value.id === transfer.destinationLocationId)?.name}</Typography>
-      <OperationLines label={t('operations.stockOperations.transferLines')} headers={[t('operations.stockOperations.itemAsset'), t('enum.value.requested'), t('enum.value.received'), t('operations.stockOperations.discrepancy')]} rows={transfer.lines.map(line => ({ id: line.id, cells: [<Link component={RouterLink} to={`/items/${line.itemId}`} key={line.id}>{line.itemName} {line.assetCode}{line.discrepancyNotes && <Typography variant="caption" sx={{ display: 'block' }}>{line.discrepancyNotes}</Typography>}</Link>, line.requestedQuantity, line.receivedQuantity, line.discrepancyQuantity] }))} />
+      <OperationLines label={t('operations.stockOperations.transferLines')} headers={[t('operations.stockOperations.itemAsset'), t('enum.value.requested'), t('enum.value.received'), t('operations.stockOperations.discrepancy')]} rows={transfer.lines.map(line => ({ id: line.id, cells: [<Link component={RouterLink} to={`/items/${line.itemId}`} key={line.id}>{line.itemName} {line.assetCode}{line.discrepancyNotes && <Typography variant="caption" sx={{ display: 'block' }}>{line.discrepancyNotes}</Typography>}</Link>, ...[line.requestedQuantity, line.receivedQuantity, line.discrepancyQuantity].map(quantity => formatQuantity(lookup.items.find(item => item.id === line.itemId), quantity))] }))} />
       {transfer.notes && <Typography>{transfer.notes}</Typography>}
 
     </OperationListEntry>)}
@@ -112,7 +112,7 @@ export function TransfersPanel() {
       ...(action.type === 'receive' ? action.transfer.lines.flatMap((line): Field[] => {
         const remaining = line.pickedQuantity - line.receivedQuantity - line.discrepancyQuantity;
         if (remaining <= 0) return [];
-        return [{ key: `received:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${t('enum.value.received')}`, type: 'number', min: 0, max: remaining, required: true, help: `${t('common.remaining')}: ${remaining}` }, { key: `discrepancy:${line.id}`, label: t('operations.stockOperations.discrepancyQuantity'), type: 'number', min: 0, max: remaining, required: true }, { key: `reason:${line.id}`, label: t('operations.stockOperations.discrepancyReason') }];
+        return [{ key: `received:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${t('enum.value.received')}`, type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: remaining, required: true, help: `${t('common.remaining')}: ${remaining}` }, { key: `discrepancy:${line.id}`, label: t('operations.stockOperations.discrepancyQuantity'), type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: remaining, required: true }, { key: `reason:${line.id}`, label: t('operations.stockOperations.discrepancyReason') }];
       }) : []), { key: 'notes', label: t('common.notes2'), multiline: true },
     ]} onSave={(values) => operationsApi.transferCommand(action.transfer.id, action.type, { idempotencyKey: action.key, notes: optionalText(values.notes), ...(action.type === 'receive' ? { lines: action.transfer.lines.map((line) => ({ transferLineId: line.id, receivedQuantity: Number(values[`received:${line.id}`] || 0), discrepancyQuantity: Number(values[`discrepancy:${line.id}`] || 0), discrepancyNotes: optionalText(values[`reason:${line.id}`]) })).filter((line) => line.receivedQuantity + line.discrepancyQuantity > 0) } : {}) })} />}
   </Stack>;
@@ -134,7 +134,7 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
     return Math.min(located, item.stock ? Math.max(0, item.stock.onHand - item.stock.damaged - item.stock.reserved) : located);
   }
   const sourceOptions = lookup.locationOptions.filter(location => available(location.value) > 0)
-    .map(location => ({ ...location, label: `${location.label} · ${t('enum.itemStatus.available')}: ${available(location.value)}` }));
+    .map(location => ({ ...location, label: `${location.label} · ${t('enum.itemStatus.available')}: ${formatQuantity(item, available(location.value))}` }));
   const error = lookup.error || positions.error || assets.error || lots.error;
   const loading = lookup.loading || (item.trackingMode === 'serialized' ? !assets.isComplete : !positions.isComplete) || (item.trackingMode === 'lot_tracked' && !lots.isComplete);
   const [ready, setReady] = useState(false);
@@ -147,8 +147,8 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
     return [
       { key: 'sourceLocationId', label: t('operations.stockOperations.from'), options: sourceOptions, required: true, reset: { assetInstanceId: '', lotId: '', quantity: 1 } },
       { key: 'destinationLocationId', label: t('operations.stockOperations.to'), options: lookup.locationOptions.filter(location => location.value !== source), required: true },
-      ...(item.trackingMode === 'serialized' ? [{ key: 'assetInstanceId', label: t('common.asset'), required: true, options: availableAssets.filter(asset => asset.currentLocationId === source).map(asset => ({ value: asset.id, label: asset.assetCode })) }] : [{ key: 'quantity', label: t('common.quantity'), type: 'number' as const, min: 1, max: quantity, required: true, help: `${t('operations.stockOperations.availableAtLocation')}: ${quantity}` }]),
-      ...(item.trackingMode === 'lot_tracked' ? [{ key: 'lotId', label: t('enum.value.lot'), required: true, reset: { quantity: 1 }, options: usableLots.filter(lot => availablePositions.some(position => position.locationId === source && position.lotId === lot.id)).map(lot => ({ value: lot.id, label: `${lot.lotNumber} · ${t('enum.itemStatus.available')}: ${available(source, lot.id)}` })) }] : []),
+      ...(item.trackingMode === 'serialized' ? [{ key: 'assetInstanceId', label: t('common.asset'), required: true, options: availableAssets.filter(asset => asset.currentLocationId === source).map(asset => ({ value: asset.id, label: asset.assetCode })) }] : [{ key: 'quantity', label: t('common.quantity'), type: 'quantity' as const, measure: item, min: 1, max: quantity, required: true, help: `${t('operations.stockOperations.availableAtLocation')}: ${formatQuantity(item, quantity)}` }]),
+      ...(item.trackingMode === 'lot_tracked' ? [{ key: 'lotId', label: t('enum.value.lot'), required: true, reset: { quantity: 1 }, options: usableLots.filter(lot => availablePositions.some(position => position.locationId === source && position.lotId === lot.id)).map(lot => ({ value: lot.id, label: `${lot.lotNumber} · ${t('enum.itemStatus.available')}: ${formatQuantity(item, available(source, lot.id))}` })) }] : []),
       { key: 'notes', label: t('common.notes2'), multiline: true },
     ];
   }} onSave={values => {
@@ -162,8 +162,9 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
 }
 
 export function CountsPanel() {
-  const t = useT(); const lookup = useStockLookups(); const { user } = useAuth(); const categories = useItemCategories();
+  const t = useT(); const { user } = useAuth(); const categories = useItemCategories();
   const counts = useOperationList('counts', operationsApi.counts);
+  const lookup = useStockLookups([...new Set((counts.data ?? []).flatMap(count => count.lines.map(line => line.itemId)))]);
   const [create, setCreate] = useState(false);
   const [action, setAction] = useState<{ count: Count; type: 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
   const finished = (count: Count) => ['posted', 'cancelled'].includes(count.status);
@@ -180,7 +181,7 @@ export function CountsPanel() {
           title: translate('operations.stockOperations.enterTheCountedQuantities'), pinned: true, onClick: () => setAction({ count, type: 'submit' }) },
         count.status === 'awaiting_recount' && { key: 'recount', label: t('operations.stockOperations.recount'), title: translate('operations.stockOperations.startARecountOfThisInventory'),
           pinned: true, onClick: () => setAction({ count, type: 'recount' }) },
-        count.status === 'awaiting_approval' && canManageUsers(user) && { key: 'approve', label: t('operations.stockOperations.approve'),
+        count.status === 'awaiting_approval' && (canManageUsers(user) || count.lines.every(line => lookup.items.find(item => item.id === line.itemId)?.access?.canEdit)) && { key: 'approve', label: t('operations.stockOperations.approve'),
           title: translate('operations.stockOperations.approveTheRecordedCountQuantities'), pinned: true, onClick: () => setAction({ count, type: 'approve' }) },
         count.status === 'approved' && { key: 'post', label: t('operations.stockOperations.postAdjustment'), title: translate('operations.stockOperations.adjustStockUsingTheApprovedCount'),
           pinned: true, onClick: () => setAction({ count, type: 'post' }) },
@@ -188,7 +189,7 @@ export function CountsPanel() {
           onClick: () => setAction({ count, type: 'cancel' }) },
       ]} title={<>{count.sessionNumber}</>} status={count.status}>
       <Typography>{lookup.locations.find((value) => value.id === count.locationId)?.name} {count.blindCount ? t('operations.stockOperations.blindCount') : ''}</Typography>
-      <CollapsibleOperationLines summary={countSummary(count)} label={t('operations.stockOperations.countLines')} headers={[t('operations.stockOperations.itemLocation'), t('operations.stockOperations.expected'), t('operations.stockOperations.counted'), t('operations.stockOperations.recount2'), t('operations.stockOperations.variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, line.expectedQuantity ?? '—', line.countedQuantity ?? '—', line.recountedQuantity ?? '—', line.varianceQuantity ?? '—'] }))} />
+      <CollapsibleOperationLines summary={countSummary(count)} label={t('operations.stockOperations.countLines')} headers={[t('operations.stockOperations.itemLocation'), t('operations.stockOperations.expected'), t('operations.stockOperations.counted'), t('operations.stockOperations.recount2'), t('operations.stockOperations.variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, ...[line.expectedQuantity, line.countedQuantity, line.recountedQuantity, line.varianceQuantity].map(quantity => quantity == null ? '—' : formatQuantity(lookup.items.find(item => item.id === line.itemId), quantity))] }))} />
     </OperationListEntry>;
   return <Stack spacing={2}>
     <Button title={translate('operations.stockOperations.createANewStockCount')} variant="contained" onClick={() => setCreate(true)}>{t('operations.stockOperations.newStockCount')}</Button>
@@ -209,7 +210,7 @@ export function CountsPanel() {
         [`note:${line.id}`, line.notes ?? ''],
       ]))} fields={[
       ...(['submit', 'recount'].includes(action.type) ? action.count.lines.flatMap((line): Field[] => [
-        { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}`, type: 'number', min: 0, max: line.assetCode ? 1 : undefined, help: [line.expectedQuantity != null && `${t('operations.stockOperations.expected')}: ${line.expectedQuantity}`, line.lotId && `${t('enum.value.lot')}: ${line.lotId}`].filter(Boolean).join(' · ') || undefined }, { key: `note:${line.id}`, label: t('operations.stockOperations.lineNotes') },
+        { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}`, type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.assetCode ? 1 : undefined, help: [line.expectedQuantity != null && `${t('operations.stockOperations.expected')}: ${formatQuantity(lookup.items.find(item => item.id === line.itemId), line.expectedQuantity)}`, line.lotId && `${t('enum.value.lot')}: ${line.lotId}`].filter(Boolean).join(' · ') || undefined }, { key: `note:${line.id}`, label: t('operations.stockOperations.lineNotes') },
       ]) : []), { key: 'notes', label: t('operations.stockOperations.notesApprovalReason'), multiline: true },
     ]} onSave={(values) => {
       if (['submit', 'recount'].includes(action.type) && !action.count.lines.some(line => values[`quantity:${line.id}`] !== '' && values[`quantity:${line.id}`] !== undefined)) return Promise.reject(new Error(t('operations.stockOperations.enterAtLeastOneCountedQuantity')));

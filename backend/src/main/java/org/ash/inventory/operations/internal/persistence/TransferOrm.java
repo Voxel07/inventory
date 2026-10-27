@@ -24,6 +24,7 @@ public class TransferOrm extends EntityOrm {
         var jpql = status == null || status.isBlank()
                 ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc"
                 : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc";
+        if (!accessActor.atLeast(DomainEnums.UserRole.warehouse_crew)) jpql = jpql.replace(" order by", " and transfer.sourceLocation.accessPolicy is not null and transfer.destinationLocation.accessPolicy is not null and not exists (select l.id from InventoryTransferLine l where l.transfer = transfer and l.item.accessPolicy is null) order by");
         var query = entityManager.createQuery(jpql, InventoryTransfer.class);
         if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.TransferStatus.valueOf(status));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();

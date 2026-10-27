@@ -16,6 +16,20 @@ Transient retention runs daily in batches of at most 1,000: terminal notificatio
 
 Account-owned items choose public/private availability on creation and owner/admin edits. Public availability enables faction and general orders without commitments; ordinary stock, damage and maintenance checks remain. The creator becomes responsible automatically. Editors may assign an account or a free-text contact; without warehouse access, accounts are limited to self and sharing-group peers. Assignment does not grant access; free text sends no notifications. Sharing changes require no reason and retain revision checks/auditing. Below Overview, one named list combines owner, admins, individual people and groups, merging duplicate permissions; private location details remain protected. Sharing-group members can see their peers by name directly on Sharing and Users.
 
+## Inventory allocation and private operations
+
+General orders may omit an event throughout submission, pickup, return and restock. Preparation accepts `sourceAllocations` as item UUID -> position UUID -> positive integer quantity. Quantities must sum to the prepared quantity; positions must belong to the item and be usable/authorized. Omission allocates across accessible internal positions in FEFO order, using the earlier non-null expiry/best-before date. Serialized preparation continues to select exact assets. Reservations reference positions and pickup emits the corresponding source/lot movements.
+
+Bulk/lot returns and unused restocks settle original checkout-position allocations in `issueQuantities`. Partial settlements cannot exceed the issued quantities, selected lots must match the issue, and reversals negate those settlements. Order returns use the configured return location, otherwise home. Pending return instructions block home/return-place changes until review. Automatic multi-lot reconciliation records provenance; it does not attest physical batch labels.
+
+Assembly checkout reviews exact serialized units and bulk/lot source quantities before one atomic transaction batch. Each row retains its command key for identical retries; changed payloads receive new keys. Assemblies remain recipes rather than physical kit stock.
+
+Private owners/editors may issue stock, transfer between editable places, run scoped counts, and review direct private returns. Public-use visibility does not grant return-review administration. Organization operations and order return review retain their role requirements. Item access and every source/destination are independently authorized; tenant lists remain private-scoped.
+
+Operational quantities are integer whole units or percentage steps with capacity context; 100 percentage steps represents one full unit. Purchasing prices are per full unit. CSV identifies items by ItemId/SKU or an unambiguous name (optionally matched by home), preserves omitted measure metadata, and rejects fractional steps. Role, tracking mode and measure settings are immutable after stock history/assets exist.
+
+Bulk damage records the exact position when more than one is possible. Repair/write-off resolves those quantities. Unlocated bulk stock can be put away by assigning a home, including its unresolved damage allocations, without adding owned stock. New lot stock requires both lot and receiving location. Inbound stock and serialized registration/relocation require active destinations and ancestors.
+
 ## Reminders and external delivery
 
 The action inbox derives live tasks. Authorization uses typed source IDs before task titles/details are returned. A selected reminder creates a generic persisted notice when due. The hourly digest checks currently visible pickup, overdue-order, expiry and maintenance work, at most 500 recipients per run, once per business day. Notices may outlive completed tasks; opening the app always shows current authorized work.

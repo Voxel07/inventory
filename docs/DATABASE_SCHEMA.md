@@ -105,8 +105,8 @@ Location services enforce no cycles and keep stock out of top-level locations; c
 | `asset_instances` | UUID; item/current location/current custodian FKs; unique asset code; availability/condition/service state, hours, serial/manufacturer, active flag and version |
 | `inventory_lots` | UUID; item FK; unique `(item_id, lot_number)`; expiry/best-before/manufacture, supplier lot, requirements and status |
 | `inventory_positions` | UUID; item/location/optional lot FKs (lot composite with item); on-hand, damaged, quarantined and transit quantities; last count; version. One row per item/location/lot (`unique nulls not distinct`). Reservations are not stored here: they are computed from live order reservations |
-| `stock_transactions` | UUID; item/actor FKs plus optional asset/lot/order/event/damage/locations; movement type, quantity, UTC time, reason/notes, before/after availability, idempotency UUID, position map and related-entity reference |
-| `stock_reservations` | UUID; item/asset/order/line/location/creator links; requested/reserved/released quantities and status; version; unique active asset reservation key |
+| `stock_transactions` | UUID; item/actor FKs plus optional asset/lot/order/event/damage/locations; movement type, quantity, UTC time, reason/notes, before/after availability, idempotency UUID, position and issued-custody settlement maps, and related-entity reference |
+| `stock_reservations` | UUID; item/asset/order/line/location/position/creator links; requested/reserved/released quantities and status; version; unique active asset reservation key |
 | `inventory_transfers` | UUID; source/destination locations, requester/receiver, unique transfer number and idempotency key, status, dispatch/receipt times |
 | `inventory_transfer_lines` | UUID; transfer/item/optional asset/lot FKs; requested/picked/received/discrepancy quantities |
 | `inventory_count_sessions` | UUID; unique session number; location subtree/item/category scope, blind flag, creator/approver, status/times |

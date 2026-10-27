@@ -28,12 +28,9 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
 
   const effectiveItemsForAssemblies = (() => {
     if (tabType !== 'combined') return items;
-    const map = new Map<string, Item>();
-    for (const it of items) {
-      map.set(it.name.toLowerCase().trim(), it);
-    }
+    const map = new Map(items.map(item => [item.id, item]));
     for (const p of parsedItems) {
-      if (p.data.name && !map.has(p.data.name.toLowerCase().trim())) {
+      if (p.data.name && !p.isExisting && (p.status === 'valid' || p.status === 'warning')) {
         // Keep every parsed attribute (role, tracking mode, ...) so dependent rows validate like real items.
         const planned: Item = {
           ...p.data,
@@ -48,7 +45,7 @@ export function buildCsvImportPlan({ csvContent, tabType, items, assemblies, sto
           created: 0,
           updated: 0,
         };
-        map.set(p.data.name.toLowerCase().trim(), planned);
+        map.set(planned.id, planned);
       }
     }
     return Array.from(map.values());

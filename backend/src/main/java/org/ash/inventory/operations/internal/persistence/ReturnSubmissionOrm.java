@@ -28,7 +28,7 @@ public class ReturnSubmissionOrm extends EntityOrm {
     }
 
     public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, UserAccount actor, boolean manager) {
-        String ownerFilter = manager ? "" : " and (r.submittedBy = :actor or r.returnedFor = :actor)";
+        String ownerFilter = manager ? "" : " and (r.submittedBy = :actor or r.returnedFor = :actor or (r.order is null and r.item.accessPolicy is not null and function('inventory_policy_visible', r.item.accessPolicy.id, :accessActor, :accessAdmin, :accessPublic, true) = true))";
         var query = entityManager.createQuery(
                 "from ReturnSubmission r"
                         + " join fetch r.item"

@@ -1,3 +1,4 @@
+import { useItemsByIds } from '../hooks/useItems';
 import { Button } from '../components/shared/ActionButtons';
 import { FormDialog } from '../components/shared/FormDialog';
 import { PageHeader } from '../components/shared/PageHeader';
@@ -154,7 +155,8 @@ function ReturnReviewDialog({ submission, statusLabel, onClose }: { submission: 
   const [rejectAttempted, setRejectAttempted] = useState(false);
   const runtimeMissing = submission.tracksRuntime && parseHoursRun(hoursRun) == null;
   const pending = acknowledge.isPending || reject.isPending;
-  const canDecide = submission.status === 'pending' && canOperateWarehouse(user);
+  const item = useItemsByIds([submission.itemId]).data?.[0];
+  const canDecide = submission.status === 'pending' && (canOperateWarehouse(user) || !submission.orderId && item?.access?.privateResource && item.access.canEdit);
   const error = acknowledge.error || reject.error;
   const close = () => { if (!pending) onClose(); };
 

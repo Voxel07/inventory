@@ -17,7 +17,13 @@ public class PurchaseOrderLine extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "purchase_order_id") public PurchaseOrder purchaseOrder;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @Column(name = "ordered_quantity", nullable = false) public int orderedQuantity;
+    /** Price of one full unit; percentage quantities contain 100 steps per full unit. */
     @Column(name = "unit_price_cents", nullable = false) public int unitPriceCents;
+
+    public long orderedValueCents() {
+        return java.math.BigDecimal.valueOf(orderedQuantity).multiply(java.math.BigDecimal.valueOf(unitPriceCents))
+                .movePointLeft(item.quantityDecimals).setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+    }
     @Column(name = "received_quantity", nullable = false) public int receivedQuantity;
     public String notes;
 

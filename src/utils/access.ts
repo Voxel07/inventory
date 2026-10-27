@@ -1,5 +1,5 @@
 import { ROLE_LADDER } from '../types';
-import type { AccessRole, User } from '../types';
+import type { AccessRole, User, Item } from '../types';
 
 function effectiveAccess(user: User | null | undefined): AccessRole | 'none' {
   return user?.role ?? 'none';
@@ -54,6 +54,10 @@ export function canPerformCustody(user: User | null | undefined): boolean {
 /** ASH crew may take items out and pick up prepared orders. */
 export function canTakeOut(user: User | null | undefined): boolean {
   return atLeast(user, 'ash');
+}
+export function canCheckoutItem(user: User | null | undefined, item: Item | null | undefined): boolean {
+  return Boolean(item?.access?.privateResource && item.access.canEdit)
+    || canTakeOut(user) && (!item?.access?.privateResource || Boolean(item.access.publicUse));
 }
 export function canManagePurchasing(user: User | null | undefined): boolean {
   return atLeast(user, 'warehouse_crew');

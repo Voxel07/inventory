@@ -1,4 +1,4 @@
-import type { EventType, Faction } from '../../types';
+import type { EventType, Faction, Item } from '../../types';
 import { EVENT_REPORT_TYPE_ALIASES, EVENT_TYPES_ALIASES, ORDER_FACTION_ALIASES, getField } from './core';
 import { FACTION_ROLES } from '../../types/eventLogistics';
 
@@ -6,6 +6,20 @@ import { FACTION_ROLES } from '../../types/eventLogistics';
 export interface CsvReference {
   eventTypes: readonly EventType[];
   factions: readonly Faction[];
+}
+
+/** IDs/SKUs are authoritative; a repeated display name is deliberately unresolved. */
+export function createItemLookup(items: readonly Item[]): Map<string, Item> {
+  const lookup = new Map<string, Item>();
+  const names = new Map<string, Item[]>();
+  for (const item of items) {
+    lookup.set(item.id.toLowerCase(), item);
+    if (item.sku) lookup.set(item.sku.trim().toLowerCase(), item);
+    const name = item.name.trim().toLowerCase();
+    names.set(name, [...(names.get(name) ?? []), item]);
+  }
+  names.forEach((matches, name) => { if (matches.length === 1 && !lookup.has(name)) lookup.set(name, matches[0]); });
+  return lookup;
 }
 
 /** Plan references supplied by an admin importing a CSV. No API writes occur here. */

@@ -24,6 +24,18 @@ public class InventoryOrder extends BaseEntity {
     @jakarta.persistence.OneToMany(mappedBy = "order", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     @jakarta.persistence.OrderBy("lineNumber, createdAt, id") @org.hibernate.annotations.BatchSize(size = 64)
     public java.util.List<OrderLine> lines = new java.util.ArrayList<>();
+    @jakarta.persistence.OneToMany(mappedBy = "order") @org.hibernate.annotations.BatchSize(size = 64)
+    public java.util.List<StockReservation> reservations = new java.util.ArrayList<>();
+
+    public java.util.Map<String, java.util.Map<String, Integer>> sourceAllocations() {
+        var result = new java.util.LinkedHashMap<String, java.util.Map<String, Integer>>();
+        for (var reservation : reservations) {
+            if (reservation.position == null || reservation.status == DomainEnums.ReservationStatus.released) continue;
+            result.computeIfAbsent(reservation.item.id.toString(), ignored -> new java.util.LinkedHashMap<>())
+                    .merge(reservation.position.id.toString(), reservation.reservedQuantity, Math::addExact);
+        }
+        return result;
+    }
 
     public String label() { return kind == Kind.faction ? orderCode : name; }
     public String factionLabel() { return faction == null ? "General order" : faction.name; }

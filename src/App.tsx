@@ -144,8 +144,8 @@ function AppContent() {
               <Route path="/events/:reportId" element={<OrganizationGuard><EventDetail /></OrganizationGuard>} />
               <Route path="/orders" element={<OrganizationGuard><Orders /></OrganizationGuard>} />
               <Route path="/orders/faction/:orderId" element={<OrganizationGuard><FactionOrderDetail /></OrganizationGuard>} />
-              <Route path="/checked-out" element={<InventoryManagerGuard><CheckedOutItemsPage /></InventoryManagerGuard>} />
-              <Route path="/returns" element={<InventoryManagerGuard><ReturnedItemsPage /></InventoryManagerGuard>} />
+              <Route path="/checked-out" element={<CatalogAccessGuard><CheckedOutItemsPage /></CatalogAccessGuard>} />
+              <Route path="/returns" element={<CatalogAccessGuard><ReturnedItemsPage /></CatalogAccessGuard>} />
               <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
               <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
               <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
@@ -155,7 +155,7 @@ function AppContent() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/storage-locations" element={<CatalogAccessGuard><StorageLocations /></CatalogAccessGuard>} />
               <Route path="/storage-locations/:locationId/labels" element={<CatalogAccessGuard><StorageLabels /></CatalogAccessGuard>} />
-              <Route path="/operations" element={<InventoryManagerGuard><Operations /></InventoryManagerGuard>} />
+              <Route path="/operations" element={<CatalogAccessGuard><Operations /></CatalogAccessGuard>} />
               <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
               <Route path="/sharing" element={<SharingGroups />} />
               <Route path="*" element={<Navigate to="/" replace />} />

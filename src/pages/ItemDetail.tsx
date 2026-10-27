@@ -67,7 +67,7 @@ import { ItemDamageReports } from '../components/items/ItemDamageReports';
 import type { ItemFormData, TransactionFormData } from '../types';
 import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canOperateWarehouse, canPerformCustody, canTakeOut } from '../utils/access';
+import { canEditCatalog, canOperateWarehouse, canPerformCustody, canCheckoutItem } from '../utils/access';
 import { isOfflineQueuedError } from '../utils/offline';
 import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
@@ -102,7 +102,7 @@ export function ItemDetail() {
     const equipment = useEquipmentProfile(itemId ?? '');
     const canEdit = item?.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canTransact = item?.access?.privateResource ? item.access.canEdit : canOperateWarehouse(user);
-    const canCheckout = canTakeOut(user) && (!item?.access?.privateResource || item.access.canEdit || item.access.publicUse);
+    const canCheckout = canCheckoutItem(user, item);
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();

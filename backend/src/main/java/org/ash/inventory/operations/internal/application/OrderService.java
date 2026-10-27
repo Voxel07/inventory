@@ -280,11 +280,11 @@ public class OrderService {
         if (input.preparedQuantities() != null && (!orderedIds.containsAll(input.preparedQuantities().keySet()) || input.preparedQuantities().values().stream().anyMatch(java.util.Objects::isNull)))
             throw ApiException.badRequest("Preparation must reference ordered items");
         if (input.assetAssignments() != null && !orderedIds.containsAll(input.assetAssignments().keySet())) throw ApiException.badRequest("Asset assignments must reference ordered items");
-        if (input.sourceLocations() != null && !orderedIds.containsAll(input.sourceLocations().keySet())) throw ApiException.badRequest("Sources must reference ordered items");
+        if (input.sourceAllocations() != null && !orderedIds.containsAll(input.sourceAllocations().keySet())) throw ApiException.badRequest("Sources must reference ordered items");
         if (order.kind == InventoryOrder.Kind.general && input.preparedQuantities() == null) throw ApiException.badRequest("Enter prepared quantities");
         itemLocks.lock(requestedByItem.keySet().stream().map(item -> item.id).toList());
         var assignedAssetIds = new HashSet<UUID>();
-        var sources = new LinkedHashMap<UUID, UUID>();
+        var sources = new LinkedHashMap<UUID, Map<org.ash.inventory.operations.internal.model.InventoryPosition, Integer>>();
         for (var entry : requestedByItem.entrySet()) {
             var lockedItem = orm.findLocked(Item.class, entry.getKey().id);
             if (lockedItem == null) throw ApiException.notFound("Item not found");
@@ -302,14 +302,13 @@ public class OrderService {
                 throw ApiException.conflict("Only " + availableIncludingThisOrder + " units of " + entry.getKey().name
                         + " can be reserved");
             }
-            var capacity = allocation.capacity(lockedItem, order.id);
-            var source = input.sourceLocations() == null || input.sourceLocations().get(lockedItem.id) == null
-                    ? allocation.defaultSource(lockedItem, capacity, prepared)
-                    : positions.location(input.sourceLocations().get(lockedItem.id));
-            if (source != null) sources.put(lockedItem.id, source.id);
-            availableIncludingThisOrder = Math.min(availableIncludingThisOrder, allocation.sourceCapacity(lockedItem, capacity, source, prepared));
-            if (prepared > availableIncludingThisOrder && (!input.acknowledgeShortages() || order.kind == InventoryOrder.Kind.general)) throw ApiException.conflict("Insufficient stock at source for " + lockedItem.name);
             int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
+            if (lockedItem.trackingMode != DomainEnums.TrackingMode.serialized) {
+                var selected = input.sourceAllocations() == null ? null : input.sourceAllocations().get(lockedItem.id);
+                sources.put(lockedItem.id, allocation.allocate(lockedItem, allocation.capacity(lockedItem, order.id), actualPrepared, selected));
+            } else if (input.sourceAllocations() != null && input.sourceAllocations().containsKey(lockedItem.id)) {
+                throw ApiException.badRequest("Serialized preparation selects assets, not quantity positions");
+            }
             distributePrepared(lines, lockedItem, actualPrepared);
             if (lockedItem.trackingMode == DomainEnums.TrackingMode.serialized) {
                 var selectedAssets = input.assetAssignments() == null ? List.<UUID>of()
@@ -528,7 +527,7 @@ public class OrderService {
         checkin.user = actor;
         checkin.order = order;
         checkin.eventOccurrence = order.eventOccurrence;
-        checkin.eventType = order.eventOccurrence.eventType;
+        checkin.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
         checkin.faction = order.factionLabel();
         checkin.type = DomainEnums.TransactionType.checkin;
         checkin.quantity = quantity;
@@ -606,8 +605,8 @@ public class OrderService {
         if (target == DomainEnums.OrderStatus.submitted || target == DomainEnums.OrderStatus.cancelled) requireGeneralOwner(order);
         if (target == DomainEnums.OrderStatus.draft || target == DomainEnums.OrderStatus.preparing)
             throw ApiException.conflict("Use preparation to start preparing a general order");
-        if (target == DomainEnums.OrderStatus.submitted && (order.eventOccurrence == null || orm.lines(order).isEmpty()))
-            throw ApiException.badRequest("Select an event and at least one item");
+        if (target == DomainEnums.OrderStatus.submitted && orm.lines(order).isEmpty())
+            throw ApiException.badRequest("Select at least one item");
     }
 
     private void pickup(InventoryOrder order, UserAccount actor, UUID idempotencyKey) {
@@ -627,25 +626,31 @@ public class OrderService {
             int available = inventory.availableFor(item, order.eventOccurrence, ownReservation);
             if (entry.getValue() > available)
                 throw ApiException.conflict("Insufficient stock to pick up " + item.name);
-            var transaction = new StockTransaction();
-            transaction.item = item;
-            transaction.user = order.kind == InventoryOrder.Kind.general ? order.createdBy : actor;
-            transaction.order = order;
-            transaction.eventOccurrence = order.eventOccurrence;
-            transaction.eventType = order.eventOccurrence.eventType;
-            transaction.faction = order.factionLabel();
-            transaction.type = DomainEnums.TransactionType.checkout;
-            transaction.quantity = entry.getValue();
-            transaction.availabilityBefore = available;
-            transaction.availabilityAfter = available - entry.getValue();
-            transaction.reason = "Order pickup " + order.label();
-            transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup");
-            transaction.clientCommandId = idempotencyKey;
-            transaction.sourceLocation = orm.reservations(order).stream().filter(r -> r.item.id.equals(item.id) && r.openQuantity() > 0).map(r -> r.location).filter(java.util.Objects::nonNull).findFirst().orElse(item.storageLocation);
-            transaction.destinationLocation = order.pickupLocation;
-            positions.apply(transaction);
-        orm.persist(transaction);
-            if (item.consumable()) consumeAtPickup(transaction, idempotencyKey);
+            var allocations = new LinkedHashMap<org.ash.inventory.operations.internal.model.InventoryPosition, Integer>();
+            for (var reserved : orm.reservations(order))
+                if (reserved.item.id.equals(item.id) && reserved.openQuantity() > 0)
+                    allocations.merge(reserved.position, reserved.openQuantity(), Math::addExact);
+            if (allocations.values().stream().mapToInt(Integer::intValue).sum() != entry.getValue())
+                throw ApiException.conflict("Prepared source allocations changed; prepare the order again");
+            for (var source : allocations.entrySet()) {
+                var position = source.getKey();
+                var transaction = new StockTransaction();
+                transaction.item = item;
+                transaction.user = order.kind == InventoryOrder.Kind.general ? order.createdBy : actor;
+                transaction.order = order; transaction.eventOccurrence = order.eventOccurrence;
+                transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
+                transaction.faction = order.factionLabel(); transaction.type = DomainEnums.TransactionType.checkout;
+                transaction.quantity = source.getValue(); transaction.availabilityBefore = inventory.stock(item).available();
+                transaction.reason = "Order pickup " + order.label();
+                transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup:" + (position == null ? "unlocated" : position.id));
+                transaction.clientCommandId = idempotencyKey;
+                transaction.sourceLocation = position == null ? null : position.location;
+                transaction.lot = position == null ? null : position.lot;
+                transaction.destinationLocation = order.pickupLocation;
+                positions.apply(transaction); orm.persist(transaction);
+                transaction.availabilityAfter = inventory.stock(item).available();
+                if (item.consumable()) consumeAtPickup(transaction, idempotencyKey);
+            }
         }
         for (var line : lines) {
             line.handedOverQuantity = line.preparedQuantity;
@@ -671,7 +676,7 @@ public class OrderService {
         consumed.type = DomainEnums.TransactionType.consumed;
         consumed.quantity = checkout.quantity;
         consumed.reason = checkout.reason;
-        consumed.idempotencyKey = transactionKey(idempotencyKey, checkout.order, checkout.item, "pickup-consumed");
+        consumed.idempotencyKey = transactionKey(idempotencyKey, checkout.order, checkout.item, "pickup-consumed:" + checkout.id);
         consumed.clientCommandId = idempotencyKey;
         consumed.sourceLocation = checkout.destinationLocation;
         consumed.availabilityBefore = checkout.availabilityAfter;
@@ -783,7 +788,7 @@ public class OrderService {
             transaction.user = order.kind == InventoryOrder.Kind.general ? order.createdBy : actor;
             transaction.order = order;
             transaction.eventOccurrence = order.eventOccurrence;
-            transaction.eventType = order.eventOccurrence.eventType;
+            transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
             transaction.faction = order.factionLabel();
             transaction.type = DomainEnums.TransactionType.checkout;
             transaction.quantity = 1;
@@ -873,33 +878,38 @@ public class OrderService {
         return remaining;
     }
 
-    private void reconcileReservations(InventoryOrder order, List<OrderLine> lines, UserAccount actor, Map<UUID, UUID> sources) {
+    private void reconcileReservations(InventoryOrder order, List<OrderLine> lines, UserAccount actor,
+            Map<UUID, Map<org.ash.inventory.operations.internal.model.InventoryPosition, Integer>> sources) {
+        for (var old : orm.reservations(order)) if (old.openQuantity() > 0) release(old);
+        var remaining = new LinkedHashMap<UUID, Map<org.ash.inventory.operations.internal.model.InventoryPosition, Integer>>();
+        sources.forEach((id, allocations) -> remaining.put(id, new LinkedHashMap<>(allocations)));
         for (var line : lines) {
-            var reservation = orm.reservation(line);
-            if (line.preparedQuantity == 0) {
-                if (reservation != null && reservation.openQuantity() > 0) release(reservation);
-                line.reservedQuantity = 0;
-                continue;
-            }
-            if (reservation == null) {
-                reservation = new StockReservation();
-                reservation.order = order;
-                reservation.orderLine = line;
-                reservation.item = line.item;
-                reservation.location = line.item.storageLocation;
-                reservation.createdBy = actor;
-                orm.persist(reservation);
-            }
-            reservation.location = sources == null || sources.get(line.item.id) == null ? line.item.storageLocation : positions.location(sources.get(line.item.id));
-            line.sourceLocation = reservation.location;
-            reservation.requestedQuantity = line.requestedQuantity;
-            reservation.reservedQuantity = line.preparedQuantity;
-            reservation.releasedQuantity = 0;
-            reservation.releasedAt = null;
-            reservation.status = DomainEnums.ReservationStatus.active;
-            reservation.activeAssetKey = "ACTIVE";
             line.reservedQuantity = line.preparedQuantity;
+            line.sourceLocation = null;
+            int left = line.preparedQuantity;
+            var allocations = remaining.getOrDefault(line.item.id, Map.of());
+            for (var entry : allocations.entrySet()) {
+                int take = Math.min(left, entry.getValue());
+                if (take == 0) continue;
+                reserve(order, line, actor, entry.getKey(), take);
+                if (line.sourceLocation == null) line.sourceLocation = entry.getKey().location;
+                entry.setValue(entry.getValue() - take); left -= take;
+                if (left == 0) break;
+            }
+            // Serialized units carry their exact sources on the asset assignments. Unlocated bulk remains explicit.
+            if (left > 0) reserve(order, line, actor, null, left);
         }
+    }
+
+    private void reserve(InventoryOrder order, OrderLine line, UserAccount actor,
+            org.ash.inventory.operations.internal.model.InventoryPosition position, int quantity) {
+        var reservation = new StockReservation();
+        reservation.order = order; reservation.orderLine = line; reservation.item = line.item;
+        reservation.position = position; reservation.location = position == null ? null : position.location;
+        reservation.requestedQuantity = line.requestedQuantity; reservation.reservedQuantity = quantity;
+        reservation.createdBy = actor;
+        order.reservations.add(reservation);
+        orm.persist(reservation);
     }
 
     private void releaseReservations(InventoryOrder order) {
@@ -1044,7 +1054,7 @@ public class OrderService {
         transaction.user = order.kind == InventoryOrder.Kind.general ? order.createdBy : actor;
         transaction.order = order;
             transaction.eventOccurrence = order.eventOccurrence;
-        transaction.eventType = order.eventOccurrence.eventType;
+        transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
         transaction.faction = order.factionLabel();
         transaction.type = type;
         transaction.quantity = quantity;
@@ -1055,7 +1065,7 @@ public class OrderService {
         transaction.sourceLocation = order.pickupLocation;
         transaction.custodyWriteOff = type == DomainEnums.TransactionType.written_off;
         if (type == DomainEnums.TransactionType.checkin)
-            transaction.destinationLocation = item.storageLocation;
+            transaction.destinationLocation = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         transaction.availabilityBefore = inventory.stock(item).available();
         positions.apply(transaction);
         orm.persist(transaction);
@@ -1174,7 +1184,7 @@ public class OrderService {
         transaction.user = order.kind == InventoryOrder.Kind.general ? order.createdBy : actor;
         transaction.order = order;
             transaction.eventOccurrence = order.eventOccurrence;
-        transaction.eventType = order.eventOccurrence.eventType;
+        transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
         transaction.faction = order.factionLabel();
         transaction.type = type;
         transaction.quantity = 1;
@@ -1186,10 +1196,10 @@ public class OrderService {
         transaction.custodyWriteOff = type == DomainEnums.TransactionType.written_off;
         asset.availabilityStatus = targetState;
         asset.currentLocation = targetState == DomainEnums.AssetState.available
-                || targetState == DomainEnums.AssetState.damaged ? item.storageLocation : null;
+                || targetState == DomainEnums.AssetState.damaged ? (item.returnLocation == null ? item.storageLocation : item.returnLocation) : null;
         asset.currentCustodian = null;
         if (type == DomainEnums.TransactionType.checkin)
-            transaction.destinationLocation = item.storageLocation;
+            transaction.destinationLocation = item.returnLocation == null ? item.storageLocation : item.returnLocation;
         transaction.availabilityBefore = before;
         positions.apply(transaction);
         orm.persist(transaction);

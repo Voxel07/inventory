@@ -378,10 +378,8 @@ public class ApiQueryService {
         var mappedAssets = mapper.assets(assigned);
         for (int i = 0; i < assigned.size(); i++)
             assignments.computeIfAbsent(assigned.get(i).item.id.toString(), ignored -> new ArrayList<>()).add(mappedAssets.get(i));
-        var sources = new LinkedHashMap<String, String>();
-        orders.reservations(value).stream().filter(r -> r.location != null).forEach(r -> sources.putIfAbsent(r.item.id.toString(), r.location.id.toString()));
         return mapper.order(value, lines, quantities, projectItems(items), projectAssemblies(visibleAssemblies, visibleComponents),
-                orders.history(value).stream().map(mapper::history).toList(), assignments, sources);
+                orders.history(value).stream().map(mapper::history).toList(), assignments, value.sourceAllocations());
     }
 
     @Transactional

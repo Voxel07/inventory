@@ -42,11 +42,6 @@ export function parseItemsFromCsv(
   const results: ParsedItemRow[] = [];
   const locationIndex = buildLocationIndex(storageLocations);
 
-  const existingMap = new Map<string, Item>();
-  for (const item of existingItems) {
-    existingMap.set(item.name.toLowerCase().trim(), item);
-  }
-
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
     if (catalogRowKind(raw) !== 'item') continue;
@@ -166,16 +161,37 @@ export function parseItemsFromCsv(
       bestBeforeDate: bestBeforeDate ? csvDate(bestBeforeDate) : undefined,
     };
 
-    const existing = existingMap.get(name.toLowerCase().trim());
+    const itemId = getField(raw, ['ItemId', 'item_id', 'ArtikelId']);
+    const sku = getField(raw, ['SKU', 'Artikelnummer']);
+    if (sku) data.sku = sku;
+    const normalizedName = name.trim().replace(/\s+/g, ' ').toLowerCase();
+    const candidates = itemId ? existingItems.filter(item => item.id === itemId)
+      : sku ? existingItems.filter(item => item.sku?.toLowerCase() === sku.toLowerCase())
+        : existingItems.filter(item => item.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName
+          && (!locInput || item.storageLocation === storageLocationId && !storageLocationPath));
+    const existing = candidates.length === 1 ? candidates[0] : undefined;
+    const decimalsText = getField(raw, ['QuantityDecimals', 'Mengennachkommastellen']);
+    const capacityText = getField(raw, ['UnitCapacity', 'Gebindeinhalt']);
+    data.unit = getField(raw, ['Unit', 'Einheit']) ?? existing?.unit ?? undefined;
+    data.quantityDecimals = (decimalsText ? Number(decimalsText) : existing?.quantityDecimals ?? 0) as 0 | 2;
+    data.unitCapacity = capacityText ? parseNumber(capacityText, NaN) : existing?.unitCapacity;
+    if (existing && !rawTrackingMode && !lotsInput && !assetCodes.length) data.trackingMode = existing.trackingMode;
+    if (existing && !getField(raw, CONSUMABLE_ALIASES)) data.inventoryRole = existing.inventoryRole;
+    const quantityError = ![0, 2].includes(data.quantityDecimals)
+      || data.quantityDecimals === 2 && (data.inventoryRole !== 'consumable' || !data.unit || !data.unitCapacity || data.unitCapacity <= 0)
+      || amountStr && (!Number.isSafeInteger(parseNumber(amountStr, NaN)) || parseNumber(amountStr, NaN) < 0)
+      ? 'Mengen als ganze Schritte angeben; bei Prozentbestand sind 100 Schritte ein volles Gebinde mit Einheit und Gebindeinhalt' : undefined;
+    const identityError = candidates.length > 1 ? 'Artikel ist mehrdeutig: ItemId oder eindeutige SKU angeben'
+      : itemId && !existing ? 'ItemId oder SKU wurde nicht gefunden' : undefined;
     let status: ParsedItemRow['status'] = 'valid';
     let statusMessage: string | undefined = undefined;
 
     if ([batteryReplacementDue, bestBeforeDate].some(value => value && !Number.isFinite(csvDate(value)))) {
       status = 'error';
       statusMessage = 'Datum muss im Format TT-MM-JJJJ angegeben werden';
-    } else if (lotError || locationError) {
+    } else if (lotError || locationError || identityError || quantityError) {
       status = 'error';
-      statusMessage = lotError || locationError;
+      statusMessage = lotError || locationError || identityError || quantityError;
     } else if (existing) {
       status = 'duplicate';
       statusMessage = `Artikel "${name}" existiert bereits (kann übersprungen oder aktualisiert werden)`;

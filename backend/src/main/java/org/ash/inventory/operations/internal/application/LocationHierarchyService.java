@@ -82,6 +82,14 @@ public class LocationHierarchyService {
             throw ApiException.badRequest("Location " + location.name + " holds no stock; choose a section or storage place");
     }
 
+    /** New stock must enter an active place in an active tree; historical sources may be retired. */
+    public static void requireActiveStockLocation(StorageLocation location) {
+        requireStockLocation(location);
+        var seen = new HashSet<UUID>();
+        for (var cursor = location; cursor != null && seen.add(cursor.id); cursor = cursor.parent)
+            if (!cursor.active) throw ApiException.conflict("Activate the storage location and its ancestors before receiving stock");
+    }
+
     /**
      * An explicit code must be free among the siblings; a code derived from the name is numbered until it is.
      * Only siblings the caller can see count, so a clash never reveals another owner's private location.

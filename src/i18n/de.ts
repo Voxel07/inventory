@@ -299,6 +299,7 @@ export default {
       adjusted: 'Korrigiert',
       reserved: 'Reserviert',
       reservation_released: 'Reservierung aufgehoben',
+      putaway: 'Eingelagert',
       transfer_out: 'Umlagerung (Abgang)',
       transfer_in: 'Umlagerung (Zugang)',
       staged: 'Bereitgestellt',
@@ -1677,6 +1678,7 @@ export default {
       theReservedItemsWillNowBeHandedOver: 'Reservierte Artikel werden jetzt übergeben.',
     },
     generalOrders: {
+      withoutEvent: 'Ohne Veranstaltung',
       statusLabels: {
         preparing: 'In Vorbereitung',
         draft: 'Entwurf',

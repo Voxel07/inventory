@@ -53,11 +53,11 @@ public class ReturnSubmissionService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission create(ApiModels.ReturnSubmissionInput input) {
         var actor = actors.current();
-        actors.requireOrdering();
         var item = orm.requireLockedFresh(Item.class, input.itemId(), "Item");
+        if (!actors.canEditPrivateItem(item)) actors.requireOrdering();
         var returnedFor = input.returnedForUserId() == null ? actor
                 : orm.require(UserAccount.class, input.returnedForUserId(), "Return user");
-        if (!actor.id.equals(returnedFor.id) && !canManageReturns(actor)) {
+        if (!actor.id.equals(returnedFor.id) && !canManageReturns(actor) && !actors.canEditPrivateItem(item)) {
             throw ApiException.forbidden("Only warehouse workers can register a return for another person");
         }
 
@@ -118,8 +118,9 @@ public class ReturnSubmissionService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission acknowledge(UUID id, ApiModels.ReturnDecisionInput input) {
-        actors.requireWarehouse();
         var value = pendingForDecision(id);
+        if (value.order != null || !actors.canEditPrivateItem(value.item)) actors.requireWarehouse();
+        actors.requireItemEdit(value.item);
         var worker = actors.current();
         var before = currentReading(value);
         var reading = runtimeReading(value, input);
@@ -179,8 +180,9 @@ public class ReturnSubmissionService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand(usage = true)
     public ReturnSubmission reject(UUID id, ApiModels.ReturnDecisionInput input) {
-        actors.requireWarehouse();
         var value = pendingForDecision(id);
+        if (value.order != null || !actors.canEditPrivateItem(value.item)) actors.requireWarehouse();
+        actors.requireItemEdit(value.item);
         var worker = actors.current();
         if (value.assetInstance != null) {
             var asset = orm.requireLockedFresh(AssetInstance.class, value.assetInstance.id, "Asset instance");

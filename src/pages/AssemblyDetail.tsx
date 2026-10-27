@@ -1,10 +1,6 @@
 import { formatDate } from '../utils/dateFormat';
 import { formatMoney } from '../utils/money';
-import { useFactionCatalog } from '../hooks/useFactionCatalog';
-import { Button } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
-import { useEventReports } from '../hooks/useEvents';
-import { Dialog } from '../components/shared/ClosableDialog';
 import { MediaImage } from '../components/common/MediaImage';
 import { apiFileUrl } from '../services/apiClient';
 import { useState } from 'react';
@@ -14,18 +10,10 @@ import {
     Typography,
     Paper,
     Chip,
-    DialogActions,
-    DialogContentText,
-    DialogTitle,
-    DialogContent,
     Skeleton,
     Alert,
-    TextField,
-    MenuItem,
 
     Stack,
-    useTheme,
-    useMediaQuery,
 } from '@mui/material';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -36,28 +24,24 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { useAssembly, useUpdateAssembly } from '../hooks/useAssemblies';
 import { useItemsByIds } from '../hooks/useItems';
 import { ItemAutocomplete } from '../components/shared/ItemAutocomplete';
-import { useAssemblyCheckout } from '../hooks/useTransactions';
+import { AssemblyCheckoutForm } from '../components/forms/AssemblyCheckoutForm';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { FormDialog } from '../components/shared/FormDialog';
 import { DamageReportDialog } from '../components/forms/DamageReportDialog';
 import { useUIStore } from '../store/uiStore';
-import type { AssemblyFormData, EventType, Item } from '../types';
-import { getItemStock } from '../utils/stock';
+import type { AssemblyFormData, Item } from '../types';
+import { fromSteps, getItemStock } from '../utils/stock';
 import { ItemsList } from '../components/lists/ItemsList';
 import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canEditCatalog, canOperateWarehouse } from '../utils/access';
+import { canCheckoutItem, canEditCatalog, canOperateWarehouse } from '../utils/access';
 import { InventorySharing } from '../components/items/InventorySharing';
-import { isOfflineQueuedError } from '../utils/offline';
 
 export function AssemblyDetail() {
     const { user } = useAuth();
     const canTransact = canOperateWarehouse(user);
 
     const t = useT();
-    const { eventTypes, factionNames } = useFactionCatalog();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { assemblyId } = useParams<{ assemblyId: string }>();
     const navigate = useNavigate();
     const { data: assembly, isLoading } = useAssembly(assemblyId ?? '');
@@ -66,19 +50,10 @@ export function AssemblyDetail() {
     const itemsQuery = useItemsByIds([...(assembly?.itemIds ?? []), ...Object.keys(assembly?.itemQuantities ?? {})]);
     const items = itemsQuery.data;
     const updateAssembly = useUpdateAssembly();
-    const checkoutAssembly = useAssemblyCheckout();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const [editOpen, setEditOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [damageOpen, setDamageOpen] = useState(false);
-    const [checkoutReason, setCheckoutReason] = useState('');
-    const [checkoutNotes, setCheckoutNotes] = useState('');
-    const [checkoutAmount, setCheckoutAmount] = useState(1);
-    const { data: checkoutEvents = [] } = useEventReports();
-    const [checkoutEventId, setCheckoutEventId] = useState('');
-    const [checkoutEventType, setCheckoutEventType] = useState<EventType | ''>('');
-    const [checkoutFaction, setCheckoutFaction] = useState('');
-
     function handleUpdate(data: AssemblyFormData) {
         if (!assembly) return;
         updateAssembly.mutate(
@@ -89,43 +64,6 @@ export function AssemblyDetail() {
                     showSnackbar(t('pages.assemblyDetail.assemblyUpdated'), 'success');
                 },
                 onError: () => showSnackbar(t('pages.assemblyDetail.couldNotUpdateAssembly'), 'error'),
-            },
-        );
-    }
-
-    function handleCheckout() {
-        const eventType = checkoutEventType;
-        if (!assembly || !eventType || !checkoutFaction || !checkoutEventId) return;
-        const quantities = assembly.itemQuantities ?? {};
-        // Build full quantities map including items with default qty 1, multiplied by checkoutAmount
-        const fullQuantities: Record<string, number> = {};
-        for (const id of assembly.itemIds ?? []) {
-            fullQuantities[id] = (quantities[id] ?? 1) * checkoutAmount;
-        }
-        checkoutAssembly.mutate(
-            {
-                itemQuantities: fullQuantities,
-                assemblyName: assembly.name,
-                reason: checkoutReason || `Assembly checkout: ${assembly.name} (Amount: ${checkoutAmount})`,
-                notes: checkoutNotes,
-                eventType,
-                faction: checkoutFaction,
-                eventOccurrenceId: checkoutEventId,
-            },
-            {
-                onSuccess: () => {
-                    setCheckoutOpen(false);
-                    setCheckoutReason('');
-                    setCheckoutNotes('');
-                    setCheckoutAmount(1);
-                    setCheckoutEventType('');
-                    setCheckoutFaction('');
-                    showSnackbar(t('pages.assemblyDetail.assemblyCheckedOutSuccessfully'), 'success');
-                },
-                onError: (error) => {
-                    if (isOfflineQueuedError(error)) return;
-                    showSnackbar(t('pages.assemblyDetail.couldNotCheckOutAssembly'), 'error');
-                },
             },
         );
     }
@@ -205,7 +143,7 @@ export function AssemblyDetail() {
     }
 
     const totalValue = assemblyItems.reduce(
-        (sum, item) => sum + (item.value ?? 0) * (assembly.itemQuantities?.[item.id] ?? 1), 0,
+        (sum, item) => sum + (item.value ?? 0) * fromSteps(item, assembly.itemQuantities?.[item.id] ?? 1), 0,
     );
 
     // Check which items have insufficient stock
@@ -216,21 +154,8 @@ export function AssemblyDetail() {
     });
 
     const componentsReady = assemblyItems.length === new Set([...(assembly.itemIds ?? []), ...Object.keys(assembly.itemQuantities ?? {})]).size;
+    const maxAssembliesPossible = assemblyItems.length ? Math.min(...assemblyItems.map(item => Math.floor((stockInfo.get(item.id) ?? 0) / (assembly.itemQuantities[item.id] ?? 1)))) : 0;
     const canCheckout = componentsReady && insufficientItems.length === 0 && assemblyItems.length > 0;
-
-    const maxAssembliesPossible = (() => {
-        if (assemblyItems.length === 0) return 0;
-        let minPossible = Infinity;
-        for (const item of assemblyItems) {
-            const needed = assembly.itemQuantities?.[item.id] ?? 1;
-            const available = stockInfo.get(item.id) ?? 0;
-            const possible = Math.floor(available / needed);
-            if (possible < minPossible) {
-                minPossible = possible;
-            }
-        }
-        return minPossible === Infinity ? 0 : minPossible;
-    })();
 
     return (
         <Box>
@@ -248,7 +173,7 @@ export function AssemblyDetail() {
                     canEdit && { key: 'edit', label: t('common.edit'), title: t('pages.assemblyDetail.editAssemblyDetails'), icon: <EditIcon />, onClick: () => setEditOpen(true) },
                     canTransact && { key: 'damage', label: t('common.reportDamage'), title: t('pages.assemblyDetail.reportDamageToThisAssembly'), icon: <ReportProblemOutlinedIcon />,
                         color: 'error', onClick: () => setDamageOpen(true) },
-                    canTransact && { key: 'checkout', label: t('enum.action.checkout'), title: t('pages.assemblyDetail.checkOutAllItemsInThisAssembly'), icon: <ShoppingCartCheckoutIcon />,
+                    assemblyItems.every(item => canCheckoutItem(user, item)) && { key: 'checkout', label: t('enum.action.checkout'), title: t('pages.assemblyDetail.checkOutAllItemsInThisAssembly'), icon: <ShoppingCartCheckoutIcon />,
                         variant: 'contained', pinned: true, disabled: !canCheckout, onClick: () => setCheckoutOpen(true) },
                 ]} />
             </Box>
@@ -354,87 +279,7 @@ export function AssemblyDetail() {
                 loadingMore={false} loadError={itemsQuery.isError}
                 onRetry={() => { void itemsQuery.refetch(); }} />
 
-            {/* Checkout Dialog */}
-            <Dialog open={checkoutOpen} fullScreen={isMobile} onClose={() => setCheckoutOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('pages.assemblyDetail.checkOutAssembly')}</DialogTitle>
-                <DialogContent>
-                    <DialogContentText sx={{ mb: 2 }}>
-                        {t('pages.assemblyDetail.thisChecksOutEveryItemInNameInTheSpecified', { name: String(assembly.name) })}
-                    </DialogContentText>
-                    <TextField select fullWidth required label={t('pages.assemblyDetail.eventOccurrence')} value={checkoutEventId} onChange={(event) => { const occurrence = checkoutEvents.find((entry) => entry.id === event.target.value); setCheckoutEventId(event.target.value); setCheckoutEventType(occurrence?.eventType ?? ''); setCheckoutFaction(''); }}>
-                        {checkoutEvents.filter((event) => event.status !== 'completed').map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}</MenuItem>)}
-                    </TextField>
-                    <TextField
-                        select
-                        label={t('nav.event')}
-                        value={checkoutEventType}
-                        onChange={(e) => {
-                            setCheckoutEventType(e.target.value as EventType); setCheckoutEventId('');
-                            setCheckoutFaction('');
-                        }}
-                        required
-                        fullWidth
-                        sx={{ mb: 2 }}
-                    >
-                        {eventTypes.map((eventType) => (
-                            <MenuItem key={eventType} value={eventType}>{eventType === 'LS' ? 'LightSim' : eventType}</MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        select
-                        label={t('common.faction')}
-                        value={checkoutFaction}
-                        onChange={(e) => setCheckoutFaction(e.target.value)}
-                        required
-                        disabled={!checkoutEventType}
-                        fullWidth
-                        sx={{ mb: 2 }}
-                    >
-                        {factionNames(checkoutEventType).map((faction) => (
-                            <MenuItem key={faction} value={faction}>{faction}</MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label={t('pages.assemblyDetail.quantityToCheckOut')}
-                        type="number"
-                        value={checkoutAmount}
-                        onChange={(e) => {
-                            const val = Math.max(1, Math.min(maxAssembliesPossible, Number(e.target.value) || 1));
-                            setCheckoutAmount(val);
-                        }}
-                        fullWidth
-                        sx={{ mb: 2 }}
-                        slotProps={{ htmlInput: { min: 1, max: maxAssembliesPossible } }}
-                    />
-                    <TextField
-                        label={t('common.reason')}
-                        value={checkoutReason}
-                        onChange={(e) => setCheckoutReason(e.target.value)}
-                        fullWidth
-                        sx={{ mb: 2 }}
-                    />
-                    <TextField
-                        label={t('pages.assemblyDetail.notesOptional')}
-                        value={checkoutNotes}
-                        onChange={(e) => setCheckoutNotes(e.target.value)}
-                        fullWidth
-                        multiline
-                        rows={2}
-                    />
-                </DialogContent>
-                <DialogActions>
-
-                    <Button title={t('pages.assemblyDetail.cancelCheckout')} onClick={() => setCheckoutOpen(false)}>{t('common.cancel')}</Button>
-
-                    <Button title={t('pages.assemblyDetail.checkOutAllItemsInThisAssembly2')}
-                        variant="contained"
-                        onClick={handleCheckout}
-                        disabled={checkoutAssembly.isPending || !checkoutEventType || !checkoutFaction || !checkoutEventId}
-                    >
-                        {t('pages.assemblyDetail.checkOutAllItems')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            {checkoutOpen && <AssemblyCheckoutForm assembly={assembly} items={assemblyItems} onClose={() => setCheckoutOpen(false)} />}
 
             {/* Edit Dialog */}
             <FormDialog open={editOpen} onClose={() => setEditOpen(false)}>

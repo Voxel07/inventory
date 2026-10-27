@@ -96,7 +96,8 @@ public final class ApiModels {
 
     public record PreparationInput(Map<@NotNull UUID, @NotNull @Min(0) Integer> preparedQuantities,
             Map<@NotNull UUID, @NotNull List<@NotNull UUID>> assetAssignments,
-            boolean acknowledgeShortages, UUID idempotencyKey, String notes, Map<UUID, UUID> sourceLocations) {}
+            boolean acknowledgeShortages, UUID idempotencyKey, String notes,
+            Map<@NotNull UUID, @NotNull Map<@NotNull UUID, @NotNull @Min(1) Integer>> sourceAllocations) {}
     /** {@code missing} is the unresolved total after this command; the other quantities are reconciled now. Consumables are consumed at pickup. */
     public record ReturnLine(
             @Min(0) int returned, @Min(0) int missing, @Min(0) int damaged,
@@ -129,7 +130,7 @@ public final class ApiModels {
             UUID itemId, @Min(1) int amount, @NotBlank @jakarta.validation.constraints.Size(max = 2000) String description,
             @NotNull DomainEnums.DamageSeverity severity, UUID orderId, UUID idempotencyKey,
             UUID assetInstanceId, UUID handoverId, boolean safetyImpact, UUID assemblyId,
-            @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
+            @jakarta.validation.constraints.PastOrPresent Instant occurredAt, UUID positionId) {}
     public record DamageResolutionInput(
             DomainEnums.DamageStatus status, @Min(1) Integer amount, String notes, UUID idempotencyKey,
             String description, DomainEnums.DamageSeverity severity,

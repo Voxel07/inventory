@@ -48,7 +48,7 @@ public class TransferService {
 
     @Transactional
     public List<TransferDtos.TransferResponse> list(String status, int page, int size) {
-        actors.requireWarehouse();
+        actors.current();
         try { return responses(orm.transfers(status, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown transfer status"); }
     }
@@ -57,14 +57,13 @@ public class TransferService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse create(TransferDtos.TransferInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var existing = orm.byIdempotencyKey(input.idempotencyKey());
-        if (existing != null) return responses(List.of(existing)).getFirst();
+        if (existing != null) { authorize(existing); return responses(List.of(existing)).getFirst(); }
         var source = orm.require(StorageLocation.class, input.sourceLocationId(), "Source location");
         var destination = orm.require(StorageLocation.class, input.destinationLocationId(), "Destination location");
-        if (!source.active || !destination.active) throw ApiException.conflict("Transfer locations must be active");
+        actors.requireLocationEdit(source); actors.requireLocationEdit(destination);
         LocationHierarchyService.requireStockLocation(source);
-        LocationHierarchyService.requireStockLocation(destination);
+        LocationHierarchyService.requireActiveStockLocation(destination);
         if (source.id.equals(destination.id)) throw ApiException.badRequest("Transfer locations must differ");
         var transfer = new InventoryTransfer();
         transfer.transferNumber = uniqueNumber(input.transferNumber());
@@ -83,6 +82,7 @@ public class TransferService {
                 .forEach(itemId -> orm.requireLocked(Item.class, itemId, "Item"));
         for (var lineInput : input.lines()) {
             var item = orm.require(Item.class, lineInput.itemId(), "Item");
+            actors.requireItemEdit(item);
             if (!item.active) throw ApiException.conflict("Transfer item must be active");
             var line = new InventoryTransferLine();
             line.transfer = transfer;
@@ -132,8 +132,8 @@ public class TransferService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse dispatch(UUID id, TransferDtos.CommandInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
+        authorize(transfer);
         if (orm.commandApplied(id, input.idempotencyKey())) {
             return response(transfer, orm.lockedLines(transfer));
         }
@@ -180,8 +180,8 @@ public class TransferService {
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse receive(UUID id, TransferDtos.ReceiveInput input) {
         var actor = actors.current();
-        actors.requireWarehouse();
         var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
+        authorize(transfer);
         if (orm.commandApplied(id, input.idempotencyKey())) {
             return response(transfer, orm.lockedLines(transfer));
         }
@@ -220,8 +220,9 @@ public class TransferService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public TransferDtos.TransferResponse cancel(UUID id, TransferDtos.CommandInput input) {
-        actors.requireWarehouse();
+        actors.current();
         var transfer = orm.requireLocked(InventoryTransfer.class, id, "Transfer");
+        authorize(transfer);
         if (transfer.status == DomainEnums.TransferStatus.cancelled) return response(transfer, orm.lockedLines(transfer));
         if (transfer.status != DomainEnums.TransferStatus.requested && transfer.status != DomainEnums.TransferStatus.picking) {
             throw ApiException.conflict("Only an undispatched transfer can be cancelled");
@@ -233,8 +234,15 @@ public class TransferService {
         return response(transfer, orm.lockedLines(transfer));
     }
 
+    private void authorize(InventoryTransfer transfer) {
+        actors.requireLocationEdit(transfer.sourceLocation);
+        actors.requireLocationEdit(transfer.destinationLocation);
+        for (var line : orm.lines(List.of(transfer))) actors.requireItemEdit(line.item);
+    }
+
     private void receiveLine(InventoryTransfer transfer, InventoryTransferLine line,
             TransferDtos.ReceiveLineInput input, UserAccount actor, UUID commandId) {
+        if (input.receivedQuantity() > 0) LocationHierarchyService.requireActiveStockLocation(transfer.destinationLocation);
         orm.requireLocked(Item.class, line.item.id, "Item");
         if (line.assetInstance != null) {
             var asset = orm.requireLocked(AssetInstance.class, line.assetInstance.id, "Asset");

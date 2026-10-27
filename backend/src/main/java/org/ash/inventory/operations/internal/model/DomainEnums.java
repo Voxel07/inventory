@@ -20,7 +20,7 @@ public final class DomainEnums {
     public enum MaintenanceType { dguv_v3, generator_service, battery_test, chrono_fps }
     public enum MaintenanceResult { passed, failed, advisory }
     public enum OrderStatus { draft, submitted, preparing, ready, picked_up, partially_returned, returned, closed, cancelled }
-    public enum TransactionType { received, adjusted, reserved, reservation_released, transfer_out, transfer_in, staged, checkout, checkin, added, consumed, damaged, missing, repaired, written_off }
+    public enum TransactionType { received, adjusted, putaway, reserved, reservation_released, transfer_out, transfer_in, staged, checkout, checkin, added, consumed, damaged, missing, repaired, written_off }
     public enum DamageSeverity { low, medium, high, critical, total_loss }
     public enum DamageStatus { reported, triaged, awaiting_repair, in_review, in_repair, repaired, verified, returned_to_service, written_off, resolved }
     public enum ReservationStatus { active, partially_released, converted_to_custody, released, closed }

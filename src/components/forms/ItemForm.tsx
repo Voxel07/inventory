@@ -328,6 +328,7 @@ export function ItemForm({
                             fullWidth
                             label={t('forms.itemForm.inventoryRole')}
                             required
+                            disabled={hasStock}
                             value={formData.inventoryRole ?? 'returnable'}
                             onChange={(event) => {
                                 const inventoryRole = event.target.value as ItemFormData['inventoryRole'];

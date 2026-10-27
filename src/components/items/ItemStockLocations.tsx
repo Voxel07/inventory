@@ -33,14 +33,15 @@ export function ItemStockLocations({ item }: { item: Item }) {
   }
   const error = positions.error || assets.error || locations.error;
   const ready = serialized ? assets.isComplete : positions.isComplete;
-  if (!error && (!ready || quantities.size <= 1)) return null;
+  const showLocations = quantities.size > 1 || (quantities.size === 1 && !quantities.has(item.storageLocation ?? ''));
+  if (!error && (!ready || !showLocations)) return null;
   const rows = [...quantities].map(([id, stock]) => {
     const location = locations.data?.find(location => location.id === id);
     return { id, quantity: stock.quantity, name: location ? locationPath(location, locations.data ?? []) : stock.name ?? id };
   }).sort((a, b) => a.name.localeCompare(b.name));
   return <DetailPanel title={t('items.itemStockLocations.stockByLocation')}>
     <QueryFeedback error={error} />
-    {ready && quantities.size > 1 && <TableContainer>
+    {ready && showLocations && <TableContainer>
       <Table size="small" aria-label={t('items.itemStockLocations.stockByLocation')} sx={{ '& .MuiTableCell-root': { py: 0.25, fontSize: '0.8125rem' } }}>
         <TableHead><TableRow><TableCell>{t('common.storageLocation')}</TableCell><TableCell align="right">{t('items.itemStockLocations.onHand')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map(row => <TableRow key={row.id}>

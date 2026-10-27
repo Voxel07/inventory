@@ -73,7 +73,7 @@ public final class ApiResponses {
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
             List<OrderHistoryResponse> history,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, Map<String, Integer>> sourceAllocations
     ) implements OrderDetail {}
 
     public record GeneralOrderSummaryResponse(
@@ -97,7 +97,7 @@ public final class ApiResponses {
             Map<String, Integer> missingQuantities,
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, String> sourceLocations
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, Map<String, Integer>> sourceAllocations
     ) {}
 
     public record DevLoginResponse(
@@ -364,7 +364,7 @@ public final class ApiResponses {
             List<OrderLineResponse> lines,
             List<OrderHistoryResponse> history,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
-            , Map<String, String> sourceLocations
+            , Map<String, Map<String, Integer>> sourceAllocations
     ) implements OrderDetail {}
 
     /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */

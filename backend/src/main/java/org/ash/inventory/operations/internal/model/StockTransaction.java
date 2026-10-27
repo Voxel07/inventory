@@ -18,6 +18,10 @@ import java.util.UUID;
 @Entity
 @Table(name = "stock_transactions")
 public class StockTransaction extends BaseEntity {
+    /** Original checkout/position quantities settled by this return or custody write-off. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "issue_quantities", columnDefinition = "jsonb", nullable = false)
+    public java.util.Map<String, Integer> issueQuantities = new java.util.LinkedHashMap<>();
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "lot_id") public InventoryLot lot;
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "position_quantities", columnDefinition = "jsonb")

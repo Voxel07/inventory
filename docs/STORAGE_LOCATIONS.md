@@ -27,8 +27,14 @@ Garage - Matze (private)         same model for tenants and members
 - **Codes.** Each level has a short code that is unique among the siblings its editor can see; it is derived from the name (`Regal 3` → `R3`) unless one is given. A rename keeps the existing code. `fullCode` joins the codes from the location down (`BH-CE-R2-F7`). Labels and CSV import accept the full code, the path (`Betriebshof / Lager / Regal 3`) or a unique name.
 - **Privacy.** A location (site) is public (staff) or private (owner). Everything inside a private location is private. Shares of a location apply to everything below it and to the items stored there.
 - **Map.** Locations and sections keep coordinates and a floor-plan overlay. Storage places show the map of their nearest section or location.
-- **Retirement.** Locations are deactivated, never deleted. Children have to be deactivated first.
+- **Retirement.** Locations are deactivated, never deleted. Children have to be deactivated first. New stock, receipts, registrations, returns and relocations require an active destination and active ancestors. Existing stock may leave a retired source.
 - **Filters.** A location used as a filter (items, counts, reports, MCP `list_storage_locations`) covers its whole subtree.
+
+## Stock allocation
+
+One item may occupy many positions; lot stock has a separate position for each lot/place. Home and return places are defaults, not the complete physical inventory. Editing home does not move existing positions/assets. It puts away any genuinely unlocated bulk stock, preserving damage allocations and owned totals through a neutral `putaway` movement. Positive lot stock requires a receiving place.
+
+Preparation reserves exact positions and can split one item across places/lots. Transfers explicitly move stock through transit. Order returns credit the configured return place (otherwise home), preserving issued lots. A private secondary place does not change an item's ownership or inherited audience; both item and place permissions apply.
 
 ## Flow
 

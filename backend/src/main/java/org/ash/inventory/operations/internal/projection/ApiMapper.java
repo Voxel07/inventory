@@ -98,7 +98,7 @@ public class ApiMapper {
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.operations.internal.model.OrderLine::reconciledAssetIds),
                 history.stream().map(this::history).toList(),
-                Map.of("createdBy", actor(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
+                Map.of("createdBy", actor(value.createdBy)), value.sourceAllocations()
         );
     }
 
@@ -124,7 +124,7 @@ public class ApiMapper {
                 value.quantities(line -> line.missingQuantity),
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.operations.internal.model.OrderLine::reconciledAssetIds),
-                Map.of("createdBy", actor(value.createdBy)), value.perItem(line -> line.sourceLocation == null ? null : line.sourceLocation.id.toString())
+                Map.of("createdBy", actor(value.createdBy)), value.sourceAllocations()
         );
     }
 
@@ -406,7 +406,7 @@ public class ApiMapper {
     public ApiResponses.OrderResponse order(InventoryOrder value, List<OrderLine> lines,
             Map<AssemblyItemId, Integer> componentQuantities, List<ApiResponses.ItemResponse> itemViews,
             List<ApiResponses.AssemblyResponse> assemblyViews, List<ApiResponses.OrderHistoryResponse> history,
-            Map<String, List<ApiResponses.AssetInstanceResponse>> assetAssignments, Map<String, String> sourceLocations) {
+            Map<String, List<ApiResponses.AssetInstanceResponse>> assetAssignments, Map<String, Map<String, Integer>> sourceAllocations) {
         var orderLines = new ArrayList<ApiResponses.OrderLineResponse>();
         var quantities = OrderQuantities.from(lines, componentQuantities);
         var requested = quantities.requested();
@@ -500,7 +500,7 @@ public class ApiMapper {
                 orderLines,
                 history,
                 expand,
-                sourceLocations
+                sourceAllocations
         );
     }
 

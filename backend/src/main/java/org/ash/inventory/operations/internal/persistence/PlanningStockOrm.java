@@ -42,7 +42,7 @@ public class PlanningStockOrm {
     private static final String SNAPSHOT_SQL = """
             with scope as (select id, inventory_role, availability_policy, access_policy_id from items where id in (:itemIds)),
             ledger as (
-                select t.item_id, t.asset_instance_id, t.type, t.quantity, t.custody_write_off, t.created_at
+                select t.item_id, t.asset_instance_id, t.type, case when t.type = 'missing' and t.related_entity_type = 'inventory_transfer' then 0 else t.quantity end as quantity, t.custody_write_off, t.created_at
                 from stock_transactions t join scope s on s.id = t.item_id
             )
             """ + String.join("\nunion all\n",

@@ -48,6 +48,7 @@ public class MovementReversalService {
         value.reverses=original;value.reversedBy=actors.current();value.reason=input.reason().trim();value.notes="Reversal of "+id;value.idempotencyKey=input.commandId();value.clientCommandId=input.commandId();
         value.eventOccurrence=original.eventOccurrence;value.eventType=original.eventType;value.faction=original.faction;
         value.sourceLocation=original.sourceLocation;value.destinationLocation=original.destinationLocation;value.lot=original.lot;
+        original.issueQuantities.forEach((key, quantity) -> value.issueQuantities.put(key, -quantity));
         value.availabilityBefore=inventory.stock(original.item).available();
         if(original.assetInstance==null && (original.type==DomainEnums.TransactionType.added || original.type==DomainEnums.TransactionType.adjusted)
                 && original.quantity>stockReads.physicalStock(original.item).available())

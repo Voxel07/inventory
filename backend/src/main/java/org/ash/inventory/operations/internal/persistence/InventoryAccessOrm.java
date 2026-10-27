@@ -206,6 +206,8 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select source_location_id as source, id as target from stock_transactions where source_location_id is not null
                 union all select destination_location_id as source, id as target from stock_transactions where destination_location_id is not null
                 union all select location_id as source, id as target from stock_reservations where location_id is not null
+                union all select position_id as source, id as target from stock_reservations where position_id is not null
+                union all select id as source, order_id as target from stock_reservations
                 union all select location_id as source, id as target from member_requests where location_id is not null
                 union all select provider_location_id as source, id as target from loan_arrangements where provider_location_id is not null
                 union all select location_id as source, id as target from custody_handovers where location_id is not null
