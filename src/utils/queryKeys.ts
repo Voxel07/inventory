@@ -7,7 +7,6 @@ export const queryKeys = {
   inbox: (userId?: string) => ['action-inbox', userId] as const,
   notificationSettings: (userId?: string) => ['notification-settings', userId] as const,
   member: (kind: 'custody' | 'storage' | 'requests', userId?: string) => [`member-${kind}`, userId] as const,
-  memberAssignments: () => ['member-assignments'] as const,
   reportDefinitions: () => ['reports', 'definitions'] as const,
   report: (name: string, filters: object, page: number) => ['reports', name, filters, page] as const,
 };

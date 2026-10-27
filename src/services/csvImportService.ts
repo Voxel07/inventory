@@ -11,7 +11,7 @@ import { createAssembly } from './assemblyService';
 import { createEventReport, getEventReports, updateEventReport } from './eventService';
 import { createFactionOrder, getFactionOrders, getFactionOrder, submitFactionOrder, updateFactionOrder, saveFactionOrderPreparation, markFactionOrderReady, pickUpFactionOrder, returnFactionOrder, closeFactionOrder } from './factionOrderService';
 import { createTransaction, getTransactions } from './transactionService';
-import { createOrder, generalOrderCommand, getOrders, returnOrder, transitionOrder } from './orderService';
+import { createOrder, generalOrderApi, generalOrderCommand, returnOrder, transitionOrder } from './orderService';
 import { createStorageLocation } from './storageLocationService';
 import { buildLocationIndex, normalizeLocationRef } from '../utils/csv/locations';
 import { getItemStock } from '../utils/stock';
@@ -411,7 +411,7 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
 
     // Step 6: Simulate general orders using the same lifecycle as the order page.
     const existingGeneralOrders = parsedGeneralOrders.length > 0
-      ? await loadAllPages((page, size) => getOrders(undefined, page, size)) : [];
+      ? await loadAllPages((page, size) => generalOrderApi.getPage(undefined, page, size)) : [];
     for (const row of parsedGeneralOrders.filter((order) => order.status === 'valid')) {
       setImportStatusText(t('services.csvImportService.importingGeneralOrderName', { name: String(row.data.name) }));
       try {

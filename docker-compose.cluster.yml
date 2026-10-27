@@ -47,9 +47,11 @@ x-inventory-api: &inventory-api
     DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
     INVENTORY_NOTIFICATION_WEBHOOK_URL: ${INVENTORY_NOTIFICATION_WEBHOOK_URL:-}
     INVENTORY_NOTIFICATION_WEBHOOK_TOKEN: ${INVENTORY_NOTIFICATION_WEBHOOK_TOKEN:-}
-    # ntfy push server (e.g. https://ntfy.sh); users pick their topic on the profile page.
+    # ntfy push server the API publishes to: HTTPS (e.g. https://ntfy.sh) or an internal container (http://ntfy).
+    # The public URL is the subscribe address shown on the profile page (empty: the publish URL).
     # Auth: an access token (tk_...) or username/password; leave empty for open servers.
     INVENTORY_NOTIFICATION_NTFY_URL: ${INVENTORY_NOTIFICATION_NTFY_URL:-}
+    INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL: ${INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL:-}
     INVENTORY_NOTIFICATION_NTFY_TOKEN: ${INVENTORY_NOTIFICATION_NTFY_TOKEN:-}
     INVENTORY_NOTIFICATION_NTFY_USERNAME: ${INVENTORY_NOTIFICATION_NTFY_USERNAME:-}
     INVENTORY_NOTIFICATION_NTFY_PASSWORD: ${INVENTORY_NOTIFICATION_NTFY_PASSWORD:-}

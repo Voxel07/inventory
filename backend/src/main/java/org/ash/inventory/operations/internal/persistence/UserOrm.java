@@ -52,13 +52,20 @@ public class UserOrm {
     }
 
     public UserAccount find(UUID id) { return entityManager.find(UserAccount.class, id); }
+    public java.util.Map<UUID, UserAccount> byIds(Collection<UUID> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        return entityManager.createQuery("from UserAccount user where user.id in :ids", UserAccount.class).setParameter("ids", ids)
+                .getResultStream().collect(java.util.stream.Collectors.toMap(user -> user.id, user -> user));
+    }
     public boolean isManaged(UserAccount user) { return entityManager.contains(user); }
-    public List<UserAccount> users(String search, int offset, int limit) {
+    /** Active accounts that can be assigned work; {@code minimum} limits them to that role or higher. */
+    public List<UserAccount> assignable(String search, DomainEnums.UserRole minimum, int offset, int limit) {
         boolean searching = search != null && !search.isBlank();
-        var query = entityManager.createQuery("from UserAccount user"
-                + (searching ? " where lower(user.name) like :search or lower(user.email) like :search" : "")
-                + " order by user.name, user.email, user.id", UserAccount.class);
-        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
+        var roles = java.util.Arrays.stream(DomainEnums.UserRole.values()).filter(role -> role.atLeast(minimum)).toList();
+        var query = entityManager.createQuery("from UserAccount user where user.active = true and user.role in :roles"
+                + (searching ? " and lower(user.name) like :search escape '!'" : "")
+                + " order by user.name, user.id", UserAccount.class).setParameter("roles", roles);
+        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public boolean adminExists() {

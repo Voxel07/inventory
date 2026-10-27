@@ -5,7 +5,7 @@ import { abortable, isAbortError } from './abort';
 const TRANSACTION_KEY = 'ash.inventory.oidc.transaction';
 const TRANSACTION_MAX_AGE_MS = 10 * 60 * 1000;
 /** Upper bound of one provider request; refreshes hold the cross-tab session lock while they wait. */
-export const OIDC_REQUEST_TIMEOUT_MS = 15_000;
+const OIDC_REQUEST_TIMEOUT_MS = 15_000;
 
 type OidcMetadata = {
   issuer: string;
@@ -50,7 +50,7 @@ export type OidcTokenSet = {
   expiresAt: number | null;
 };
 
-export class OidcTokenRequestError extends Error {
+class OidcTokenRequestError extends Error {
   readonly status: number;
   readonly code?: string;
 
@@ -67,7 +67,7 @@ export class OidcTokenRequestError extends Error {
 }
 
 /** The provider did not answer in time; a temporary failure like any other network error. */
-export class OidcTimeoutError extends Error {
+class OidcTimeoutError extends Error {
   constructor(what: string) {
     super(translate('services.oidcClient.oIDCProviderDidNotRespondInTimeWhat', { what: what }));
     this.name = 'OidcTimeoutError';

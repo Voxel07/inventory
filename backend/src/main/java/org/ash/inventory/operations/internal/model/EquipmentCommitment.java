@@ -13,8 +13,8 @@ import java.util.List;
 @Entity
 @Table(name = "equipment_commitments")
 public class EquipmentCommitment extends BaseEntity {
-    @ManyToOne(optional = false) @JoinColumn(name = "item_id") public Item item;
-    @ManyToOne @JoinColumn(name = "event_id") public EventOccurrence event;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "event_id") public EventOccurrence event;
     @Column(nullable = false) public int quantity;
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "asset_ids", columnDefinition = "jsonb", nullable = false)
     public List<String> assetIds = new ArrayList<>();
@@ -26,5 +26,5 @@ public class EquipmentCommitment extends BaseEntity {
     @Column(nullable = false) public String notes;
     @Column(nullable = false) public boolean cancelled;
     @Column(name = "cancellation_reason") public String cancellationReason;
-    @ManyToOne(optional = false) @JoinColumn(name = "recorded_by") public UserAccount recordedBy;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "recorded_by") public UserAccount recordedBy;
 }

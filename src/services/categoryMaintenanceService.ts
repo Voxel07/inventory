@@ -1,6 +1,6 @@
 import { apiRequest } from './apiClient';
 
-export interface CategoryMaintenancePolicy {
+interface CategoryMaintenancePolicy {
   category: string;
   intervalDays: number;
 }

@@ -13,7 +13,7 @@ export function createCreateResourceHooks<T extends { id: string }, TForm>(api: 
   };
 }
 
-export function createMutableResourceHooks<T extends { id: string }, TForm>(api: MutableResourceApi<T, TForm>, queryKey: string) {
+function createMutableResourceHooks<T extends { id: string }, TForm>(api: MutableResourceApi<T, TForm>, queryKey: string) {
   return {
     ...createCreateResourceHooks(api, queryKey),
     useDetail(id?: string) {

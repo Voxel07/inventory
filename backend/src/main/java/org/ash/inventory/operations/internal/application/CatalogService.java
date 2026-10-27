@@ -75,12 +75,12 @@ public class CatalogService {
     }
 
     public List<UUID> getVisibleItemIds() {
-        var actor = actorService.current();
+        actorService.current();
         return orm.visibleItemIds();
     }
 
     public List<String> getVisibleCategories() {
-        var actor = actorService.current();
+        actorService.current();
         return orm.categories();
     }
 
@@ -431,8 +431,6 @@ public class CatalogService {
             runtime.record(item, null, input.currentOperatingHours(), null, null, RuntimeEntry.Source.correction, note);
     }
 
-    public boolean managesInventory(UserAccount actor) { return canManageInventory(actor); }
-
     private boolean canManageInventory(UserAccount actor) {
         return actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
     }
@@ -779,11 +777,7 @@ public class CatalogService {
         return orm.assetInstances(item);
     }
 
-    public List<AssetInstance> getAssets(UUID itemId, int offset, int limit) {
-        var item = getVisibleItem(itemId);
-        return orm.assetInstances(item, offset, limit);
-    }
-
+    /** {@code status} null: assets in every state. */
     public List<AssetInstance> getAssets(UUID itemId, DomainEnums.AssetState status, int offset, int limit) {
         return orm.assetInstances(getVisibleItem(itemId), status, offset, limit);
     }

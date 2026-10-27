@@ -30,7 +30,7 @@ import type { FactionOrder, FactionOrderStatus, StorageLocation } from '../../..
 import { translate, useT } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
-export interface OrderDetailHeaderProps {
+interface OrderDetailHeaderProps {
   order: FactionOrder;
   orderItemsCount: number;
   orderAssembliesCount: number;

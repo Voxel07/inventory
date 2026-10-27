@@ -20,7 +20,7 @@ export function useAppLanguage(): AppLanguage {
   );
 }
 
-export type NamingGroup =
+type NamingGroup =
   | 'itemStatus'
   | 'damageStatus'
   | 'severity'

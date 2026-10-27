@@ -61,9 +61,7 @@ public class ReturnSubmissionService {
             throw ApiException.forbidden("Only warehouse workers can register a return for another person");
         }
 
-        var balance = custody.list(false).stream().filter(row -> row.itemId().equals(item.id)
-                && row.personId().equals(returnedFor.id)
-                && java.util.Objects.equals(row.orderId(), input.orderId())
+        var balance = custody.of(returnedFor.id, item.id).stream().filter(row -> java.util.Objects.equals(row.orderId(), input.orderId())
                 && (row.factionOrder() || java.util.Objects.equals(row.assetInstanceId(), input.assetInstanceId()))
                 && (input.orderId() != null || java.util.Objects.equals(row.eventOccurrenceId(), input.eventOccurrenceId())))
                 .findFirst().orElseThrow(() -> ApiException.conflict("No matching outstanding custody; return order items through their order"));

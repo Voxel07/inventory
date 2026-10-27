@@ -3,7 +3,7 @@ import { getAssetByCode, getItem, getItemBySku, getSavedItemByCode, itemApi } fr
 import { ApiError } from '../services/apiClient';
 import { getAssembly } from '../services/assemblyService';
 
-export interface CodeResolutionResult {
+interface CodeResolutionResult {
   found: boolean;
   type?: 'order' | 'item' | 'assembly' | 'location';
   path?: string;

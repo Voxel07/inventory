@@ -4,7 +4,7 @@ export type AttendeeRoleKind = 'faction_leader' | 'faction_deputy' | 'faction_hq
 export const FACTION_ROLES: readonly AttendeeRoleKind[] = ['faction_leader', 'faction_deputy', 'faction_hq_crew'];
 export const ATTENDEE_ROLES: readonly AttendeeRoleKind[] = [...FACTION_ROLES, 'as_held', 'event_crew'];
 
-export interface AttendeeRoleInput {
+interface AttendeeRoleInput {
   role: AttendeeRoleKind;
   factionId: string | null;
   /** Work assigned to event crew. */

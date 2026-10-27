@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
 /** Page size sentinel meaning "render the whole collection on one page". */
-export const SHOW_ALL_PAGE_SIZE = -1;
+const SHOW_ALL_PAGE_SIZE = -1;
 
-export interface UseClientPaginationOptions {
+interface UseClientPaginationOptions {
   initialPage?: number;
   initialPageSize?: number;
 }

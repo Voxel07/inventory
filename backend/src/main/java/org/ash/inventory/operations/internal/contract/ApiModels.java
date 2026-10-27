@@ -141,7 +141,7 @@ public final class ApiModels {
             String certificateNumber, String notes, UUID assetInstanceId, UUID scheduleId,
             String certificateObjectKey) {}
 
-    public record DevLoginInput(@NotBlank String email, String password) {}
+    public record DevLoginInput(@NotBlank String email) {}
     /** The current user's delivery channels: ntfy topic (ntfy topic syntax) and HTTPS webhook URL; null or blank clears one. */
     public record NotificationSettingsInput(@jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{1,64}|") String ntfyTopic,
             @jakarta.validation.constraints.Size(max = 2048) String webhookUrl) {}

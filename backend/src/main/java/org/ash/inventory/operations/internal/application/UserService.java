@@ -20,6 +20,7 @@ public class UserService {
     private final UserOrm users;
     @jakarta.inject.Inject ActorService actors;
     @jakarta.inject.Inject DomainEventService events;
+    @jakarta.inject.Inject NtfyTopicFeed adminTopics;
 
     public UserService(UserOrm users) {
         this.users = users;
@@ -63,8 +64,10 @@ public class UserService {
             try { webhook = PersonalWebhookPublisher.validate(webhook); }
             catch (IllegalArgumentException invalid) { throw ApiException.badRequest(invalid.getMessage()); }
         }
+        String topic = input.ntfyTopic() == null || input.ntfyTopic().isBlank() ? null : input.ntfyTopic();
+        if (adminTopics.reserved(topic)) throw ApiException.badRequest("This ntfy topic is reserved for administrator notifications");
         var user = users.findLocked(actors.current().id);
-        user.ntfyTopic = input.ntfyTopic() == null || input.ntfyTopic().isBlank() ? null : input.ntfyTopic();
+        user.ntfyTopic = topic;
         user.webhookUrl = webhook;
         return user;
     }

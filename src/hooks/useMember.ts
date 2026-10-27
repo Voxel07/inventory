@@ -11,4 +11,3 @@ export function useMember() {
   const requests = usePagedList(queryKeys.member('requests', user?.id), memberApi.requests, options);
   return { custody, stored, requests };
 }
-export const useMemberAssignments = () => useQuery({ queryKey: queryKeys.memberAssignments(), queryFn: memberApi.assignments });

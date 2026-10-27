@@ -36,7 +36,6 @@ public class MemberService {
             DomainEnums.DamageSeverity severity) {}
     public record Decision(@NotNull Long revision, @NotBlank @Size(max=2000) String response, boolean resolved) {}
     public record Assignment(UUID userId) {}
-    public record LocationView(UUID id, String name, UUID userId) {}
     public record RequestView(UUID id, UUID itemId, String item, String requester, String kind, int quantity,
             String notes, String status, String response, Instant createdAt, long revision, UUID assetId, UUID locationId, UUID damageReportId) {}
     public record ReturnInput(@NotBlank String custodyKey, @Min(1) int quantity, UUID assetId, @Size(max=255) String notes, @NotNull UUID commandId) {}
@@ -72,12 +71,6 @@ public class MemberService {
         for (var a : orm.storedAssets(actor))
             result.add(new Stored(a.item.id, a.item.name, a.currentLocation.id, a.currentLocation.name, a.id, a.assetCode, 1));
         return result;
-    }
-    @Transactional
-    public List<LocationView> assignments() {
-        actors.requireWarehouse();
-        return orm.locations()
-                .map(l -> new LocationView(l.id, l.name, l.keeperUser == null ? null : l.keeperUser.id)).toList();
     }
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand

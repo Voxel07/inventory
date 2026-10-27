@@ -62,7 +62,6 @@ public class ApiMapper {
                 value.createdAt,
                 value.updatedAt,
                 value.name,
-                value.name,
                 value.email,
                 value.role.name(),
                 value.roles.stream().map(Enum::name).toList(),
@@ -72,7 +71,7 @@ public class ApiMapper {
     }
 
     public ApiResponses.ActorSummary actor(UserAccount value) {
-        return new ApiResponses.ActorSummary(value.id, value.name, value.name);
+        return new ApiResponses.ActorSummary(value.id, value.name);
     }
 
     public ApiResponses.GeneralOrderResponse generalOrder(InventoryOrder value, Map<String, String> itemNames,
@@ -195,8 +194,7 @@ public class ApiMapper {
                 canViewLocation(value.parent) ? value.parent.id.toString() : null,
                 value.active, accessPolicies.projection(value.accessPolicy), locationPath(value),
                 !staff || value.keeperUser == null ? null : value.keeperUser.id,
-                !staff || value.keeperUser == null ? null : value.keeperUser.name,
-                !staff || value.keeperUser == null ? null : value.keeperUser.email
+                !staff || value.keeperUser == null ? null : value.keeperUser.name
         );
     }
 

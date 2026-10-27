@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { initializeAuth } from './services/apiClient.ts'
 import './services/offlineSnapshot.ts'
 import { initializePwaInstallation } from './services/pwaInstallation.ts'
+import { initializeI18n } from './i18n/index.ts'
 
 // Capture installation events before authentication or React startup can delay the UI.
 initializePwaInstallation()
@@ -20,6 +21,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && window.isSecureConte
 }
 
 async function bootstrap() {
+  // Auth start-up can report translated errors, so the active catalog loads first (its download started on import).
+  await initializeI18n()
   await initializeAuth()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

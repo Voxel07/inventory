@@ -56,32 +56,6 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
     serviceWorkerBuildId(),
   ],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('@mui/x-data-grid') || id.includes('@mui/x-internals')) {
-              return 'mui-grid-vendor';
-            }
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'react-vendor';
-            }
-            if (id.includes('@mui') || id.includes('@emotion')) {
-              return 'mui-vendor';
-            }
-            if (id.includes('recharts')) {
-              return 'recharts-vendor';
-            }
-            if (id.includes('jspdf')) {
-              return 'jspdf-vendor';
-            }
-            if (id.includes('leaflet')) {
-              return 'leaflet-vendor';
-            }
-          }
-        }
-      }
-    }
-  }
+  // No manualChunks: Rolldown pulls a manual chunk's dependencies (clsx, reselect, ...) into it, so every importer
+  // of such a helper loaded the data grid, jsPDF and Leaflet vendors at startup. Automatic splitting keeps them lazy.
 })

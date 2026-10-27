@@ -228,7 +228,7 @@ public class InventoryAccessOrm extends EntityOrm {
                 union all select purchase_order_id as source, id as target from goods_receipts where purchase_order_id is not null
             """;
 
-    /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly. */
+    /** IDs of evidence/aggregates that must not reveal an unauthorized item or location indirectly (forward walk; the regression oracle for {@link #privateReferenceOrigins}). */
     public Map<UUID, Set<UUID>> referenceOrigins(Set<UUID> roots) {
         if (roots.isEmpty()) return Map.of();
         String sql = "with recursive edges(source, target) as not materialized (" + REFERENCE_EDGES + "), " + """
@@ -246,10 +246,6 @@ public class InventoryAccessOrm extends EntityOrm {
             result.computeIfAbsent(UUID.fromString(row[0].toString()), ignored -> new HashSet<>()).add(UUID.fromString(row[1].toString()));
         }
         return result;
-    }
-
-    public Set<UUID> relatedReferences(Set<UUID> roots) {
-        return referenceOrigins(roots).values().stream().flatMap(Set::stream).collect(java.util.stream.Collectors.toSet());
     }
 
     /** Walk only the ancestors of IDs present in a response or command. */

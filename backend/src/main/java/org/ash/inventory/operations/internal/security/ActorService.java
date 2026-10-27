@@ -41,13 +41,15 @@ import java.util.TreeSet;
 public class ActorService {
     /** Issuer recorded for header-based development accounts. */
     public static final String DEV_ISSUER = "dev";
-    /** Development only: an administrator acts as the account with this ID for the request. */
+    /** Pre-launch only: an administrator acts as the account with this ID for the request; events record both. */
     public static final String IMPERSONATE_HEADER = "X-Impersonate-User";
 
     @jakarta.inject.Inject InventoryAccess privateAccess;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
     @jakarta.inject.Inject DomainEventService events;
     @ConfigProperty(name = "inventory.impersonation.enabled", defaultValue = "false") boolean impersonationEnabled;
+    @jakarta.inject.Inject org.ash.inventory.platform.api.ImpersonationContext impersonation;
+    private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(ActorService.class);
     private final SecurityIdentity identity;
     private final CurrentVertxRequest request;
     private final UserOrm users;
@@ -155,7 +157,7 @@ public class ActorService {
         return authenticated;
     }
 
-    /** Everything the impersonated account does is recorded as that account. */
+    /** The impersonated account is the actor; domain events also record the administrator (impersonator_id). */
     private UserAccount impersonate(UserAccount admin, String target) {
         if (!impersonationEnabled) throw ApiException.badRequest("Impersonation is disabled");
         if (!admin.role.atLeast(DomainEnums.UserRole.admin)) throw ApiException.forbidden("Only administrators may impersonate accounts");
@@ -165,6 +167,10 @@ public class ActorService {
         var user = users.find(id);
         if (user == null) throw ApiException.notFound("Impersonated account not found");
         if (!user.active) throw ApiException.conflict("Deactivated accounts cannot be impersonated");
+        impersonation.impersonatedBy(admin.id);
+        var context = request.getCurrent();
+        LOG.infof("Impersonation: administrator=%s acts as account=%s request=%s %s", admin.id, user.id,
+                context == null ? "-" : context.request().method(), context == null ? "-" : context.normalizedPath());
         return user;
     }
 
@@ -339,10 +345,6 @@ public class ActorService {
         if (actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)) return true;
         return actor.role.atLeast(DomainEnums.UserRole.faction_leader)
                 && actor.factions.contains(factionKey(faction.eventType, faction.slug));
-    }
-
-    public void requireFactionView(UserAccount actor) {
-        if (!canViewFaction(actor)) throw ApiException.forbidden("Not available for tenant accounts");
     }
 
     public void requireFactionAccess(UserAccount actor, org.ash.inventory.operations.internal.model.Faction faction) {

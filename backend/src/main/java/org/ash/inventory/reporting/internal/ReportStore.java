@@ -47,7 +47,7 @@ public class ReportStore {
             String key=f.getKey(),parameter="f_"+key;
             if(key.equals("search")){
                 where.append(" and exists(select 1 from jsonb_each_text(value) f where lower(f.value) like :").append(parameter).append(" escape '!')");
-                parameters.put(parameter,"%"+f.getValue().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%");
+                parameters.put(parameter,"%"+org.ash.inventory.platform.api.Inputs.escapeLike(f.getValue().toLowerCase(Locale.ROOT))+"%");
             }else{
                 boolean dateFilter = key.equals("from") || key.equals("to");
                 if (dateFilter) {

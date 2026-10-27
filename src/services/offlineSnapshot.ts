@@ -8,7 +8,7 @@ import { storageLocationApi } from './storageLocationService';
 import { getOfflineCatalog, setOfflineCatalog } from './offlineQueue';
 import type { Page } from './apiPagination';
 
-export type SnapshotStatus = { kind: 'idle' | 'downloading' | 'complete' | 'partial'; completed: number; total: number; failed: string[]; finishedAt?: number };
+type SnapshotStatus = { kind: 'idle' | 'downloading' | 'complete' | 'partial'; completed: number; total: number; failed: string[]; finishedAt?: number };
 const idle = (): SnapshotStatus => ({ kind: 'idle', completed: 0, total: 6, failed: [] });
 let status = idle();
 let pending: { generation: number; promise: Promise<void> } | undefined;

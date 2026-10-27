@@ -22,7 +22,7 @@ import type { StorageLocation } from '../../../types';
 import { translate, useT } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
 
-export interface OrderPickupMapDialogProps {
+interface OrderPickupMapDialogProps {
   open: boolean;
   onClose: () => void;
   onConfirm?: (args: {

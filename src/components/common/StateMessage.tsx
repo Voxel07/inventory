@@ -6,7 +6,7 @@ import SearchOffIcon from '@mui/icons-material/SearchOff';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { translate } from '../../utils/naming';
 
-export type StateKind = 'loading' | 'error' | 'empty' | 'no-matches' | 'done';
+type StateKind = 'loading' | 'error' | 'empty' | 'no-matches' | 'done';
 
 const icons: Record<Exclude<StateKind, 'loading'>, ReactNode> = {
   error: <CloudOffIcon />,

@@ -1,6 +1,4 @@
 import i18next from 'i18next';
-import en from './en';
-import de from './de';
 
 export type AppLanguage = 'de' | 'en';
 
@@ -19,16 +17,26 @@ function initialLanguage(): AppLanguage {
 let activeLanguage: AppLanguage = initialLanguage();
 if (typeof document !== 'undefined') document.documentElement.lang = activeLanguage;
 
-void i18next.init({
-  resources: {
-    de: { translation: de },
-    en: { translation: en },
-  },
+// Only the active catalog is downloaded; `bun run lint` (check:i18n) keeps DE and EN key-complete, so no fallback is needed.
+const catalogs = { de: () => import('./de'), en: () => import('./en') } as const;
+
+async function loadCatalog(language: AppLanguage): Promise<void> {
+  if (i18next.hasResourceBundle(language, 'translation')) return;
+  i18next.addResourceBundle(language, 'translation', (await catalogs[language]()).default);
+}
+
+const ready = i18next.init({
+  resources: {},
   lng: activeLanguage,
-  fallbackLng: 'en',
+  fallbackLng: false,
   interpolation: { escapeValue: false },
   returnEmptyString: false,
-});
+}).then(() => loadCatalog(activeLanguage));
+
+/** Resolves once the active language's catalog is loaded; the app renders only after it. */
+export function initializeI18n(): Promise<void> {
+  return ready;
+}
 
 i18next.on('languageChanged', (lng) => {
   activeLanguage = lng === 'en' ? 'en' : 'de';
@@ -47,7 +55,9 @@ export function setAppLanguage(language: AppLanguage): void {
   } catch {
     // Keep the in-memory selection even when persistence is unavailable.
   }
-  void i18next.changeLanguage(language);
+  // Offline before this catalog was ever downloaded, the current language stays.
+  void loadCatalog(language).then(() => i18next.changeLanguage(language))
+    .catch((error: unknown) => console.error('Could not load the language catalog', error));
 }
 
 export function subscribeAppLanguage(listener: () => void): () => void {

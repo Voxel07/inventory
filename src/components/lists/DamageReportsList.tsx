@@ -54,7 +54,7 @@ export function DamageReportsList({ reports, isLoading, loadError, onRetry, sear
     };
     const getUserName = (report: DamageReport, field: 'reportedBy' | 'handledBy') => {
         const actor = report.expand?.[field];
-        return actor?.name?.trim() || actor?.username?.trim() || report[field] || '—';
+        return actor?.name?.trim() || report[field] || '—';
     };
     const getUnresolvedAmount = (report: DamageReport) => Math.max(0, report.amount - (report.repairedAmount ?? 0) - (report.writtenOffAmount ?? 0));
     const openEdit = (report: DamageReport) => {

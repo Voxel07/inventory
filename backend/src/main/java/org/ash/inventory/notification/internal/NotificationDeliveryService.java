@@ -49,7 +49,7 @@ public class NotificationDeliveryService {
             var channels = new LinkedHashMap<String, Callable<Boolean>>();
             if (endpoint.isPresent() && recipient.email() != null) channels.put("gateway", () -> sendGateway(delivery, recipient.email()));
             if (recipient.webhookUrl() != null) channels.put("webhook", () -> webhooks.publish(recipient.webhookUrl(), delivery.id(), SUBJECT, TEXT, publicUrl));
-            if (ntfy.server().isPresent() && recipient.ntfyTopic() != null)
+            if (ntfy.enabled() && recipient.ntfyTopic() != null)
                 channels.put("ntfy", () -> ntfy.publish(new NtfyPublisher.Message(recipient.ntfyTopic(), SUBJECT, TEXT, publicUrl, List.of("package"))));
             if(!recipient.allowed() || channels.isEmpty()) { notifications.finish(delivery,NotificationService.Outcome.SKIPPED,delivery.delivered()); continue; }
             var delivered = new TreeSet<>(delivery.delivered());

@@ -4,7 +4,7 @@ import { formatDate } from '../../../utils/dateFormat';
 import { generateQRCodeDataURL } from '../../../utils/qrCode';
 import type { Assembly, FactionOrder, Item } from '../../../types';
 
-export interface GeneratePdfSlipOptions {
+interface GeneratePdfSlipOptions {
   order: FactionOrder;
   orderItems: Item[];
   orderAssemblies: Assembly[];

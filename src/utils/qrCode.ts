@@ -6,7 +6,7 @@ function baseUrl(): string {
   return import.meta.env.VITE_APP_URL || window.location.origin;
 }
 
-export function getQRUrl(id: string, type: QRResourceType = 'item', textCode?: string): string {
+function getQRUrl(id: string, type: QRResourceType = 'item', textCode?: string): string {
   const url = type === 'assembly'
     ? `${baseUrl()}/assemblies/${id}`
     : type === 'faction-order'

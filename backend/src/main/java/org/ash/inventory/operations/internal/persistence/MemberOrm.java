@@ -56,10 +56,6 @@ public class MemberOrm extends EntityOrm {
         return entityManager.createQuery("from AssetInstance a join fetch a.item join fetch a.currentLocation where a.currentLocation.keeperUser = :actor and a.currentLocation.active = true and a.active = true", AssetInstance.class).setParameter("actor", actor).getResultList();
     }
 
-    public Stream<StorageLocation> locations() {
-        return entityManager.createQuery("from StorageLocation order by name", StorageLocation.class).getResultStream();
-    }
-
     public Stream<MemberRequest> requestCommands(UUID commandId) {
         return entityManager.createQuery("from MemberRequest where commandId = :id", MemberRequest.class).setParameter("id", commandId).getResultStream();
     }

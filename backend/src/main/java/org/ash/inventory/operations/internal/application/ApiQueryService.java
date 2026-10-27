@@ -40,7 +40,6 @@ import java.util.UUID;
  */
 @ApplicationScoped
 public class ApiQueryService {
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final ActorService actors;
     private final CatalogService catalog;
@@ -59,6 +58,8 @@ public class ApiQueryService {
     @jakarta.inject.Inject InventoryAccessService accessPolicies;
     @jakarta.inject.Inject DomainEventService outbox;
     @jakarta.inject.Inject com.fasterxml.jackson.databind.ObjectMapper json;
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.persistence.SourceRevisionOrm revisions;
+    @jakarta.inject.Inject @io.quarkus.cache.CacheName("inventory-summary") io.quarkus.cache.Cache summaries;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -88,11 +89,23 @@ public class ApiQueryService {
         return projectItems(catalog.getItems(filter, bounds.offset(), bounds.limit()));
     }
 
-    /** Overview counts over the caller's visible catalog, ledger and damage, without sending the catalog. */
+    /**
+     * Overview counts over the caller's visible catalog, ledger and damage, without sending the catalog. Administrators
+     * see everything, so their counts are shared under the commit-ordered stock revision; the minute bucket bounds the
+     * sliding seven-day movement window. Every dashboard refetches after a change, which would otherwise repeat the
+     * whole-catalog read once per administrator.
+     */
     @Transactional
     public ApiResponses.InventorySummaryResponse summary() {
         var actor = actors.current();
         actors.requireReader();
+        if (actor.role != DomainEnums.UserRole.admin) return computeSummary(actor);
+        String key = revisions.reportToken("availability") + "|" + Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        return summaries.<String, ApiResponses.InventorySummaryResponse>get(key, ignored -> computeSummary(actor))
+                .await().atMost(java.time.Duration.ofSeconds(30));
+    }
+
+    private ApiResponses.InventorySummaryResponse computeSummary(org.ash.inventory.operations.internal.model.UserAccount actor) {
         var ids = catalog.getVisibleItemIds();
         long units = 0, low = 0;
         for (int from = 0; from < ids.size(); from += 500) {
@@ -133,7 +146,7 @@ public class ApiQueryService {
     public List<ApiResponses.AssetInstanceResponse> itemAssets(UUID id, int page, int size) {
         actors.current();
         var pageBounds = bounds(page, size);
-        return mapper.assets(catalog.getAssets(id, pageBounds.offset(), pageBounds.limit()));
+        return mapper.assets(catalog.getAssets(id, null, pageBounds.offset(), pageBounds.limit()));
     }
 
     @Transactional
@@ -413,8 +426,10 @@ public class ApiQueryService {
         actors.requireAdmin();
         var bounds = bounds(page, size);
         if (users.find(id) == null) throw ApiException.notFound("User not found");
-        return outbox.userAccessHistory(id, bounds.offset(), bounds.limit()).stream().map(event -> {
-            var changedBy = event.actorId() == null ? null : users.find(event.actorId());
+        var events = outbox.userAccessHistory(id, bounds.offset(), bounds.limit());
+        var actorsById = users.byIds(events.stream().map(event -> event.actorId()).filter(java.util.Objects::nonNull).distinct().toList());
+        return events.stream().map(event -> {
+            var changedBy = event.actorId() == null ? null : actorsById.get(event.actorId());
             return new ApiResponses.UserAccessHistoryResponse(event.id(), event.occurredAt(),
                     changedBy == null ? null : mapper.actor(changedBy),
                     json.convertValue(event.payload().get("before"), ApiResponses.UserAccessState.class),
@@ -423,24 +438,20 @@ public class ApiQueryService {
         }).toList();
     }
 
+    /** Pickers only need who can be assigned; contact details and access assignments stay in account administration. */
     @Transactional
-    public List<ApiResponses.UserResponse> assignableUsers(String search, int page, int size) {
+    public List<ApiResponses.ActorSummary> assignableUsers(String search, String minimumRole, int page, int size) {
         actors.requireWarehouse();
         var bounds = bounds(page, size);
-        return users.users(search, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        DomainEnums.UserRole minimum = DomainEnums.UserRole.tenant;
+        if (minimumRole != null && !minimumRole.isBlank()) {
+            minimum = ActorService.parseRole(minimumRole);
+            if (minimum == null) throw ApiException.badRequest("Unknown user role");
+        }
+        return users.assignable(search, minimum, bounds.offset(), bounds.limit()).stream().map(mapper::actor).toList();
     }
 
-    private PageBounds bounds(int page, int size) {
-        if (page < 0) throw ApiException.badRequest("page must be zero or greater");
-        if (size < 1 || size > MAX_PAGE_SIZE) {
-            throw ApiException.badRequest("size must be between 1 and " + MAX_PAGE_SIZE);
-        }
-        try {
-            return new PageBounds(Math.multiplyExact(page, size), size);
-        } catch (ArithmeticException exception) {
-            throw ApiException.badRequest("page is too large");
-        }
+    private static org.ash.inventory.platform.api.PageBounds bounds(int page, int size) {
+        return org.ash.inventory.platform.api.PageBounds.of(page, size);
     }
-
-    private record PageBounds(int offset, int limit) {}
 }

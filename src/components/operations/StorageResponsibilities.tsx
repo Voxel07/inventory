@@ -25,7 +25,7 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
     const pending = loading;
     const rows = locations.filter((location) => location.active).map((location) => {
         const assignment = { id: location.id, name: location.name, userId: location.keeperUserId };
-        const keeper = location.keeperUserId ? { name: location.keeperUserName, email: location.keeperUserEmail } : undefined;
+        const keeper = location.keeperUserId ? { name: location.keeperUserName } : undefined;
         const missing = [
             ...(!assignment?.userId ? [t('operations.storageResponsibilities.responsiblePersonMissing')] : []),
         ];
@@ -35,8 +35,7 @@ export function StorageResponsibilities({ locations, loading, onEditLocation }: 
         { field: 'name', headerName: t('common.storageLocation'), flex: 1.2, minWidth: 200 },
         { field: 'keeper', headerName: t('common.responsiblePerson'), flex: 1, minWidth: 180,
             valueGetter: (_, row) => row.keeper?.name ?? (row.assignment?.userId ? t('operations.storageResponsibilities.unknown') : t('common.unassigned')),
-            renderCell: ({ row, value }) => <Tooltip title={row.keeper?.email ?? ''}>
-                <Typography variant="body2" noWrap>{value}</Typography></Tooltip> },
+            renderCell: ({ value }) => <Typography variant="body2" noWrap>{value}</Typography> },
         { field: 'missing', headerName: t('operations.storageResponsibilities.missingInformation'), flex: 1.5, minWidth: 220,
             valueGetter: (_, row) => row.missing.join(', '),
             renderCell: ({ row }) => row.missing.length > 0

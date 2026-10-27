@@ -20,18 +20,17 @@ export function emptyAuthSession(): PersistedAuthSession {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const isRole = (value: unknown): value is UserRole => typeof value === 'string' && (ROLE_LADDER as readonly string[]).includes(value);
-const isOptionalString = (value: unknown) => value === undefined || typeof value === 'string';
 
 function decodeUser(value: unknown): User | null | undefined {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  const { id, name, email, role, roles, faction, username, revision, active, created, updated } = value;
+  const { id, name, email, role, roles, faction, revision, active, created, updated } = value;
   if (typeof id !== 'string' || typeof name !== 'string' || typeof email !== 'string' || !isRole(role)
     || !Array.isArray(roles) || !roles.every(isRole)
     || (faction !== undefined && !(Array.isArray(faction) && faction.every((entry) => typeof entry === 'string')))
-    || !isOptionalString(username) || (revision !== undefined && typeof revision !== 'number')
+    || (revision !== undefined && typeof revision !== 'number')
     || typeof active !== 'boolean' || typeof created !== 'number' || !Number.isSafeInteger(created) || typeof updated !== 'number' || !Number.isSafeInteger(updated)) return undefined;
-  return { id, name, email, role, roles, faction, username, revision, active, created, updated };
+  return { id, name, email, role, roles, faction, revision, active, created, updated };
 }
 
 /** Validates untrusted stored data; anything else (including older record shapes) is discarded, never repaired. */

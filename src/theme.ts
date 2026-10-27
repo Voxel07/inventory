@@ -5,9 +5,9 @@ import { translate } from './utils/naming';
 
 export type ThemeMode = 'light' | 'dark';
 
-export const SANS_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+const SANS_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
 /** Reserved for identifiers: asset codes, SKUs, order and document references. */
-export const MONO_FONT = 'ui-monospace, "SFMono-Regular", "Cascadia Mono", "Segoe UI Mono", Consolas, "Liberation Mono", monospace';
+const MONO_FONT = 'ui-monospace, "SFMono-Regular", "Cascadia Mono", "Segoe UI Mono", Consolas, "Liberation Mono", monospace';
 
 /**
  * Semantic colour tokens per mode. Every text/background pairing used by the

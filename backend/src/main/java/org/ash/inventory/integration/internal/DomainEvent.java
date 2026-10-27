@@ -31,6 +31,8 @@ public class DomainEvent extends BaseEntity {
     @Column(name = "aggregate_id", nullable = false, updatable = false) public UUID aggregateId;
     @Column(name = "aggregate_revision", nullable = false, updatable = false) public long aggregateRevision;
     @Column(name = "actor_id", updatable = false) public UUID actorId;
+    /** The signed-in administrator when {@link #actorId} was impersonated. */
+    @Column(name = "impersonator_id", updatable = false) public UUID impersonatorId;
     @Column(name = "idempotency_key", updatable = false) public UUID idempotencyKey;
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "trace_context", columnDefinition = "jsonb", nullable = false, updatable = false)
     public Map<String, String> traceContext = new LinkedHashMap<>();

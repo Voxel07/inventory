@@ -1,5 +1,6 @@
 package org.ash.inventory.operations.internal.model;
 
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -16,7 +17,7 @@ import java.util.UUID;
 @Table(name = "item_images")
 public class ItemImage {
     @Id @GeneratedValue public UUID id;
-    @ManyToOne(optional = false) @JoinColumn(name = "item_id") public Item item;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @Column(name = "object_key", nullable = false, length = 1000) public String objectKey;
     @Column(name = "display_order", nullable = false) public int displayOrder;
     @Column(name = "created_at", nullable = false, updatable = false) public Instant createdAt;

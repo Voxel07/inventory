@@ -140,6 +140,7 @@ create table domain_event_outbox (
     published_at bigint,
     updated_at bigint not null,
     actor_id uuid,
+    impersonator_id uuid,
     aggregate_id uuid not null,
     event_id uuid not null unique,
     id uuid not null,

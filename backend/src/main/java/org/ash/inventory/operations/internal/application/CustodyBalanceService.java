@@ -34,16 +34,26 @@ public class CustodyBalanceService {
         // The warehouse oversees everyone's custody; others see their own.
         boolean all = !mine && actor.role.atLeast(DomainEnums.UserRole.warehouse_crew);
         UUID recipient = all ? null : actor.id;
-        return balances(recipient, true);
+        return balances(recipient, null, true);
+    }
+
+    /**
+     * Balances narrowed in the database to one custodian and/or one item (null: any) instead of filtering everyone's.
+     * Callers have authorized reading those balances; another person's need warehouse access.
+     */
+    @Transactional
+    public List<Balance> of(UUID person, UUID item) {
+        if (!actors.current().id.equals(person)) actors.requireWarehouse();
+        return balances(person, item, true);
     }
 
     /** Unredacted owner snapshot; report reads apply current resource authorization later. */
-    List<Balance> reportSnapshot() { return balances(null, false); }
+    List<Balance> reportSnapshot() { return balances(null, null, false); }
 
-    private List<Balance> balances(UUID recipient, boolean redactLocations) {
+    private List<Balance> balances(UUID recipient, UUID itemId, boolean redactLocations) {
         var rows = new LinkedHashMap<String, Balance>();
-        var lines = orm.orderLines(recipient);
-        var direct = orm.directBalances(recipient);
+        var lines = orm.orderLines(recipient, itemId);
+        var direct = orm.directBalances(recipient, itemId);
         var items = new ArrayList<Item>();
         lines.forEach(line -> items.add(line.item)); direct.forEach(tx -> items.add(tx.item()));
         var policies = new ArrayList<InventoryAccessPolicy>();
@@ -73,7 +83,7 @@ public class CustodyBalanceService {
             var row = balance(tx.item(), tx.user(), tx.event(), null, tx.asset(), tx.quantity(), null, redactLocations);
             rows.put(row.key(), row);
         }
-        for (var pending : orm.pending(recipient)) {
+        for (var pending : orm.pending(recipient, itemId)) {
             // Faction-order custody is one row per item; asset-level rows exist for general orders and direct checkouts.
             var key = key((UUID) pending[0], (UUID) pending[1], (UUID) pending[2], (UUID) pending[3],
                     pending[4] == InventoryOrder.Kind.faction ? null : (UUID) pending[5]);

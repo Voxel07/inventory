@@ -1,7 +1,7 @@
 import type { MaintenanceResult, MaintenanceType } from '../types/operations';
 import { apiRequest } from './apiClient';
 
-export type MaintenanceRecord = {
+type MaintenanceRecord = {
   id: string;
   itemId: string;
   itemName: string;

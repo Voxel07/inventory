@@ -18,7 +18,7 @@ export function DamageReportInfoDialog({ report, targetName, onClose }: Props) {
     const userName = (id?: string) => {
         const actor = id === report.reportedBy ? report.expand?.reportedBy
             : id === report.handledBy ? report.expand?.handledBy : undefined;
-        return actor?.name?.trim() || actor?.username?.trim() || id || '—';
+        return actor?.name?.trim() || id || '—';
     };
 
     return <Dialog open onClose={onClose} maxWidth="sm" fullWidth>

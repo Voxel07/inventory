@@ -1,6 +1,6 @@
 export interface InventoryGrant { userId?: string | null; groupId?: string | null; canEdit: boolean; name?: string }
 /** A share that reaches a resource through a private location it is stored in. */
-export interface InheritedShare {
+interface InheritedShare {
   locationId: string; locationName: string; kind: 'owner' | 'person' | 'group';
   principalId: string; name: string; canEdit: boolean;
 }

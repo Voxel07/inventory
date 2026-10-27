@@ -51,8 +51,8 @@ public class CatalogOrm extends EntityOrm {
         var where = new StringBuilder(" where i.active = true").append(visibility());
         var parameters = new LinkedHashMap<String, Object>();
         if (filter.search() != null && !filter.search().isBlank()) {
-            where.append(" and (lower(i.name) like :search or lower(i.sku) like :search or lower(i.category) like :search)");
-            parameters.put("search", "%" + filter.search().trim().toLowerCase(Locale.ROOT) + "%");
+            where.append(" and (lower(i.name) like :search escape '!' or lower(i.sku) like :search escape '!' or lower(i.category) like :search escape '!')");
+            parameters.put("search", org.ash.inventory.platform.api.Inputs.containsPattern(filter.search()));
         }
         if (filter.category() != null && !filter.category().isBlank()) {
             where.append(" and lower(i.category) = :category");
@@ -99,7 +99,7 @@ public class CatalogOrm extends EntityOrm {
     /** LIKE pattern matching one string element of a JSON array column rendered as text. */
     private static String jsonElementPattern(String value) {
         String json = "\"" + value.trim().replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-        return "%" + json.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        return "%" + org.ash.inventory.platform.api.Inputs.escapeLike(json) + "%";
     }
 
     private static String visibility() {
@@ -145,14 +145,6 @@ public class CatalogOrm extends EntityOrm {
     }
 
     /** One page of visible active locations, optionally within one location's subtree. */
-    public List<StorageLocation> locations(UUID subtreeId, int offset, int limit) {
-        var query = entityManager.createQuery("from StorageLocation l left join fetch l.parent where l.active = true and "
-                + InventoryAccessOrm.visible("l.accessPolicy") + (subtreeId == null ? "" : " and l.id in :subtree")
-                + " order by lower(l.fullCode), l.id", StorageLocation.class);
-        if (subtreeId != null) query.setParameter("subtree", subtreeIds(subtreeId));
-        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
-    }
-
     public record VisibleCounts(long items, long serializedAssets, long locations) {}
     public VisibleCounts visibleCounts() {
         long items = visible(entityManager.createQuery("select count(i) from Item i where i.active = true" + visibility(), Long.class)).getSingleResult();
@@ -172,10 +164,10 @@ public class CatalogOrm extends EntityOrm {
     public List<StorageLocation> locations(boolean includeInactive, String search, UUID subtreeId, int offset, int limit) {
         var query = entityManager.createQuery("from StorageLocation l left join fetch l.parent where "
                 + InventoryAccessOrm.visible("l.accessPolicy") + (includeInactive ? "" : " and l.active = true")
-                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search or lower(l.code) like :search or lower(coalesce(l.description, '')) like :search)")
+                + (search == null || search.isBlank() ? "" : " and (lower(l.name) like :search escape '!' or lower(l.code) like :search escape '!' or lower(coalesce(l.description, '')) like :search escape '!')")
                 + (subtreeId == null ? "" : " and l.id in :subtree")
                 + " order by lower(l.fullCode), l.id", StorageLocation.class);
-        if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
+        if (search != null && !search.isBlank()) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         if (subtreeId != null) query.setParameter("subtree", subtreeIds(subtreeId));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
@@ -213,11 +205,11 @@ public class CatalogOrm extends EntityOrm {
         var query = entityManager.createQuery("from Assembly a where a.active = true and " + InventoryAccessOrm.visible("a.accessPolicy")
                 + " and not exists (select ai.quantity from AssemblyItem ai join ai.item component where ai.assembly = a and (component.active = false or not "
                 + InventoryAccessOrm.visible("component.accessPolicy") + "))"
-                + (search == null || search.isBlank() ? "" : " and (lower(a.name) like :search or lower(coalesce(a.category, '')) like :search or lower(coalesce(a.subcategory, '')) like :search)")
+                + (search == null || search.isBlank() ? "" : " and (lower(a.name) like :search escape '!' or lower(coalesce(a.category, '')) like :search escape '!' or lower(coalesce(a.subcategory, '')) like :search escape '!')")
                 + (eventTag == null || eventTag.isBlank() ? "" : " and cast(a.eventTags as String) like :eventTag escape '!'")
                 + (mineOwner == null ? "" : " and a.accessPolicy.owner.id = :mineOwner")
                 + " order by a.createdAt desc, a.id", Assembly.class);
-        if (search != null && !search.isBlank()) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
+        if (search != null && !search.isBlank()) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         if (eventTag != null && !eventTag.isBlank()) query.setParameter("eventTag", jsonElementPattern(eventTag));
         if (mineOwner != null) query.setParameter("mineOwner", mineOwner);
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
@@ -327,10 +319,6 @@ public class CatalogOrm extends EntityOrm {
     public List<AssetInstance> assetInstances(Item item) {
         return entityManager.createQuery("from AssetInstance a where a.item = :item and a.active = true order by a.assetCode asc", AssetInstance.class)
                 .setParameter("item", item).getResultList();
-    }
-
-    public List<AssetInstance> assetInstances(Item item, int offset, int limit) {
-        return assetInstances(item, null, offset, limit);
     }
 
     public List<AssetInstance> assetInstances(Item item, DomainEnums.AssetState status, int offset, int limit) {

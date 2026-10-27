@@ -13,7 +13,7 @@ const SESSION_LOCK = 'ash-inventory-auth-session';
  */
 const SESSION_LOCK_WAIT_MS = 45_000;
 
-export type AuthSnapshot = {
+type AuthSnapshot = {
   generation: number;
   token: string;
   user: User | null;

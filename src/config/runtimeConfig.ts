@@ -32,7 +32,7 @@ export const API_URL = absoluteUrl(
   'API_URL',
 );
 
-export type OidcRuntimeConfig = {
+type OidcRuntimeConfig = {
   authority: string;
   clientId: string;
   redirectUri: string;

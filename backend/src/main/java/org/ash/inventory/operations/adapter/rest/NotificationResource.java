@@ -32,6 +32,7 @@ public class NotificationResource {
     private final UserService users;
     private final ActorService actors;
     private final NtfyPublisher ntfy;
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.application.NtfyTopicFeed adminTopics;
 
     public NotificationResource(ApiQueryService queries, UserService users, ActorService actors, NtfyPublisher ntfy) {
         this.queries = queries;
@@ -67,7 +68,7 @@ public class NotificationResource {
         return queries.markNotificationRead(id);
     }
 
-    /** The current user's delivery channels; the ntfy server URL and credentials come from deployment configuration. */
+    /** The current user's delivery channels; the public ntfy URL and credentials come from deployment configuration. */
     @GET @Path("/settings")
     public ApiResponses.NotificationSettingsResponse settings() {
         return settings(actors.current());
@@ -82,8 +83,9 @@ public class NotificationResource {
     @POST @Path("/settings/ntfy-test")
     public void ntfyTest() {
         var topic = actors.current().ntfyTopic;
-        if (ntfy.server().isEmpty()) throw ApiException.badRequest("ntfy is not configured for this deployment");
+        if (!ntfy.enabled()) throw ApiException.badRequest("ntfy is not configured for this deployment");
         if (topic == null) throw ApiException.badRequest("Save an ntfy topic first");
+        if (adminTopics.reserved(topic)) throw ApiException.badRequest("This ntfy topic is reserved for administrator notifications");
         try {
             if (!ntfy.publish(new NtfyPublisher.Message(topic, "Inventory test notification",
                     "Your ntfy notifications are set up correctly.", null, List.of("white_check_mark"))))
@@ -97,6 +99,6 @@ public class NotificationResource {
     }
 
     private ApiResponses.NotificationSettingsResponse settings(UserAccount user) {
-        return new ApiResponses.NotificationSettingsResponse(ntfy.server().orElse(null), user.ntfyTopic, user.webhookUrl);
+        return new ApiResponses.NotificationSettingsResponse(ntfy.publicUrl().orElse(null), user.ntfyTopic, user.webhookUrl);
     }
 }

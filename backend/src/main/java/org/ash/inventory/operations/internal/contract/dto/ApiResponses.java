@@ -36,7 +36,6 @@ public final class ApiResponses {
             Instant created,
             Instant updated,
             String name,
-            String username,
             String email,
             String role,
             List<String> roles,
@@ -45,7 +44,7 @@ public final class ApiResponses {
     ) {}
 
     /** Attribution outside account administration never discloses contact details or access assignments. */
-    public record ActorSummary(UUID id, String name, String username) {}
+    public record ActorSummary(UUID id, String name) {}
 
     public record UserAccessState(List<String> roles, List<String> factions) {}
 
@@ -127,7 +126,7 @@ public final class ApiResponses {
             String rootLocationName,
             String parentLocationId,
             boolean active, org.ash.inventory.operations.internal.application.InventoryAccessService.View access,
-            String hierarchyPath, UUID keeperUserId, String keeperUserName, String keeperUserEmail
+            String hierarchyPath, UUID keeperUserId, String keeperUserName
     ) {}
 
     public record ItemResponse(

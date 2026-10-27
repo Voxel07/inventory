@@ -52,10 +52,10 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
     function getUserName(tx: StockTransaction) {
         const expandedUser = tx.expand?.userId;
         if (expandedUser) {
-            return expandedUser.name?.trim() || expandedUser.username?.trim() || tx.userId || '—';
+            return expandedUser.name?.trim() || tx.userId || '—';
         }
         const foundUser = users?.find((u) => u.id === tx.userId);
-        return foundUser ? foundUser.name?.trim() || foundUser.username?.trim() || foundUser.email?.trim() || tx.userId : tx.userId || '—';
+        return foundUser ? foundUser.name?.trim() || foundUser.email?.trim() || tx.userId : tx.userId || '—';
     }
 
     function reversalActor(tx: StockTransaction) {

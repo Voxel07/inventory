@@ -102,7 +102,7 @@ The creator is automatically responsible for a new item. Editors can change this
 
 ### 3.6 Changes take effect
 
-Access (the `inventory` group) is re-read from every token, so removing someone takes effect at the next token refresh. Role and faction changes made on the Users page apply on the user's next API request. Open browsers refresh the current account on `user.changed` and reconnect, and discard cached views when access changes.
+Access (the `inventory` group) is re-read from every token, so removing someone takes effect at the next token refresh. Role and faction changes made on the Users page apply on the user's next API request. Open browsers of that account refresh it on `user.changed` and discard cached views; other sessions only refresh account lists (`users.changed`).
 
 ## 4. Token lifetimes and logout
 

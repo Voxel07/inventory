@@ -22,7 +22,7 @@ export function repairInput(v: InputValues): RepairInput {
 export function repairTransitionInput(v: InputValues): RepairTransitionInput {
   return { status: inputChoice(v.status, ['reported', 'triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service', 'written_off']), amount: optionalNumber(v.amount), repairOwnerId: optionalText(v.repairOwnerId), vendorId: optionalText(v.vendorId), verificationResult: optionalText(v.verificationResult), notes: optionalText(v.notes), idempotencyKey: optionalText(v.idempotencyKey), occurredAt: optionalNumber(v.occurredAt) };
 }
-export function receiptLineInput(v: InputValues): ReceiptLineInput {
+function receiptLineInput(v: InputValues): ReceiptLineInput {
   return { purchaseOrderLineId: inputText(v.purchaseOrderLineId), acceptedQuantity: inputNumber(v.acceptedQuantity, 0), damagedQuantity: inputNumber(v.damagedQuantity, 0), rejectedQuantity: inputNumber(v.rejectedQuantity, 0), lotId: optionalText(v.lotId), assetCodes: inputStrings(v.assetCodes), receivingNotes: optionalText(v.receivingNotes) };
 }
 export function receiptInput(v: InputValues): ReceiptInput {

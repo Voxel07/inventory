@@ -1,6 +1,6 @@
 import type { StorageLocation } from '../types';
 
-export type LocationRole = 'location' | 'section' | 'place';
+type LocationRole = 'location' | 'section' | 'place';
 
 /** Location (site, holds no stock) → section → storage places, which may nest (shelf → compartment). */
 export function locationRole(location: Pick<StorageLocation, 'depth'>): LocationRole {

@@ -58,7 +58,7 @@ export function UserAccessHistory({ user, factions, onClose }: { user: User; fac
           {history.isSuccess && !rows.length && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.noAccessHistory')}</TableCell></TableRow>}
           {!history.isError && rows.map(entry => <TableRow key={entry.id} sx={{ '& td': { verticalAlign: 'top', py: 2 } }}>
             <TableCell sx={{ whiteSpace: 'nowrap' }}>{date.format(new Date(entry.occurredAt))}</TableCell>
-            <TableCell>{entry.changedBy?.name || entry.changedBy?.username || t('profile.unknownUser')}</TableCell>
+            <TableCell>{entry.changedBy?.name || t('profile.unknownUser')}</TableCell>
             <TableCell><AccessState state={entry.before} factions={factions} /></TableCell>
             <TableCell><AccessState state={entry.after} factions={factions} /></TableCell>
             <TableCell sx={{ minWidth: 220, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry.reason}</TableCell>

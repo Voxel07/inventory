@@ -202,7 +202,7 @@ function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: ()
   ]} onSave={async (values) => { const saved = await saveVendor(optionalValues(values), vendor?.id); onSaved?.(saved); return saved; }} />;
 }
 
-export function DocumentsPanel({ order }: { order: PurchaseOrder }) {
+function DocumentsPanel({ order }: { order: PurchaseOrder }) {
   const t = useT(); const documents = useOperationList(`documents:${order.id}`, operationsApi.documents(order.id)); const command = useOperationCommand();
   const receipts = useCompleteList(['operations', `document-receipts:${order.id}`], operationsApi.receipts(order.id));
   const [attach, setAttach] = useState(false); const [file, setFile] = useState<File | null>(null);

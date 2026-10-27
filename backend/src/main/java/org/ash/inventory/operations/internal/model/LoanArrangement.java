@@ -9,8 +9,8 @@ import java.util.*;
 
 @Entity @Table(name = "loan_arrangements")
 public class LoanArrangement extends BaseEntity {
-    @OneToOne(optional = false) @JoinColumn(name = "commitment_id", unique = true) public EquipmentCommitment commitment;
-    @ManyToOne(optional = false) @JoinColumn(name = "provider_location_id") public StorageLocation providerLocation;
+    @OneToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "commitment_id", unique = true) public EquipmentCommitment commitment;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "provider_location_id") public StorageLocation providerLocation;
     @Column(nullable = false) public String kind;
     @Column(nullable = false) public String provider;
     @Column(nullable = false) public String contact;

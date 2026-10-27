@@ -20,7 +20,7 @@ export const CSV_OPERATIONS = {
   member_return: { label: 'utils.csvOperations.operationLabels.member_return', requiredFields: ['itemId', 'quantity', 'notes'] },
 } as const;
 
-export type CsvOperation = keyof typeof CSV_OPERATIONS;
+type CsvOperation = keyof typeof CSV_OPERATIONS;
 export interface ParsedOperationRow {
   index: number;
   name: string;

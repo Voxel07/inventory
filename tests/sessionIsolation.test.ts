@@ -281,6 +281,35 @@ test('a server role-change event refreshes identity and clears organization view
   await connection;
 });
 
+test('an expiring stream hands over to the next one without discarding cached data', async () => {
+  signIn('stream-handover');
+  const client = queries.getSessionQueryClient();
+  client.setQueryData(['items'], [{ id: 'cached' }]);
+  const streams: { controller: ReadableStreamDefaultController<Uint8Array>; signal?: AbortSignal | null }[] = [];
+  let accountReads = 0;
+  fetchRequest = async (input, init) => {
+    if (String(input).endsWith('/api/events/stream')) return new Response(new ReadableStream<Uint8Array>({
+      start(controller) { streams.push({ controller, signal: init?.signal }); },
+    }));
+    if (String(input).endsWith('/api/auth/me')) accountReads++;
+    return new Response('[]');
+  };
+  connectivity.onLine = true;
+  const connection = api.startRealtimeEvents();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  streams[0].controller.enqueue(new TextEncoder().encode('data: {"type":"stream.expiring"}\n\n'));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  expect(streams.length).toBe(2);
+  expect(streams[0].signal?.aborted).toBe(true);
+  expect(streams[1].signal?.aborted).toBe(false);
+  await new Promise(resolve => setTimeout(resolve, 350));
+  expect(client.getQueryState(['items'])?.isInvalidated).toBe(false);
+  expect(accountReads).toBe(0);
+  api.stopRealtimeEvents();
+  streams.forEach(({ controller }) => { try { controller.close(); } catch { /* already aborted */ } });
+  await connection;
+});
+
 test('private catalog responses remove durable snapshots and private writes cannot enter the queue', async () => {
   signIn('privacy-owner');
   await offline.setOfflineCatalog('items', [{ id: 'public-item' }]);

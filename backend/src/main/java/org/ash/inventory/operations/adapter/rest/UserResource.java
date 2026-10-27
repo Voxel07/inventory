@@ -74,10 +74,11 @@ public class UserResource {
     }
 
     @Paged @GET @Path("/users/assignable")
-    public List<ApiResponses.UserResponse> assignableUsers(
+    public List<ApiResponses.ActorSummary> assignableUsers(
             @jakarta.ws.rs.QueryParam("search") String search,
+            @jakarta.ws.rs.QueryParam("minRole") String minimumRole,
             @jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
             @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size) {
-        return queries.assignableUsers(search, page, size);
+        return queries.assignableUsers(search, minimumRole, page, size);
     }
 }

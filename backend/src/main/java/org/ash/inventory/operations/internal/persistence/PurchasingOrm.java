@@ -24,9 +24,9 @@ public class PurchasingOrm extends EntityOrm {
     public List<Vendor> vendors(String search, int offset, int limit) {
         boolean searching = search != null && !search.isBlank();
         var query = entityManager.createQuery("from Vendor vendor"
-                + (searching ? " where lower(vendor.name) like :search" : "")
+                + (searching ? " where lower(vendor.name) like :search escape '!'" : "")
                 + " order by vendor.active desc, vendor.preferredVendor desc, vendor.name, vendor.id", Vendor.class);
-        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(Locale.ROOT) + "%");
+        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public boolean vendorNameExists(String name, UUID excluding) {

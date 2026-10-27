@@ -50,8 +50,7 @@ public class McpInventoryService {
 
     public com.fasterxml.jackson.databind.JsonNode custody(UUID itemId, UUID personId, UUID orderId, Integer page, Integer limit) {
         actors.requireWarehouse(); var bounds = bounds(page, limit);
-        var rows = custody.list(false).stream().filter(r -> (itemId == null || itemId.equals(r.itemId()))
-                && (personId == null || personId.equals(r.personId())) && (orderId == null || orderId.equals(r.orderId())))
+        var rows = custody.of(personId, itemId).stream().filter(r -> orderId == null || orderId.equals(r.orderId()))
                 .sorted(Comparator.comparing(CustodyBalanceService.Balance::key)).toList();
         var visible = privacy.filter(rows, false).value();
         var result = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();
@@ -206,11 +205,11 @@ public class McpInventoryService {
     public List<ApiResponses.StorageLocationResponse> locations(UUID locationId, Integer page, Integer limit) {
         actors.current();
         var bounds = bounds(page, limit);
-        return mapper.locations(catalogOrm.locations(locationId, bounds.offset(), bounds.limit()));
+        return mapper.locations(catalogOrm.locations(false, null, locationId, bounds.offset(), bounds.limit()));
     }
 
     public InventoryMcpDtos.ResourcePage<ApiResponses.StorageLocationResponse> locationResource() {
-        var values = catalogOrm.locations(null, 0, 101);
+        var values = catalogOrm.locations(false, null, null, 0, 101);
         boolean more = values.size() > 100;
         return new InventoryMcpDtos.ResourcePage<>(mapper.locations(values.stream().limit(100).toList()),
                 0, 100, more, more ? 1 : null, "list_storage_locations");
@@ -260,7 +259,7 @@ public class McpInventoryService {
 
     /** Aggregate counts only; maintenance alerts are read page by page with {@link #maintenanceAlerts}. */
     public InventoryMcpDtos.OperationalMetricsDto summary() {
-        var actor = actors.current();
+        actors.current();
         var counts = catalogOrm.visibleCounts();
         return new InventoryMcpDtos.OperationalMetricsDto(counts.items(), counts.serializedAssets(), counts.locations(),
                 catalogOrm.upcomingEventCount(BusinessTime.today()));
@@ -318,12 +317,8 @@ public class McpInventoryService {
         return input;
     }
 
-    private PageBounds bounds(Integer page, Integer limit) {
-        int index = page == null ? 0 : page;
-        int size = limit == null ? 20 : limit;
-        if (index < 0 || size < 1 || size > 100) throw ApiException.badRequest("page must be non-negative; limit must be 1–100");
-        try { return new PageBounds(Math.multiplyExact(index, size), size); }
-        catch (ArithmeticException exception) { throw ApiException.badRequest("page is too large"); }
+    /** MCP pages default to 20 and hold at most 100 rows. */
+    private static org.ash.inventory.platform.api.PageBounds bounds(Integer page, Integer limit) {
+        return org.ash.inventory.platform.api.PageBounds.of(page == null ? 0 : page, limit == null ? 20 : limit, 100);
     }
-    private record PageBounds(int offset, int limit) {}
 }

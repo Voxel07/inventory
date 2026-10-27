@@ -59,7 +59,7 @@ public class NtfyTopicFeed {
         var prefixes = new ArrayList<String>();
         if (!catalog.isEmpty()) prefixes.add("catalog.changed");
         if (users != null) prefixes.add("user.");
-        active = ntfy.server().isPresent() && !prefixes.isEmpty();
+        active = ntfy.enabled() && !prefixes.isEmpty();
         // An abandoned subscription would keep its events from the outbox purge.
         if (active) feed.subscribe(CONSUMER, prefixes); else feed.remove(CONSUMER);
     }
@@ -74,6 +74,12 @@ public class NtfyTopicFeed {
             actions.add(value);
         }
         if (topic != null && !actions.isEmpty()) catalog.put(resource, new Catalog(topic, actions, singular, plural, path));
+    }
+
+    /** Admin feed topics cannot be chosen as personal topics, so users cannot make the API post into them. */
+    public boolean reserved(String topic) {
+        return topic != null && java.util.stream.Stream.of(itemsTopic, assembliesTopic, usersTopic)
+                .map(String::trim).anyMatch(configured -> configured.equalsIgnoreCase(topic.trim()));
     }
 
     private static String topic(String configured) {

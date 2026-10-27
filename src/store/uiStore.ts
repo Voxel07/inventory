@@ -8,7 +8,7 @@ const MOBILE_NAVIGATION_QUERY = '(max-width: 899.95px)';
 
 type ThemeMode = 'light' | 'dark';
 /** Storage locations page: grouped by top-level location, or one flat list. */
-export type StorageLocationView = 'grouped' | 'flat';
+type StorageLocationView = 'grouped' | 'flat';
 
 function storedStorageLocationView(): StorageLocationView {
   try {

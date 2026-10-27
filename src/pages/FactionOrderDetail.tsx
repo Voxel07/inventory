@@ -35,8 +35,7 @@ import {
   useUpdateFactionOrder,
 } from '../hooks/useFactionOrders';
 import { useItemsByIds } from '../hooks/useItems';
-import { loadAllPages } from '../services/apiPagination';
-import { getFactionOrders } from '../services/factionOrderService';
+import { getPreviousFactionOrder } from '../services/factionOrderService';
 import { useAssemblies } from '../hooks/useAssemblies';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import type { Assembly, FactionOrder, Item } from '../types';
@@ -72,10 +71,10 @@ export function FactionOrderDetail() {
   const { data: order, isLoading, isError } = useFactionOrder(orderId);
   const pickupGroups = useQuery({ queryKey: ['order-pickup-groups', 'faction', orderId], queryFn: () => orderPickupApi.get('faction', orderId), enabled: Boolean(orderId) });
   const equipment = useEquipmentAvailability(order?.eventOccurrenceId);
-  // Exactly this order's items (lines and assembly components) and this faction's orders, never the catalog.
-  const { data: allOrders = [] } = useQuery({ queryKey: ['faction-orders', 'faction', order?.eventType, order?.faction],
+  // Exactly this order's items (lines and assembly components) and the faction's previous order, never the catalog.
+  const { data: previousOrder = null } = useQuery({ queryKey: ['faction-orders', 'previous', order?.eventType, order?.faction, order?.eventDate, order?.id],
     enabled: Boolean(order), networkMode: 'offlineFirst',
-    queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType: order!.eventType, faction: order!.faction }, page, size)) });
+    queryFn: () => getPreviousFactionOrder(order!.eventType, order!.faction, order!.eventDate, order!.id) });
   const { data: assemblies = [] } = useAssemblies();
   const lineIds = [...Object.keys(order?.requestedQuantities ?? {}), ...(order?.expand?.assemblyIds ?? []).flatMap((assembly) => Object.keys(assembly.itemQuantities ?? {}))];
   const { data: lineLookup = [] } = useItemsByIds(lineIds);
@@ -365,7 +364,7 @@ export function FactionOrderDetail() {
       <OrderTraceability
         key={order.id}
         order={order}
-        allOrders={allOrders}
+        previousOrder={previousOrder}
         itemMap={itemMap}
         assemblyMap={assemblyMap}
         onOpenOrder={(id) => navigate(`/orders/faction/${id}`)}

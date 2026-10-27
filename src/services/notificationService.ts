@@ -2,7 +2,7 @@ import { apiPage, apiRequest } from './apiClient';
 import type { Page } from './apiPagination';
 
 export type AppNotification = { id: string; type: string; payload: Record<string, unknown>; orderId?: string; createdAt: number; readAt?: number };
-export const NOTICE_PAGE_SIZE = 50;
+const NOTICE_PAGE_SIZE = 50;
 /** One page of unread notices, newest first, paged on the server so read notices never hide older unread ones. */
 export function getUnreadNotifications(page: number): Promise<Page<AppNotification>> {
   return apiPage('/api/notifications', page, NOTICE_PAGE_SIZE, { query: { unread: true } });

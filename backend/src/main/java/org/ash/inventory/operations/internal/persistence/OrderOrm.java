@@ -72,12 +72,12 @@ public class OrderOrm extends EntityOrm {
         if (filter.eventId() != null) jpql.append(" and event.id = :eventId");
         else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
         boolean searching = filter.search() != null && !filter.search().isBlank();
-        if (searching) jpql.append(" and (lower(o.name) like :search or lower(o.purpose) like :search)");
+        if (searching) jpql.append(" and (lower(o.name) like :search escape '!' or lower(o.purpose) like :search escape '!')");
         var query = entityManager.createQuery(jpql + InventoryAccessOrm.scope("order", "o") + " order by o.createdAt desc, o.id", InventoryOrder.class);
         if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
         if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());
         else if (filter.eventType() != null && !filter.eventType().isBlank()) query.setParameter("eventType", filter.eventType());
-        if (searching) query.setParameter("search", "%" + filter.search().trim().toLowerCase(Locale.ROOT) + "%");
+        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(filter.search()));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

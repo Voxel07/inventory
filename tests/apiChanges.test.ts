@@ -3,14 +3,42 @@ import { QueryClient } from '@tanstack/react-query';
 import { decodeServerChange, localWriteChange } from '../src/services/apiChanges';
 import { createApiChangeCoalescer, invalidateForApiChange } from '../src/utils/realtimeInvalidation';
 
-test('role changes discard cached organization data, including inactive event queries', async () => {
+test('a change of this account discards cached organization data, including inactive event queries', async () => {
   const client = new QueryClient();
   const keys = [['event-reports'], ['event-logistics', 'event-a', 'attendees'], ['items'], ['users']];
   keys.forEach(key => client.setQueryData(key, [{ sensitive: 'organization data' }]));
-  invalidateForApiChange(client, localWriteChange('/api/users/user-a'));
+  invalidateForApiChange(client, decodeServerChange({ type: 'user.changed' }));
   await new Promise(resolve => setTimeout(resolve, 0));
   keys.forEach(key => expect(client.getQueryData(key)).toBeUndefined());
   client.clear();
+});
+
+test('changes of other accounts refresh only account lists', async () => {
+  const client = new QueryClient();
+  for (const key of [['users'], ['items'], ['faction-orders']]) client.setQueryData(key, [{ id: 'kept' }]);
+  for (const change of [localWriteChange('/api/users/user-a'), decodeServerChange({ type: 'users.changed' })]) {
+    invalidateForApiChange(client, change);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(client.getQueryState(['users'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['items'])?.isInvalidated).toBe(false);
+    expect(client.getQueryData(['faction-orders'])).toEqual([{ id: 'kept' }]);
+  }
+  client.clear();
+});
+
+test('server event families map to their readers instead of refetching everything', () => {
+  // The stream sends `<family>.changed`; these are the families whose names differ from local write types.
+  for (const [type, touched, untouched] of [
+    ['location.changed', ['storageLocations'], ['items']],
+    ['planning.changed', ['procurement-deficits'], ['items']],
+  ] as const) {
+    const client = new QueryClient();
+    for (const key of [...touched, ...untouched]) client.setQueryData([key], []);
+    invalidateForApiChange(client, decodeServerChange({ type }));
+    for (const key of touched) expect(client.getQueryState([key])?.isInvalidated).toBe(true);
+    for (const key of untouched) expect(client.getQueryState([key])?.isInvalidated).toBe(false);
+    client.clear();
+  }
 });
 
 test('a reminder write invalidates inbox queries without refetching stock or reports', () => {

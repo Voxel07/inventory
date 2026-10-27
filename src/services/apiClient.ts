@@ -14,6 +14,7 @@ import {
   announceLogout,
   assertAuthSession,
   AuthPersistenceError,
+  canRefreshAuth,
   captureAuthSession,
   type AuthSessionContext,
   clearAuth,
@@ -21,6 +22,7 @@ import {
   getAuthSnapshot,
   getOidcIdToken,
   getRevocableTokens,
+  getValidAccessToken,
   restorePersistedSession,
   setAuthError,
   setDevelopmentSession,
@@ -61,7 +63,7 @@ export async function login(): Promise<void> {
   }
   if (AUTH_CONFIGURATION_ERROR) throw new Error(AUTH_CONFIGURATION_ERROR);
   const response = await apiRequest<{ token: string; user: User }>('/api/auth/dev-login', {
-    method: 'POST', body: { email: 'admin@localhost', password: '' }, anonymous: true,
+    method: 'POST', body: { email: 'admin@localhost' }, anonymous: true,
   });
   assertAuthSession(context);
   setDevelopmentSession(response.token, response.user);
@@ -137,7 +139,7 @@ export async function switchImpersonation(target: User | null): Promise<void> {
 }
 
 /** A repeated value (`readonly string[]`) becomes one query parameter per element. */
-export type QueryValue = string | number | boolean | undefined | readonly string[];
+type QueryValue = string | number | boolean | undefined | readonly string[];
 export type ApiQuery = Record<string, QueryValue>;
 
 type RequestOptions = {
@@ -414,6 +416,10 @@ function handleSseBlock(block: string): void {
   }
   const changeDetail = decodeServerChange(detail);
   if (changeDetail.type === 'heartbeat') return;
+  if (changeDetail.type === 'stream.expiring') {
+    void startRealtimeEvents({ handover: true });
+    return;
+  }
   const now = Date.now();
   for (const [id, timestamp] of seenEventIds) {
     if (now - timestamp > 600_000) seenEventIds.delete(id);
@@ -427,14 +433,25 @@ function handleSseBlock(block: string): void {
   if (changeDetail.type === 'user.changed') void refreshCurrentUser();
 }
 
-export async function startRealtimeEvents(): Promise<void> {
-  stopRealtimeEvents();
+/**
+ * `handover`: the current stream announced its end (`stream.expiring`). The next stream connects while the current one
+ * still delivers changes and only then replaces it, so nothing was missed and cached data stays valid.
+ */
+export async function startRealtimeEvents(options: { handover?: boolean } = {}): Promise<void> {
+  const previous = options.handover ? sseAbortController : null;
+  if (previous && sseRetryTimer) {
+    clearTimeout(sseRetryTimer);
+    sseRetryTimer = null;
+  }
+  if (!previous) stopRealtimeEvents();
   if (!navigator.onLine || !getAuthSnapshot().token) return;
 
   const context = captureAuthSession();
   const controller = new AbortController();
   sseAbortController = controller;
   try {
+    // The server bounds a stream by its token, so the next stream needs a fresh one to outlive this handover.
+    if (previous && canRefreshAuth()) await getValidAccessToken(true).catch(() => undefined);
     const headers = await getAuthorizationHeaders(controller.signal);
     assertAuthSession(context);
     if (controller.signal.aborted) return;
@@ -446,8 +463,10 @@ export async function startRealtimeEvents(): Promise<void> {
     if (!response.ok || !response.body) throw new Error(`Event stream failed (${response.status})`);
     if (controller.signal.aborted) return;
     // The stream has no replay cursor; a reconnect must recover changes (including permission changes)
-    // missed while disconnected. The first connection of a session has nothing to recover.
-    if (realtimeGeneration === context.generation) {
+    // missed while disconnected. The first connection of a session and a handover have nothing to recover.
+    if (previous) {
+      previous.abort();
+    } else if (realtimeGeneration === context.generation) {
       conditionalGetCache.clear();
       publishApiChange({ type: 'realtime.reconnected' }, context);
       void refreshCurrentUser();

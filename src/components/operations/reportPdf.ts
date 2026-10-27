@@ -1,7 +1,7 @@
 import type { Translator } from '../../utils/naming';
 import { formatDateTime, formatReportValue } from '../../utils/dateFormat';
 
-export interface ReportPdfOptions {
+interface ReportPdfOptions {
   title: string;
   definition?: string;
   generatedAt: number;

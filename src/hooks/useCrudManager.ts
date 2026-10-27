@@ -2,19 +2,19 @@ import { useState } from 'react';
 import { useMutationFeedback } from './useMutationFeedback';
 import { useT } from '../utils/naming';
 
-export interface MutationLike<TArgs> {
+interface MutationLike<TArgs> {
   mutate: (args: TArgs, options?: { onSuccess?: () => void; onError?: (error: unknown) => void }) => void;
   isPending?: boolean;
 }
 
-export interface CrudMutations<TForm> {
+interface CrudMutations<TForm> {
   create: MutationLike<TForm>;
   update: MutationLike<{ id: string; data: Partial<TForm> }>;
   delete: MutationLike<string>;
   deleteMany?: MutationLike<string[]>;
 }
 
-export interface CrudManagerOptions {
+interface CrudManagerOptions {
   entityName: string;
   entityNamePlural?: string;
   createSuccessMessage?: string;

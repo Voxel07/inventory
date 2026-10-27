@@ -120,7 +120,7 @@ function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; f
   return (
     <TableRow hover>
       <TableCell component="th" scope="row" sx={{ fontWeight: 700, whiteSpace: compact ? undefined : 'nowrap', overflowWrap: 'anywhere' }}>
-        {user.name || user.username || user.email}
+        {user.name || user.email}
         {compact && user.email && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 400 }}>{user.email}</Typography>}
       </TableCell>
       {!compact && <TableCell sx={{ whiteSpace: 'nowrap' }}>{user.email}</TableCell>}

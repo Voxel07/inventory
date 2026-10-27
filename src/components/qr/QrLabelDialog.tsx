@@ -3,7 +3,7 @@ import { Dialog } from '../shared/ClosableDialog';
 import { QRCodeGenerator } from './QRCodeGenerator';
 import type { QRResourceType } from '../../utils/qrCode';
 
-export interface QrLabel {
+interface QrLabel {
   title: string;
   /** ID encoded in the QR payload. */
   itemId: string;

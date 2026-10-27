@@ -4,7 +4,7 @@ import { LIST_PAGE_SIZE, loadAllPages, type Page } from './apiPagination';
 import { getOfflineCatalog, removeOfflineCatalog, setOfflineCatalog, setOfflineCatalogEntries } from './offlineQueue';
 import { assertAuthSession, captureAuthSession, type AuthSessionContext } from './authManager';
 
-export interface ResourceOptions<TForm, T = unknown> {
+interface ResourceOptions<TForm, T = unknown> {
   /** List rows have the full detail projection and can seed exact offline entries. */
   cacheDetails?: boolean;
   transformPayload?: (data: Partial<TForm>, isUpdate?: boolean) => Promise<Record<string, unknown>> | Record<string, unknown>;
@@ -12,14 +12,14 @@ export interface ResourceOptions<TForm, T = unknown> {
   customUpdate?: (id: string, data: Partial<TForm>, basePath: string, session: AuthSessionContext) => Promise<T>;
 }
 
-export interface CollectionResourceApi<T> {
+interface CollectionResourceApi<T> {
   /** One server page; screens read pages on demand. */
   getPage: (query: ApiQuery | undefined, page: number, size?: number, cacheRequired?: boolean) => Promise<Page<T>>;
   /** Explicit exhaustive read (imports, exports, hierarchy pickers, offline snapshots). */
   getAll: (query?: ApiQuery) => Promise<T[]>;
 }
 
-export interface ReadResourceApi<T> extends CollectionResourceApi<T> {
+interface ReadResourceApi<T> extends CollectionResourceApi<T> {
   getById: (id: string) => Promise<T>;
 }
 

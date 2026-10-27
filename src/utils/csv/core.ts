@@ -83,7 +83,7 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
   return { headers, rows };
 }
 
-export function detectDelimiter(line: string): string {
+function detectDelimiter(line: string): string {
   let inQuotes = false;
   let commas = 0;
   let semicolons = 0;
@@ -109,7 +109,7 @@ export function detectDelimiter(line: string): string {
   return ',';
 }
 
-export function normalizeKey(key: string): string {
+function normalizeKey(key: string): string {
   return key
     .toLowerCase()
     .replace(/[^a-z0-9äöüß]/g, '')
@@ -162,10 +162,6 @@ export const DESCRIPTION_ALIASES = ['description', 'beschreibung', 'details', 'i
 export const CONTAINER_SIZE_ALIASES = ['containersize', 'gebindegroesse', 'gebindegröße', 'packungsgroesse'];
 
 export const CONTAINER_COUNT_ALIASES = ['containercount', 'gebindeanzahl', 'packungsanzahl'];
-
-export const MAINTENANCE_DAYS_ALIASES = ['maintenanceintervaldays', 'wartungsintervall', 'wartungsintervalltage'];
-
-export const NEXT_MAINTENANCE_DUE_ALIASES = ['nextmaintenancedue', 'naechstewartung', 'nächstewartung', 'wartungfaellig', 'wartungfällig'];
 
 /** Yes/no: the warehouse records the hours run when it checks a return. */
 export const TRACKS_RUNTIME_ALIASES = ['tracksruntime', 'betriebsstundenerfassen', 'laufzeiterfassen', 'laufzeit'];

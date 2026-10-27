@@ -53,16 +53,6 @@ public final class MaintenancePolicy {
 
     /** Days before a calendar due date in which item and asset calendars report {@code due_soon}. */
     public static final int CALENDAR_WARNING_DAYS = 30;
-
-    /** Calendar status derived from the out-of-service flag and the due date of one scope. */
-    public static DomainEnums.MaintenanceStatus calendarStatus(boolean outOfService, LocalDate due, LocalDate today) {
-        if (outOfService) return DomainEnums.MaintenanceStatus.in_service;
-        if (due == null) return DomainEnums.MaintenanceStatus.certified;
-        if (due.isBefore(today)) return DomainEnums.MaintenanceStatus.overdue;
-        if (!due.isAfter(today.plusDays(CALENDAR_WARNING_DAYS))) return DomainEnums.MaintenanceStatus.due_soon;
-        return DomainEnums.MaintenanceStatus.certified;
-    }
-
     public static DomainEnums.MaintenanceStatus itemStatus(Item item, LocalDate today) {
         return item.outOfService ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
     }

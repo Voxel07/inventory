@@ -36,9 +36,9 @@ public class OperationsOrm extends EntityOrm {
         if (start != null) jpql.append(" and tx.occurredAt >= :start");
         if (end != null) jpql.append(" and tx.occurredAt < :end");
         boolean searching = search != null && !search.isBlank();
-        if (searching) jpql.append(" and (lower(tx.item.name) like :search or lower(tx.user.name) like :search or lower(coalesce(tx.reason, '')) like :search"
-                + " or lower(coalesce(tx.notes, '')) like :search or lower(coalesce(tx.eventType, '')) like :search or lower(coalesce(tx.faction, '')) like :search"
-                + " or lower(coalesce(e.name, oe.name, '')) like :search or lower(coalesce(o.orderCode, o.name, '')) like :search)");
+        if (searching) jpql.append(" and (lower(tx.item.name) like :search escape '!' or lower(tx.user.name) like :search escape '!' or lower(coalesce(tx.reason, '')) like :search escape '!'"
+                + " or lower(coalesce(tx.notes, '')) like :search escape '!' or lower(coalesce(tx.eventType, '')) like :search escape '!' or lower(coalesce(tx.faction, '')) like :search escape '!'"
+                + " or lower(coalesce(e.name, oe.name, '')) like :search escape '!' or lower(coalesce(o.orderCode, o.name, '')) like :search escape '!')");
         jpql.append(" order by tx.occurredAt desc, tx.id desc");
         var query = entityManager.createQuery(jpql.toString(), StockTransaction.class);
         if (itemId != null) query.setParameter("itemId", itemId);
@@ -48,7 +48,7 @@ public class OperationsOrm extends EntityOrm {
         if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);
-        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
+        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
@@ -60,10 +60,10 @@ public class OperationsOrm extends EntityOrm {
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
         if (!statuses.isEmpty()) jpql.append(" and d.status in :statuses");
         boolean searching = search != null && !search.isBlank();
-        if (searching) jpql.append(" and (lower(d.description) like :search or lower(di.name) like :search or lower(da.name) like :search or lower(asset.assetCode) like :search)");
+        if (searching) jpql.append(" and (lower(d.description) like :search escape '!' or lower(di.name) like :search escape '!' or lower(da.name) like :search escape '!' or lower(asset.assetCode) like :search escape '!')");
         jpql.append(" order by d.createdAt desc, d.id desc");
         var query = entityManager.createQuery(jpql.toString(), DamageReport.class);
-        if (searching) query.setParameter("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%");
+        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         if (itemId != null) query.setParameter("itemId", itemId);
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (assemblyId != null) query.setParameter("assemblyId", assemblyId);
@@ -220,6 +220,7 @@ public class OperationsOrm extends EntityOrm {
                 .getSingleResult();
     }
 
+    /** Per-item query kept as the regression oracle for the batched reservation snapshot. */
     public Map<UUID, Long> activeReservationQuantities(Collection<UUID> itemIds) {
         var quantities = new LinkedHashMap<UUID, Long>();
         if (itemIds.isEmpty()) return quantities;

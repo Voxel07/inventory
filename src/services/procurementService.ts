@@ -26,7 +26,7 @@ export type ProcurementDeficit = {
 };
 
 export type Vendor = { id: string; name: string; active: boolean; contactPerson?: string; email?: string; phone?: string; address?: string; website?: string; paymentNotes?: string; preferredVendor?: boolean; internalNotes?: string };
-export type PurchaseOrderLine = { id: string; itemId: string; itemName: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPriceCents: number };
+type PurchaseOrderLine = { id: string; itemId: string; itemName: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPriceCents: number };
 export type PurchaseOrder = { id: string; orderNumber: string; vendorId: string; vendorName: string; eventOccurrenceId?: string; orderDate: number; expectedDeliveryDate?: number; status: string; createdById: string; createdByName: string; notes?: string; lines: PurchaseOrderLine[] };
 export const saveVendor = (data: object, id?: string) => apiRequest<Vendor>(`/api/vendors${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: data });
 export const updatePurchaseOrder = (id: string, data: object) => apiRequest<PurchaseOrder>(`/api/purchase-orders/${id}`, { method: 'PUT', body: data });

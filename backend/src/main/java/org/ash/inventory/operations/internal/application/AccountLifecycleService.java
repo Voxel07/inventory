@@ -39,7 +39,7 @@ public class AccountLifecycleService {
         long keepers = em.createQuery("select count(l) from StorageLocation l where l.keeperUser.id = :id", Long.class).setParameter("id", id).getSingleResult();
         var resources = owned(id, 201);
         return new Overview(user.active, user.accessRevision, user.deactivatedAt, keepers,
-                custody.list(false).stream().filter(b -> id.equals(b.personId())).toList(), resources.stream().limit(200).toList(), resources.size() > 200);
+                custody.of(id, null), resources.stream().limit(200).toList(), resources.size() > 200);
     }
 
     @Transactional

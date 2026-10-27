@@ -4,7 +4,6 @@ export interface StorageLocation {
   hierarchyPath?: string;
   keeperUserId?: string;
   keeperUserName?: string;
-  keeperUserEmail?: string;
   access?: InventoryAccess;
   /** Null if an ancestor is hidden; otherwise 0 = site, 1 = section, 2+ = place. */
   depth: number | null;
@@ -78,7 +77,7 @@ export interface ItemStock {
   ordered: number;
 }
 
-export interface MaintenanceBlock {
+interface MaintenanceBlock {
   scheduleId: string;
   maintenanceType: MaintenanceType;
   assetCode: string | null;
@@ -144,7 +143,7 @@ export interface Item {
 }
 
 export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
-export type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_service';
+type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_service';
 
 export interface ItemFormData {
   privateResource?: boolean;
@@ -231,7 +230,7 @@ export interface ReturnSubmission {
   eventName?: string;
 }
 
-export interface ReturnDamage {
+interface ReturnDamage {
   id: string;
   assetCode?: string;
   quantity: number;

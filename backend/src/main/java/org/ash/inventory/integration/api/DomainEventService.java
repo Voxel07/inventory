@@ -48,6 +48,7 @@ public class DomainEventService {
                 event.aggregateType = aggregateType;
                 event.aggregateId = aggregateId;
                 event.actorId = actorId;
+                event.impersonatorId = org.ash.inventory.platform.api.ImpersonationContext.current();
                 event.idempotencyKey = idempotencyKey;
                 event.payload = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
                 event.traceContext.putAll(telemetry.captureTraceContext());

@@ -181,7 +181,7 @@ Rental/loan economics and evidence live in the agreement's current fields/JSON; 
 | `category_maintenance_policies` | UUID; unique category, interval days and timestamps |
 | `operational_reports` | Report name PK; generation version/times, source token and JSON rows; eight snapshot kinds |
 | `sync_command_audit` | UUID; unique command ID, owner/operation/payload/local time, server result/status/conflict/retry; supersedes and resolution-root FKs to command IDs |
-| `domain_event_outbox` | UUID; unique event ID, aggregate/actor/command, type/payload, aggregate revision, delivery status/attempts/availability/published time/error |
+| `domain_event_outbox` | UUID; unique event ID, aggregate/actor (and impersonating administrator)/command, type/payload, aggregate revision, delivery status/attempts/availability/published time/error |
 | `report_rebuild_jobs` | Reporting-owned coalesced jobs; requester, state, attempts, lease token/expiry and safe failure text |
 | `media_cleanup_jobs` | Operations-owned object cleanup intents; key, due time and fenced deletion lease |
 | `integration_aggregate_sequences` | Integration-owned commit-ordered revision per aggregate type/UUID |

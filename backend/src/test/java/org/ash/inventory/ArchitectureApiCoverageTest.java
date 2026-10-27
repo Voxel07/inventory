@@ -185,8 +185,7 @@ class ArchitectureApiCoverageTest {
         String shelf = location(), id = item(shelf, 3, "bulk");
         reader().body(Map.of("userId", user)).put("/api/member/assignments/" + shelf).then().statusCode(403);
         admin().body(Map.of("userId", user)).put("/api/member/assignments/" + shelf).then().statusCode(204);
-        admin().get("/api/member/assignments").then().statusCode(200)
-                .body("find { it.id == '" + shelf + "' }.userId", equalTo(user));
+        admin().get("/api/storage-locations/" + shelf).then().statusCode(200).body("keeperUserId", equalTo(user));
         actor("member", "faction_leader").get("/api/member/storage").then().statusCode(200).body("itemId", hasItem(id));
         reader().get("/api/member/storage").then().statusCode(200).body("itemId", not(hasItem(id)));
         var request = Map.of("itemId", id, "locationId", shelf, "kind", "pickup", "quantity", 1,
@@ -288,6 +287,76 @@ class ArchitectureApiCoverageTest {
         reader().get("/api/users").then().statusCode(403);
         admin().get("/api/users/assignable?size=200").then().statusCode(200).body("id", hasItem(user));
         reader().get("/api/users/assignable").then().statusCode(403);
+        admin().header("X-Impersonate-User", user).get("/api/auth/me").then().statusCode(400);
+    }
+
+    @Test void assignablePeopleCarryNoContactOrAccessDetailsAndExcludeDeactivatedAccounts() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String leader = actor("assignable-leader-" + suffix, "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id");
+        String reader = actor("assignable-reader-" + suffix, "read_only").get("/api/auth/me").then().statusCode(200).extract().path("id");
+        var crew = actor("assignable-crew", "warehouse_crew");
+        crew.queryParam("search", suffix).get("/api/users/assignable").then().statusCode(200)
+                .body("id", hasItems(leader, reader))
+                .body("find { it.id == '" + leader + "' }.keySet()", containsInAnyOrder("id", "name"));
+        actor("assignable-crew", "warehouse_crew").queryParam("minRole", "faction_leader").queryParam("search", suffix)
+                .get("/api/users/assignable").then().statusCode(200)
+                .body("id", hasItem(leader)).body("id", not(hasItem(reader)));
+        actor("assignable-crew", "warehouse_crew").get("/api/users/assignable?minRole=owner").then().statusCode(400);
+        // LIKE wildcards in the search match literally.
+        actor("assignable-crew", "warehouse_crew").queryParam("size", 200).queryParam("search", "%").get("/api/users/assignable").then().statusCode(200)
+                .body("id", not(hasItem(leader)));
+
+        long revision = admin().get("/api/users/" + reader + "/lifecycle").then().statusCode(200).extract().jsonPath().getLong("revision");
+        admin().body(Map.of("active", false, "revision", revision, "reason", "Assignable test"))
+                .patch("/api/users/" + reader + "/lifecycle").then().statusCode(204);
+        actor("assignable-crew", "warehouse_crew").queryParam("search", suffix).get("/api/users/assignable").then().statusCode(200)
+                .body("id", not(hasItem(reader)));
+    }
+
+    /** Calendar dates travel as epoch milliseconds of their UTC midnight. */
+    private static long date(int year, int month, int day) {
+        return java.time.LocalDate.of(year, month, day).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+    }
+
+    @Test void previousFactionOrderIsTheLatestNonCancelledOrderOfAnEarlierYear() {
+        String faction = "Previous " + UUID.randomUUID().toString().substring(0, 8), id = item(location(), 5, "bulk");
+        java.util.function.Function<Long, String> order = date -> {
+            String event = admin().body(Map.of("name", faction + " " + date, "eventType", "DE", "startDate", date))
+                    .post("/api/events").then().statusCode(200).extract().path("id");
+            return admin().body(Map.of("eventType", "DE", "faction", faction, "eventDate", date, "eventOccurrenceId", event,
+                    "requestedQuantities", Map.of(id, 1))).post("/api/orders/faction").then().statusCode(200).extract().path("id");
+        };
+        String older = order.apply(date(2029, 6, 1));
+        String previous = order.apply(date(2030, 6, 1));
+        String cancelled = order.apply(date(2030, 9, 1));
+        admin().body(Map.of()).post("/api/orders/faction/" + cancelled + "/transitions/cancelled").then().statusCode(200);
+        order.apply(date(2031, 3, 1)); // same year as the compared order: never its baseline
+        String current = order.apply(date(2031, 6, 1));
+        var query = Map.<String, Object>of("eventType", "DE", "faction", faction, "before", date(2031, 6, 1));
+        reader().queryParams(query).queryParam("excludeId", current).get("/api/orders/faction/previous").then().statusCode(200)
+                .body("id", equalTo(previous));
+        reader().queryParams(query).queryParam("excludeId", previous).get("/api/orders/faction/previous").then().statusCode(200)
+                .body("id", equalTo(older));
+        reader().queryParams(Map.of("eventType", "DE", "faction", faction, "before", date(2029, 6, 1)))
+                .get("/api/orders/faction/previous").then().statusCode(204);
+    }
+
+    @Test void inventorySummaryFollowsCommittedStockChanges() {
+        long items = admin().get("/api/inventory-summary").then().statusCode(200).extract().jsonPath().getLong("items");
+        admin().get("/api/inventory-summary").then().statusCode(200).body("items", equalTo((int) items));
+        item(location(), 2, "bulk");
+        admin().get("/api/inventory-summary").then().statusCode(200).body("items", equalTo((int) items + 1));
+        reader().get("/api/inventory-summary").then().statusCode(200).body("items", greaterThanOrEqualTo(1));
+    }
+
+    @Test void personalNtfyTopicsCannotTakeAnAdministratorTopic() {
+        var member = actor("ntfy-member", "faction_leader");
+        member.body(Map.of("ntfyTopic", "inventory-users")).put("/api/notifications/settings").then().statusCode(400);
+        actor("ntfy-member", "faction_leader").body(Map.of("ntfyTopic", "INVENTORY-ITEMS")).put("/api/notifications/settings").then().statusCode(400);
+        actor("ntfy-member", "faction_leader").body(Map.of("ntfyTopic", "member-" + UUID.randomUUID().toString().substring(0, 8)))
+                .put("/api/notifications/settings").then().statusCode(200);
+        actor("ntfy-member", "faction_leader").body(Map.of("webhookUrl", "https://127.0.0.1/hook"))
+                .put("/api/notifications/settings").then().statusCode(400);
     }
 
     @Test void loanExtensionsCheckRevisionAndKeepBothConsentDates() {

@@ -1,7 +1,7 @@
 import type { GeneralOrder, GeneralOrderSummary, GeneralOrderFormData } from '../types';
 import { createMutableResourceApi } from './resourceFactory';
 import { apiPage, apiRequest } from './apiClient';
-import { loadAllPages, type Page } from './apiPagination';
+import type { Page } from './apiPagination';
 import type { GeneralOrderCommands } from '../types/order';
 import { changeOrderStatus, orderPath, prepareOrder, reconcileOrder } from './orderCommands';
 
@@ -10,17 +10,13 @@ const getPage = (query: { status?: readonly string[]; eventId?: string; eventTyp
   apiPage<GeneralOrderSummary>(orderPath('general'), page, size, { query });
 export const generalOrderApi = {
   ...mutations,
-  create: createOrder,
   getPage,
-  getAll: (query?: { status?: readonly string[] }) => loadAllPages((page, size) => getPage(query, page, size)),
 };
-export const getOrders = generalOrderApi.getPage;
 export function createOrder(data: GeneralOrderFormData) {
   const idempotencyKey = crypto.randomUUID();
   return apiRequest<GeneralOrder>(orderPath('general'), { method: 'POST', body: { ...data, idempotencyKey },
     offline: { type: 'order.create', payload: { kind: 'general', ...data }, idempotencyKey } });
 }
-export const updateOrder = generalOrderApi.update;
 export function transitionOrder(id: string, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel') {
   const statuses = { submit: 'submitted', ready: 'ready', pickup: 'picked_up', close: 'closed', cancel: 'cancelled' } as const;
   return changeOrderStatus<GeneralOrder>('general', id, statuses[action]);

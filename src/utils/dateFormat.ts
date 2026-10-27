@@ -1,5 +1,5 @@
 /** Dates cross API/storage boundaries as signed epoch milliseconds. Calendar days use midnight UTC. */
-export type DateValue = number | Date | null | undefined;
+type DateValue = number | Date | null | undefined;
 export type DateFieldValue = number | '';
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -38,7 +38,7 @@ export function dateAtTime(value: number, hours = 0, minutes = 0): number {
   return new Date(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hours, minutes).getTime();
 }
 
-export function formatDateInput(value: number, withTime: boolean): string {
+function formatDateInput(value: number, withTime: boolean): string {
   return withTime ? formatDateTime(value, '') : formatDate(value, '');
 }
 

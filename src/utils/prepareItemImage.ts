@@ -5,7 +5,7 @@ const MAX_PIXELS = 40_000_000;
 const MAX_BYTES = 20 * 1024 * 1024;
 const preparedImages = new WeakSet<File>();
 
-export interface ImageCrop { x: number; y: number; width: number; height: number }
+interface ImageCrop { x: number; y: number; width: number; height: number }
 
 export function calculateImageCrop(width: number, height: number, aspect: number, zoom: number, x: number, y: number): ImageCrop {
   const cropWidth = Math.min(width, height * aspect) / zoom;

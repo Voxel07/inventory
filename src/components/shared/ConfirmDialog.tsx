@@ -4,7 +4,7 @@ import type { ButtonProps } from '@mui/material';
 import { DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { translate, useT } from '../../utils/naming';
 
-export interface ConfirmDialogProps {
+interface ConfirmDialogProps {
   open: boolean;
   title: string;
   message: string;

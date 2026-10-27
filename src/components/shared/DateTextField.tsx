@@ -14,8 +14,8 @@ import { type DateFieldValue } from '../../utils/dateFormat';
 import { Button, IconButton } from './ActionButtons';
 import { useT } from '../../utils/naming';
 
-export const DATE_FORMAT = 'DD-MM-YYYY';
-export const DATE_TIME_FORMAT = 'DD-MM-YYYY HH:mm';
+const DATE_FORMAT = 'DD-MM-YYYY';
+const DATE_TIME_FORMAT = 'DD-MM-YYYY HH:mm';
 
 /** Pickers exchange epoch milliseconds; date-only values represent midnight UTC. */
 function toDayjs(value: unknown, withTime = false): Dayjs | null {

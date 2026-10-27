@@ -193,7 +193,7 @@ class P2StorageRegressionTest {
         tx(item, user, DomainEnums.TransactionType.written_off, 2, true);
         tx(item, user, DomainEnums.TransactionType.missing, 3, false);
         tx(item, other, DomainEnums.TransactionType.checkout, 9, false);
-        em.flush(); em.clear(); stats().clear(); var rows = custody.directBalances(user.id);
+        em.flush(); em.clear(); stats().clear(); var rows = custody.directBalances(user.id, null);
         assertEquals(1, rows.size()); assertEquals(5, rows.getFirst().quantity()); assertNull(rows.getFirst().event());
         assertEquals(3, stats().getPrepareStatementCount(), "Aggregate plus two metadata batches, regardless of history length");
     }

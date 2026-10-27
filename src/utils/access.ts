@@ -1,7 +1,7 @@
 import { ROLE_LADDER } from '../types';
 import type { AccessRole, User } from '../types';
 
-export function effectiveAccess(user: User | null | undefined): AccessRole | 'none' {
+function effectiveAccess(user: User | null | undefined): AccessRole | 'none' {
   return user?.role ?? 'none';
 }
 

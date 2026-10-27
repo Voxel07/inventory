@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import type { Assembly, FactionOrder, Item, StorageLocation } from '../src/types';
 import { getItemStock } from '../src/utils/stock';
 import { assemblyAvailability } from '../src/utils/factionOrderQuantities';
-import { factionOrderItemBaseline, factionOrderAssemblyBaseline, findPreviousFactionOrder } from '../src/utils/factionOrderHistory';
+import { factionOrderItemBaseline, factionOrderAssemblyBaseline } from '../src/utils/factionOrderHistory';
 import { buildLocationTree, filterLocationTree, holdsStock, isDescendant, locationPath, locationRole } from '../src/utils/locationHierarchy';
 import { generateStoragePlaces, generatedCount } from '../src/utils/storageGenerator';
 import { calculateImageCrop } from '../src/utils/prepareItemImage';
@@ -28,18 +28,6 @@ const order = (id: string, date: number, status: FactionOrder['status'] = 'close
   id, eventDate: date, status, faction, eventType, requestedQuantities: { radio: 8 }, preparedQuantities: { radio: 5 },
   requestedAssemblyQuantities: { kit: 3 }, preparedAssemblyQuantities: { kit: 2 },
 } as FactionOrder);
-
-test('previous-year comparison ignores current-year, cancelled, other-faction and other-event orders', () => {
-  const previous = order('previous', 1749686400000);
-  const candidates = [order('current', 1767225600000), order('cancelled', 1764547200000, 'cancelled'),
-    order('other-faction', 1761955200000, 'closed', 'GOF'), order('other-event', 1759276800000, 'closed', 'KGG', 'LS'),
-    order('older', 1718150400000), previous];
-  const values = { eventType: 'DE', faction: 'KGG', eventDate: 1781222400000 };
-  expect(findPreviousFactionOrder(candidates, values)).toBe(previous);
-  expect(findPreviousFactionOrder(candidates, { ...values, excludeId: 'previous' })?.id).toBe('older');
-  expect(findPreviousFactionOrder(candidates, { ...values, eventDate: NaN })).toBeUndefined();
-  expect(findPreviousFactionOrder([], values)).toBeUndefined();
-});
 
 test('historical baselines compare handed-over preparation; open orders compare demand', () => {
   for (const status of ['picked_up', 'partially_returned', 'returned', 'closed'] as const) {

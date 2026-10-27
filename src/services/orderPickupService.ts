@@ -5,7 +5,7 @@ import type { AccessPerson } from '../types/inventoryAccess';
 
 export type { OrderKind } from '../types/orderCommands';
 export type PickupAssignment = { responsiblePersonId: string | null; groupName: string; pickupLocationId: string | null };
-export type PickupLine = { itemId: string; name: string; ordered: number; prepared: number };
+type PickupLine = { itemId: string; name: string; ordered: number; prepared: number };
 export type PickupGroup = { key: string; name: string; responsiblePersonId?: string; responsiblePersonName?: string; pickupLocationId?: string; pickupLocationName?: string; items: PickupLine[] };
 export type PickupPlan = { orderName: string; status: string; canEdit: boolean; pickupPointsComplete: boolean; groups: PickupGroup[] };
 export type ItemResponsibility = { responsiblePersonId?: string; responsiblePersonName?: string };

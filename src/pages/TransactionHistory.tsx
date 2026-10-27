@@ -45,7 +45,7 @@ export function TransactionHistoryPage() {
         </Box>
         <TextField select label={t('common.user')} value={transactionFilters.userId} onChange={(event) => setTransactionFilters({ userId: event.target.value })} size="small" sx={{ minWidth: 150 }}>
           <MenuItem value="">{t('pages.transactionHistory.allUsers')}</MenuItem>
-          {users?.map((user) => <MenuItem key={user.id} value={user.id}>{user.name?.trim() || user.username || user.email || user.id}</MenuItem>)}
+          {users?.map((user) => <MenuItem key={user.id} value={user.id}>{user.name?.trim() || user.email || user.id}</MenuItem>)}
         </TextField>
         <Autocomplete size="small" sx={{ minWidth: 240, flex: '1 1 240px' }} options={events.data ?? []}
           value={events.data?.find((event) => event.id === transactionFilters.eventOccurrenceId) ?? null}

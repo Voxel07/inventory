@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button, IconButton } from './ActionButtons';
 
-export interface TooltipButtonProps {
+interface TooltipButtonProps {
     tooltipText: string;
     icon?: React.ReactNode;
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;

@@ -81,7 +81,7 @@ On **Maintenance**, set a category's interval in days to schedule its items. An 
 
 ## PostgreSQL schema and API
 
-OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health`. Flyway applies the single editable `V1.0.0__init.sql` baseline; Hibernate validates it. Recreate disposable databases after schema changes.
+OpenAPI, Swagger UI, and health endpoints are available at `/q/openapi`, `/q/swagger-ui`, and `/q/health` (in the prod profile `/q/openapi` is off unless `OPENAPI_ENABLED=true`). Flyway applies the single editable `V1.0.0__init.sql` baseline; Hibernate validates it. Recreate disposable databases after schema changes.
 
 Roles are enforced by the backend services (shared by REST, MCP and offline replay) using the six roles listed above. Every organization member reads all order lists; faction leaders change only the lists of the factions the admin assigned to them; inventory lifecycle actions remain warehouse-only.
 

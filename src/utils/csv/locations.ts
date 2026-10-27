@@ -3,7 +3,7 @@ import type { StorageLocation } from '../../types';
 /** `Betriebshof / Regal 3`, `Betriebshof > Regal 3` and `Betriebshof\Regal 3` all name the same path. */
 const PATH_SEPARATOR = /\s*(?:\/|>|\\)\s*/;
 
-export function locationPathSegments(value: string): string[] {
+function locationPathSegments(value: string): string[] {
   return value.split(PATH_SEPARATOR).map((segment) => segment.trim()).filter(Boolean);
 }
 
@@ -29,7 +29,7 @@ export function buildLocationIndex(locations: StorageLocation[]): Map<string, St
   return index;
 }
 
-export type CsvLocationMatch =
+type CsvLocationMatch =
   | { kind: 'found'; location: StorageLocation }
   | { kind: 'ambiguous'; name: string }
   | { kind: 'missing'; segments: string[] };

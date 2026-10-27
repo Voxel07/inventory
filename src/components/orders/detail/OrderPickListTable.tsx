@@ -28,7 +28,7 @@ import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
 import { translate, useT } from '../../../utils/naming';
 
-export interface OrderPickListTableProps {
+interface OrderPickListTableProps {
   order: FactionOrder;
   /** Items ordered on their own. */
   orderItems: Item[];

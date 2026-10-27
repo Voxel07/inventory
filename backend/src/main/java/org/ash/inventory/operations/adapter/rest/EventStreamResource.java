@@ -27,12 +27,16 @@ import java.util.Set;
  * <p>Broadcast classification: every authenticated session receives only the event family
  * ({@code stock.changed}, {@code order.changed}, …) and, for catalog changes, the catalog resource
  * kind. Aggregate IDs, actors, quantities and payloads are never sent. {@code access.*} events are
- * sent as {@code access.changed} so clients evict cached private data. The stream ends when the
- * bearer token expires; the client reconnects with a fresh token.
+ * sent as {@code access.changed} so clients evict cached private data. {@code user.*} events are
+ * {@code user.changed} only on the stream of the account they concern (its access may have changed) and
+ * {@code users.changed} on every other stream (the account directory changed). The stream ends when the
+ * bearer token expires; {@link #RENEW_BEFORE} earlier it sends {@code stream.expiring} so the client can open
+ * the next stream before this one ends and miss no change.
  */
 @Path("/api/events/stream")
 public class EventStreamResource {
     static final Duration MAX_STREAM = Duration.ofHours(1);
+    static final Duration RENEW_BEFORE = Duration.ofSeconds(30);
     private static final Set<String> CATALOG_RESOURCES = Set.of("items", "assemblies", "storage-locations", "events",
             "factions", "category-maintenance");
 
@@ -55,6 +59,7 @@ public class EventStreamResource {
     public Multi<Map<String, Object>> stream() {
         // The session belongs to the signed-in account, also while an administrator impersonates.
         var actorId = actors.authenticated().id;
+        var self = Set.copyOf(java.util.List.of(actorId.toString(), actors.current().id.toString()));
         String tokenHash = identity.getPrincipal() instanceof JsonWebToken token ? org.ash.inventory.operations.internal.application.AuthSessionService.fingerprint(token) : null;
         Duration lifetime = lifetime(identity.isAnonymous() ? null : identity.getPrincipal(), Instant.now());
         if (lifetime.isZero()) throw new ApiException(401, "Token expired");
@@ -70,7 +75,11 @@ public class EventStreamResource {
                         }
                         return Map.<String,Object>of("type","heartbeat");
                     });
-            return Multi.createBy().merging().streams(broadcaster.stream().map(EventStreamResource::publicEvent),guard).select().first(lifetime)
+            // Too short a stream to hand over: it ends and the client reconnects (and refreshes) as after an outage.
+            Multi<Map<String, Object>> expiring = lifetime.compareTo(RENEW_BEFORE.multipliedBy(2)) <= 0 ? Multi.createFrom().empty()
+                    : io.smallrye.mutiny.Uni.createFrom().item(Map.<String, Object>of("type", "stream.expiring"))
+                            .onItem().delayIt().by(lifetime.minus(RENEW_BEFORE)).toMulti();
+            return Multi.createBy().merging().streams(broadcaster.stream().map(event -> publicEvent(event, self)), guard, expiring).select().first(lifetime)
                     .onFailure(ApiException.class).recoverWithCompletion()
                     .onTermination().invoke((failure, cancelled) -> telemetry.streamClosed(
                             sessionEnded.get() ? "session_ended" : failure != null ? "error" : cancelled ? "client_cancelled" : "lifetime_expired", started));
@@ -84,12 +93,15 @@ public class EventStreamResource {
         return remaining.compareTo(MAX_STREAM) > 0 ? MAX_STREAM : remaining;
     }
 
-    static Map<String, Object> publicEvent(Map<String, Object> event) {
+    /** {@code self}: the signed-in and the acting account of this stream. */
+    static Map<String, Object> publicEvent(Map<String, Object> event, Set<String> self) {
         String type = String.valueOf(event.get("type"));
         if ("heartbeat".equals(type)) return Map.of("type", "heartbeat");
         int separator = type.indexOf('.');
         String family = separator > 0 ? type.substring(0, separator) : "inventory";
         if ("access".equals(family)) return Map.of("type", "access.changed");
+        if ("user".equals(family))
+            return Map.of("type", self.contains(String.valueOf(event.get("aggregateId"))) ? "user.changed" : "users.changed");
         if ("catalog".equals(family)) {
             Object resource = event.get("resource");
             return resource != null && CATALOG_RESOURCES.contains(resource.toString())

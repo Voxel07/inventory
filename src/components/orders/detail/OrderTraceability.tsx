@@ -4,32 +4,26 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { Button } from '../../shared/ActionButtons';
 import { useState } from 'react';
 import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
-import type { Assembly, FactionOrder, FactionOrderSummary, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
+import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
 import { translate, useT } from '../../../utils/naming';
-import { factionOrderAssemblyBaseline, factionOrderItemBaseline, findPreviousFactionOrder } from '../../../utils/factionOrderHistory';
+import { factionOrderAssemblyBaseline, factionOrderItemBaseline } from '../../../utils/factionOrderHistory';
 
 interface OrderTraceabilityProps {
   order: FactionOrder;
-  /** Orders of the same faction and event type; the previous one is compared. */
-  allOrders: FactionOrderSummary[];
+  /** The faction's order of the previous event year (server rule), compared with this one. */
+  previousOrder: FactionOrder | null;
   itemMap: Map<string, Item>;
   assemblyMap: Map<string, Assembly>;
   onOpenOrder: (id: string) => void;
 }
 
-function relationName(value: { name?: string; username?: string; email?: string } | undefined, fallback?: string) {
-  return value?.name || value?.username || value?.email || fallback || '—';
+function relationName(value: { name?: string; email?: string } | undefined, fallback?: string) {
+  return value?.name || value?.email || fallback || '—';
 }
 
-export function OrderTraceability({ order, allOrders, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
+export function OrderTraceability({ order, previousOrder, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
   const t = useT();
   const [comparePrevious, setComparePrevious] = useState(false);
-  const previousOrder = findPreviousFactionOrder(allOrders, {
-    eventType: order.eventType,
-    faction: order.faction,
-    eventDate: order.eventDate,
-    excludeId: order.id,
-  });
 
   const comparison = (() => {
     if (!previousOrder) return [];

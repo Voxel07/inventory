@@ -20,10 +20,12 @@ import java.util.Collection;
 public class CustodyOrm {
     private final EntityManager em;
     public CustodyOrm(EntityManager em) { this.em = em; }
-    public List<OrderLine> orderLines(UUID actor) {
+    /** {@code actor} and {@code item} narrow the balance to one custodian and/or one item; null reads all. */
+    public List<OrderLine> orderLines(UUID actor, UUID item) {
         var query = em.createQuery("from OrderLine l join fetch l.item i left join fetch i.returnLocation left join fetch i.storageLocation join fetch l.order o join fetch o.createdBy left join fetch o.faction left join fetch o.eventOccurrence where l.handedOverQuantity - l.returnedQuantity - l.consumedQuantity - l.damagedQuantity - l.writtenOffQuantity > 0"
-                + (actor == null ? "" : " and o.createdBy.id = :actor"), OrderLine.class);
+                + (actor == null ? "" : " and o.createdBy.id = :actor") + (item == null ? "" : " and i.id = :item"), OrderLine.class);
         if (actor != null) query.setParameter("actor", actor);
+        if (item != null) query.setParameter("item", item);
         return query.getResultList();
     }
     public java.util.Map<UUID, Item> items(Collection<UUID> ids) {
@@ -32,7 +34,7 @@ public class CustodyOrm {
                 .setParameter("ids", ids).getResultStream().collect(java.util.stream.Collectors.toMap(i -> i.id, i -> i));
     }
     public record Direct(Item item, UserAccount user, EventOccurrence event, UUID asset, int quantity) {}
-    public List<Direct> directBalances(UUID actor) {
+    public List<Direct> directBalances(UUID actor, UUID item) {
         var query = em.createQuery("""
                 select t.item.id, t.user.id, e.id, a.id,
                     sum(case when t.type = checkout then t.quantity
@@ -41,8 +43,10 @@ public class CustodyOrm {
                 from StockTransaction t left join t.eventOccurrence e left join t.assetInstance a
                 where t.order is null and t.relatedEntityType is null
                     and (t.type in (checkout, checkin, consumed) or (t.type = written_off and t.custodyWriteOff = true))
-                """ + (actor == null ? "" : " and t.user.id = :actor") + " group by t.item.id, t.user.id, e.id, a.id", Object[].class);
+                """ + (actor == null ? "" : " and t.user.id = :actor") + (item == null ? "" : " and t.item.id = :item")
+                + " group by t.item.id, t.user.id, e.id, a.id", Object[].class);
         if (actor != null) query.setParameter("actor", actor);
+        if (item != null) query.setParameter("item", item);
         var rows = query.getResultList().stream().filter(row -> ((Number) row[4]).longValue() > 0).toList();
         var items = items(rows.stream().map(row -> (UUID) row[0]).distinct().toList());
         var users = batch(UserAccount.class, rows.stream().map(row -> (UUID) row[1]).distinct().toList());
@@ -71,13 +75,14 @@ public class CustodyOrm {
         return em.createQuery("from " + type.getSimpleName() + " e where e.id in :ids", type).setParameter("ids", ids)
                 .getResultStream().collect(java.util.stream.Collectors.toMap(e -> e.id, e -> e));
     }
-    public List<Object[]> pending(UUID actor) {
+    public List<Object[]> pending(UUID actor, UUID item) {
         var query = em.createQuery("""
                 select r.item.id, r.returnedFor.id, e.id, o.id, o.kind, a.id, sum(r.quantity)
                 from ReturnSubmission r left join r.eventOccurrence e left join r.order o left join r.assetInstance a where r.status = pending
-                """ + (actor == null ? "" : " and r.returnedFor.id = :actor")
+                """ + (actor == null ? "" : " and r.returnedFor.id = :actor") + (item == null ? "" : " and r.item.id = :item")
                 + " group by r.item.id, r.returnedFor.id, e.id, o.kind, o.id, a.id", Object[].class);
         if (actor != null) query.setParameter("actor", actor);
+        if (item != null) query.setParameter("item", item);
         return query.getResultList();
     }
     public boolean hasOutstandingAsset(UUID assetId) {

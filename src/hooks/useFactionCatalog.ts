@@ -4,7 +4,7 @@ import type { EventType, Faction } from '../types';
 import { useAuth } from './useAuth';
 import { canViewOrganization } from '../utils/access';
 
-export interface FactionCatalog {
+interface FactionCatalog {
   eventTypes: EventType[];
   factions: Faction[];
   factionsFor: (eventType: EventType | undefined) => Faction[];

@@ -11,7 +11,7 @@ export function useUpdateOrder() {
   return useMutation({ mutationFn: ({ id, data }: { id: string; data: Partial<GeneralOrderFormData> }) => generalOrderApi.update(id, data) });
 }
 
-export type GeneralOrderQuery = { status?: readonly GeneralOrderSummary['status'][]; eventId?: string; eventType?: string; search?: string };
+type GeneralOrderQuery = { status?: readonly GeneralOrderSummary['status'][]; eventId?: string; eventType?: string; search?: string };
 
 /** Every filter runs on the server, so a screen never pages through orders it does not show. */
 export function useOrders(query: GeneralOrderQuery = {}) {

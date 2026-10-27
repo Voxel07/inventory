@@ -1,11 +1,10 @@
 /** Display attribution; account details and permissions are never embedded in operational responses. */
-export type ActorSummary = Pick<User, 'id' | 'name' | 'username'>;
+export type ActorSummary = Pick<User, 'id' | 'name'>;
 
 export interface User {
   active: boolean;
   id: string;
   name: string;
-  username?: string;
   email: string;
   role: UserRole;
   /** Independently assigned roles; role is the highest effective role. */
