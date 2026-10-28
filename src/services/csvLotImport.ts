@@ -6,7 +6,7 @@ import { assertAuthSession, captureAuthSession } from './authManager';
 import { csvCommandId } from './csvImportIdentity';
 import { operationsApi } from './operationsService';
 
-/** Reuse lot numbers and stable stock commands so an interrupted import can resume. */
+/** Each lot is created by the stock booking that brings its quantity in; stable commands let an interrupted import resume. */
 export function createCsvLotImporter() {
   const context = captureAuthSession();
   const byItem = new Map<string, Lot[]>();
@@ -18,22 +18,15 @@ export function createCsvLotImporter() {
       assertAuthSession(context);
       byItem.set(itemId, existing);
     }
-    for (const { quantity, ...metadata } of lots) {
+    for (const { quantity, ...newLot } of lots) {
       assertAuthSession(context);
-      let lot = existing.find((entry) => entry.lotNumber === metadata.lotNumber);
-      if (!lot) {
-        lot = await operationsApi.createLot({ itemId, ...metadata });
-        assertAuthSession(context);
-        existing.push(lot);
-      }
-      if (quantity > 0) {
-        const idempotencyKey = await csvCommandId(JSON.stringify(['lot-opening-stock', itemId, lot.id, locationId]));
-        assertAuthSession(context);
-        await apiRequest('/api/transactions', { method: 'POST', session: context, body: {
-          itemId, lotId: lot.id, locationId, transactionType: 'adjusted', quantityChanged: quantity,
-          reason: 'CSV-Import Chargen-Anfangsbestand', idempotencyKey,
-        } });
-      }
+      const lot = existing.find((entry) => entry.lotNumber.toLowerCase() === newLot.lotNumber.toLowerCase());
+      const idempotencyKey = await csvCommandId(JSON.stringify(['lot-opening-stock', itemId, newLot.lotNumber, locationId]));
+      assertAuthSession(context);
+      await apiRequest('/api/transactions', { method: 'POST', session: context, body: {
+        itemId, ...(lot ? { lotId: lot.id } : { newLot }), locationId, transactionType: 'adjusted', quantityChanged: quantity,
+        reason: 'CSV-Import Chargen-Anfangsbestand', idempotencyKey,
+      } });
     }
   };
 }

@@ -399,18 +399,13 @@ create table inventory_count_sessions (
 );
 
 create table inventory_lots (
-    best_before_date bigint,
     expiry_date bigint,
-    manufacture_date bigint,
     created_at bigint not null,
     updated_at bigint not null,
     id uuid not null,
     item_id uuid not null,
     lot_number varchar(255) not null,
-    notes varchar(255),
     status varchar(255) not null check ((status in ('available','hold','recalled','expired','depleted'))),
-    storage_requirements varchar(255),
-    supplier_lot varchar(255),
     primary key (id),
     constraint uq_item_lot_number unique (item_id, lot_number),
     -- Target of the composite (lot_id, item_id) references: a lot never serves another item's stock or history.

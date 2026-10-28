@@ -66,7 +66,7 @@ public class ActionInboxService {
                 add(out, "receipt:" + p.id, "receipt", p.orderNumber, p.vendor.name, p.expectedDeliveryDate, "/operations?tab=receipts", p.id);
         if (warehouse)
             for (var l : orm.availableLots(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) {
-                var due = l.expiryDate == null ? l.bestBeforeDate : l.bestBeforeDate == null || l.expiryDate.isBefore(l.bestBeforeDate) ? l.expiryDate : l.bestBeforeDate;
+                var due = l.expiryDate;
                 if (due != null && !due.isAfter(today.plusDays(LOT_EXPIRY_WARNING_DAYS))) add(out, "lot:" + l.id, "expiring_lot", l.item.name, l.lotNumber, due, "/operations?tab=lots", l.id, l.item.id);
             }
         var schedules = orm.activeSchedules(maintenance ? null : actor.id);

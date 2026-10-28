@@ -13,8 +13,6 @@ import org.ash.inventory.operations.internal.projection.ApiMapper;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,14 +32,8 @@ public class StockManagementResource {
         return lots(service.lots(itemId, page, size));
     }
 
-    @POST @Path("/inventory-lots") @jakarta.transaction.Transactional
-    public Response createLot(@Valid StockDtos.LotCreateInput input) {
-        var value = service.createLot(input);
-        return Response.created(URI.create("/api/inventory-lots/" + value.id)).entity(lots(List.of(value)).getFirst()).build();
-    }
-
     @PUT @Path("/inventory-lots/{id}") @jakarta.transaction.Transactional
-    public StockDtos.LotResponse updateLot(@PathParam("id") UUID id, @Valid StockDtos.LotUpdateInput input) {
+    public StockDtos.LotResponse updateLot(@PathParam("id") UUID id, @Valid StockDtos.LotInput input) {
         return lots(List.of(service.updateLot(id, input))).getFirst();
     }
 
@@ -85,8 +77,7 @@ public class StockManagementResource {
                     p.quantityDamaged, p.quantityQuarantined, p.quantityInTransit);
         }).toList();
         return new StockDtos.LotResponse(value.id, value.item.id, value.item.name, value.item.sku, value.item.active,
-                value.lotNumber, value.supplierLot, value.manufactureDate, value.expiryDate, value.bestBeforeDate,
-                value.storageRequirements, value.status.name(), value.notes, value.createdAt, value.updatedAt, stock, stock.isEmpty());
+                value.lotNumber, value.expiryDate, value.status.name(), value.createdAt, value.updatedAt, stock, stock.isEmpty());
     }
 
     private StockDtos.PositionResponse position(InventoryPosition value, int reserved) {

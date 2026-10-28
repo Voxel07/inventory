@@ -1,11 +1,9 @@
-import type { CountInput, LotCreateInput, LotUpdateInput, ReceiptInput, ReceiptLineInput, RepairInput, RepairTransitionInput, ScheduleInput, TransferInput, VendorDocumentInput } from '../types/operations';
+import type { CountInput, LotInput, ReceiptInput, ReceiptLineInput, RepairInput, RepairTransitionInput, ScheduleInput, TransferInput, VendorDocumentInput } from '../types/operations';
+import { LOT_STATUSES } from '../types/operations';
 import { inputBoolean, inputChoice, inputNumber, inputRows, inputStrings, inputText, optionalNumber, optionalText, type InputValues } from '../utils/inputValues';
 
-export function lotUpdateInput(v: InputValues): LotUpdateInput {
-  return { lotNumber: inputText(v.lotNumber), supplierLot: optionalText(v.supplierLot), manufactureDate: optionalNumber(v.manufactureDate), expiryDate: optionalNumber(v.expiryDate), bestBeforeDate: optionalNumber(v.bestBeforeDate), storageRequirements: optionalText(v.storageRequirements), status: v.status == null ? undefined : inputChoice(v.status, ['available', 'hold', 'recalled', 'expired', 'depleted']), notes: optionalText(v.notes) };
-}
-export function lotCreateInput(v: InputValues): LotCreateInput {
-  return { ...lotUpdateInput(v), itemId: inputText(v.itemId) };
+export function lotInput(v: InputValues): LotInput {
+  return { lotNumber: inputText(v.lotNumber).trim(), expiryDate: optionalNumber(v.expiryDate), status: v.status == null || v.status === '' ? undefined : inputChoice(v.status, LOT_STATUSES) };
 }
 export function transferInput(v: InputValues): TransferInput {
   return { transferNumber: optionalText(v.transferNumber), sourceLocationId: inputText(v.sourceLocationId), destinationLocationId: inputText(v.destinationLocationId), idempotencyKey: inputText(v.idempotencyKey), notes: optionalText(v.notes), lines: inputRows(v.lines).map((line) => ({ itemId: inputText(line.itemId), assetInstanceId: optionalText(line.assetInstanceId), lotId: optionalText(line.lotId), quantity: inputNumber(line.quantity) })) };
@@ -23,7 +21,7 @@ export function repairTransitionInput(v: InputValues): RepairTransitionInput {
   return { status: inputChoice(v.status, ['reported', 'triaged', 'awaiting_repair', 'in_repair', 'repaired', 'verified', 'returned_to_service', 'written_off']), amount: optionalNumber(v.amount), repairOwnerId: optionalText(v.repairOwnerId), vendorId: optionalText(v.vendorId), verificationResult: optionalText(v.verificationResult), notes: optionalText(v.notes), idempotencyKey: optionalText(v.idempotencyKey), occurredAt: optionalNumber(v.occurredAt) };
 }
 function receiptLineInput(v: InputValues): ReceiptLineInput {
-  return { purchaseOrderLineId: inputText(v.purchaseOrderLineId), acceptedQuantity: inputNumber(v.acceptedQuantity, 0), damagedQuantity: inputNumber(v.damagedQuantity, 0), rejectedQuantity: inputNumber(v.rejectedQuantity, 0), lotId: optionalText(v.lotId), assetCodes: inputStrings(v.assetCodes), receivingNotes: optionalText(v.receivingNotes) };
+  return { purchaseOrderLineId: inputText(v.purchaseOrderLineId), acceptedQuantity: inputNumber(v.acceptedQuantity, 0), damagedQuantity: inputNumber(v.damagedQuantity, 0), rejectedQuantity: inputNumber(v.rejectedQuantity, 0), lotId: optionalText(v.lotId), newLot: v.newLot == null ? undefined : lotInput(v.newLot as InputValues), assetCodes: inputStrings(v.assetCodes), receivingNotes: optionalText(v.receivingNotes) };
 }
 export function receiptInput(v: InputValues): ReceiptInput {
   return { purchaseOrderId: inputText(v.purchaseOrderId), receivingLocationId: inputText(v.receivingLocationId), receiptNumber: optionalText(v.receiptNumber), receivedAt: optionalNumber(v.receivedAt), idempotencyKey: inputText(v.idempotencyKey), notes: optionalText(v.notes), lines: inputRows(v.lines).map(receiptLineInput) };

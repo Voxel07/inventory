@@ -142,7 +142,7 @@ public class ReturnSubmissionService {
                     "Return accepted by warehouse", value.notes, null, null,
                     value.assetInstance == null ? null : value.assetInstance.id,
                     value.returnedFor.id, value.id,
-                    value.eventOccurrence == null ? null : value.eventOccurrence.id, null, null, null));
+                    value.eventOccurrence == null ? null : value.eventOccurrence.id, null, null, null, null));
             if (reading != null) {
                 var asset = value.assetInstance == null ? null : orm.requireLocked(AssetInstance.class, value.assetInstance.id, "Asset instance");
                 runtime.record(value.item, asset, reading, value.eventOccurrence, null, RuntimeEntry.Source.return_check, input == null ? null : input.notes());

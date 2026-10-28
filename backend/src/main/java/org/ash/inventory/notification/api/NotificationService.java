@@ -18,9 +18,10 @@ public class NotificationService {
     public record Notice(UUID id, UUID recipientId, UUID orderId, String type, Map<String,Object> payload, Instant createdAt, Instant readAt) {
         public Notice { payload = Collections.unmodifiableMap(new LinkedHashMap<>(payload)); }
     }
-    /** {@code delivered}: channels that acknowledged an earlier attempt. */
-    public record Delivery(UUID id, UUID lease, UUID recipientId, UUID orderId, UUID itemId, Set<String> delivered) {
-        public Delivery { delivered = Set.copyOf(delivered); }
+    /** {@code delivered}: channels that acknowledged an earlier attempt; {@code type} and {@code payload} say what happened. */
+    public record Delivery(UUID id, UUID lease, UUID recipientId, UUID orderId, UUID itemId, Set<String> delivered,
+            String type, Map<String,Object> payload) {
+        public Delivery { delivered = Set.copyOf(delivered); payload = Collections.unmodifiableMap(new LinkedHashMap<>(payload)); }
     }
     public enum Outcome { SENT, RETRY, SKIPPED }
     public UUID enqueue(UUID recipient, UUID order, String type, String dedupe, Map<String,Object> payload) {
@@ -69,7 +70,7 @@ public class NotificationService {
         n.deliveryAttempts++;n.deliveryStatus="sending";n.deliveryLease=UUID.randomUUID();n.deliveryLeaseUntil=Instant.now().plusSeconds(120);
         UUID item=null;try{if(n.payload.get("itemId")!=null)item=UUID.fromString(n.payload.get("itemId").toString());}
         catch(IllegalArgumentException invalid){n.deliveryStatus="skipped";n.deliveryLease=null;n.deliveryLeaseUntil=null;continue;}
-        return new Delivery(n.id,n.deliveryLease,n.recipientId,n.orderId,item,n.deliveredChannels);
+        return new Delivery(n.id,n.deliveryLease,n.recipientId,n.orderId,item,n.deliveredChannels,n.type,n.payload);
         }
         return null;
     }

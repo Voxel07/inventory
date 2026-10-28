@@ -278,8 +278,7 @@ public class CatalogService {
                 var lot = new InventoryLot();
                 lot.item = item;
                 lot.lotNumber = item.sku + "-L001";
-                lot.bestBeforeDate = item.bestBeforeDate;
-                lot.notes = "Initial stock on item creation";
+                lot.expiryDate = item.bestBeforeDate;
                 orm.persist(lot);
                 tx.lot = lot;
             }

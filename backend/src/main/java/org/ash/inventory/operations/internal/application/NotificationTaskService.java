@@ -50,7 +50,7 @@ public class NotificationTaskService {
                 where (u.role in ('warehouse_crew','admin') or o.created_by=u.id)
                 and (o.status='ready' or e.end_date<:today and exists(select 1 from order_lines line where line.order_id=o.id and line.handed_over_quantity-line.returned_quantity-line.damaged_quantity-line.consumed_quantity-line.written_off_quantity>0))
                 and inventory_resource_visible('order',o.id,u.id,u.role='admin',true))
-              or u.role in ('warehouse_crew','admin') and exists(select 1 from inventory_lots l where l.status='available' and (l.expiry_date<=:warning or l.best_before_date<=:warning)
+              or u.role in ('warehouse_crew','admin') and exists(select 1 from inventory_lots l where l.status='available' and l.expiry_date<=:warning
                 and inventory_resource_visible('item',l.item_id,u.id,u.role='admin',true))
               or exists(select 1 from maintenance_schedules s join items i on i.id=s.item_id left join asset_instances a on a.id=s.asset_instance_id
                 where s.active=true and (u.role in ('warehouse_crew','admin') or s.responsible_person_id=u.id)

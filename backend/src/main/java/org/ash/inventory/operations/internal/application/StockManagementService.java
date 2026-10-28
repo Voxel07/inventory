@@ -38,17 +38,17 @@ public class StockManagementService {
         return orm.lots(itemId, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
-    @Transactional
-    @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
-    public InventoryLot createLot(StockDtos.LotCreateInput input) {
-        var item = orm.requireLocked(Item.class, input.itemId(), "Item");
-        actors.requireItemEdit(item);
-        if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked) {
+    /**
+     * The only way a lot comes into being: the stock booking that brings its first units in. The caller holds the
+     * item lock and has authorized the booking; the lot belongs to that item for life.
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public InventoryLot newLot(Item item, StockDtos.LotInput input) {
+        if (item.trackingMode != DomainEnums.TrackingMode.lot_tracked)
             throw ApiException.badRequest("Inventory lots require an item with lot_tracked tracking mode");
-        }
         var lot = new InventoryLot();
         lot.item = item;
-        apply(lot, input.metadata(), null);
+        apply(lot, input, null);
         orm.persist(lot);
         events.record("inventory_lot.created", "inventory_lot", lot.id, actors.current().id, null,
                 Map.of("itemId", lot.item.id.toString(), "lotNumber", lot.lotNumber));
@@ -57,7 +57,7 @@ public class StockManagementService {
 
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
-    public InventoryLot updateLot(UUID id, StockDtos.LotUpdateInput input) {
+    public InventoryLot updateLot(UUID id, StockDtos.LotInput input) {
         var lot = orm.requireLocked(InventoryLot.class, id, "Inventory lot");
         actors.requireItemEdit(lot.item);
         var previousStatus = lot.status;
@@ -68,19 +68,14 @@ public class StockManagementService {
         return lot;
     }
 
-    /** Metadata only; {@code lot.item} is fixed at creation and positions, ledger and lines reference the pair. */
-    private void apply(InventoryLot lot, StockDtos.LotUpdateInput input, UUID excluding) {
-        if (input.itemId() != null && !input.itemId().equals(lot.item.id))
-            throw ApiException.badRequest("A lot belongs to its item; create a new lot for another item");
-        if (orm.lotNumberExists(lot.item.id, input.lotNumber(), excluding)) throw ApiException.conflict("Lot number already exists for item");
-        lot.lotNumber = input.lotNumber().trim();
-        lot.supplierLot = input.supplierLot();
-        lot.manufactureDate = input.manufactureDate();
+    /** Number, expiry and eligibility only; {@code lot.item} is fixed at creation. */
+    private void apply(InventoryLot lot, StockDtos.LotInput input, UUID excluding) {
+        var number = input.lotNumber() == null ? "" : input.lotNumber().trim();
+        if (number.isEmpty()) throw ApiException.badRequest("Lot number is required");
+        if (orm.lotNumberExists(lot.item.id, number, excluding)) throw ApiException.conflict("Lot number already exists for item");
+        lot.lotNumber = number;
         lot.expiryDate = input.expiryDate();
-        lot.bestBeforeDate = input.bestBeforeDate();
-        lot.storageRequirements = input.storageRequirements();
         lot.status = input.status() == null ? DomainEnums.LotStatus.available : input.status();
-        lot.notes = input.notes();
     }
 
     public List<AssetInstance> assets(UUID itemId, UUID locationId, int page, int size) {

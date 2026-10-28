@@ -1,11 +1,15 @@
 import { formatDate } from '../../utils/dateFormat';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { ToggleButton, Button } from '../shared/ActionButtons';
+import EditLocationAltOutlinedIcon from '@mui/icons-material/EditLocationAltOutlined';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { useEquipmentAvailability } from '../../hooks/useEquipment';
 import { useCompleteList } from '../../hooks/usePagedList';
 import { operationsApi } from '../../services/operationsService';
 import { useState } from 'react';
+import { TextField as DateField } from '../shared/DateTextField';
+import { calendarDate } from '../../utils/dateFormat';
+import { LOT_STATUSES, type Lot } from '../../types/operations';
 import {
     Alert,
     Box,
@@ -52,6 +56,9 @@ function returnable(row: CheckedOutRow) {
     return Math.max(0, row.checkedOut - (row.pendingQuantity ?? 0));
 }
 
+const NEW_LOT = '__new__';
+const BLANK_LOT = { lotNumber: '', status: 'available' } as const;
+
 export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading, initialData, onRestock }: Props) {
     const { user } = useAuth();
     const names = useNames();
@@ -76,6 +83,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             faction: initialData?.faction ?? '',
             orderId: initialData?.orderId,
             lotId: initialData?.lotId,
+            // Added lot-tracked stock forms a new lot unless an existing lot was chosen (e.g. "Add stock" on a lot).
+            newLot: initialData?.newLot ?? (transactionType === 'added' && !initialData?.lotId ? { ...BLANK_LOT } : undefined),
             locationId: initialData?.locationId,
         };
     };
@@ -87,7 +96,12 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const [quantityInput, setQuantityInput] = useState(initialQuantityInput);
     const [quantityUnit, setQuantityUnit] = useState<'items' | 'boxes' | 'percent'>(initialPercentage ? 'percent' : 'items');
     const [restocking, setRestocking] = useState(false);
+    /** Added stock goes where the item (or lot) already lies unless the user chooses to store it somewhere else. */
+    const [chooseLocation, setChooseLocation] = useState(false);
+    const [today] = useState(() => calendarDate());
     const selectedItem = items.find((item) => item.id === formData.itemId);
+    const lotLabel = (lot: Lot) => [lot.lotNumber, lot.expiryDate != null && `${t('operations.stockOperations.expiry')}: ${formatDate(lot.expiryDate)}`,
+        `${t('common.stock')}: ${formatQuantity(selectedItem, lot.stock.reduce((sum, row) => sum + row.onHand, 0))}`].filter(Boolean).join(' · ');
     const canEditStock = selectedItem?.access?.privateResource ? selectedItem.access.canEdit : canOperateWarehouse(user);
     const canCheckout = canCheckoutItem(user, selectedItem);
     const lots = useCompleteList(['operations', `transaction-lots:${formData.itemId}`], operationsApi.lots({ itemId: formData.itemId }), { enabled: Boolean(formData.itemId) });
@@ -96,13 +110,32 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
     const { data: itemAssets = [], isLoading: assetsLoading } = useItemAssets(isSerialized ? selectedItem.id : undefined);
     const selectedStock = getItemStock(selectedItem);
     const isCheckout = formData.transactionType === 'checkout';
+    const isAdd = formData.transactionType === 'added';
+    const isLotTracked = selectedItem?.trackingMode === 'lot_tracked';
     const eventUse = isCheckout && usage === 'event';
     const equipment = useEquipmentAvailability(formData.eventOccurrenceId);
     const commitment = equipment.data?.[formData.itemId];
     // A checkout picks stock up where it actually lies: only locations holding usable stock of this item (and lot).
     const positions = useCompleteList(['operations', `positions:${formData.itemId}:`], operationsApi.positions({ itemId: formData.itemId }),
-        { enabled: Boolean(formData.itemId) && isCheckout && !isSerialized });
-    const usableLots = new Set((lots.data ?? []).filter((lot) => lot.status === 'available').map((lot) => lot.id));
+        { enabled: Boolean(formData.itemId) && (isCheckout || isAdd) && !isSerialized });
+    const usableLotList = (lots.data ?? []).filter((lot) => lot.status === 'available' && (!lot.expiryDate || lot.expiryDate >= today));
+    const usableLots = new Set(usableLotList.map((lot) => lot.id));
+    // Added lot-tracked stock either joins a usable lot or forms a new lot; lots are only created this way.
+    const newLot = isAdd && isLotTracked ? formData.newLot : undefined;
+    const newLotNumber = newLot?.lotNumber.trim() ?? '';
+    const newLotDuplicate = Boolean(newLotNumber) && (lots.data ?? []).some((lot) => lot.lotNumber.toLowerCase() === newLotNumber.toLowerCase());
+    const lotMissing = isAdd && isLotTracked && (newLot ? !newLotNumber || newLotDuplicate : !usableLots.has(formData.lotId ?? ''));
+    // Where this stock (of the chosen lot) already lies: the item's default location when it holds some, else the largest holding.
+    const stored = new Map<string, number>();
+    for (const position of positions.data ?? []) {
+        if (position.quantityOnHand <= 0 || (isLotTracked && !newLot && formData.lotId && position.lotId !== formData.lotId)) continue;
+        stored.set(position.locationId, (stored.get(position.locationId) ?? 0) + position.quantityOnHand);
+    }
+    const storedLocationId = selectedItem?.storageLocation && stored.has(selectedItem.storageLocation) ? selectedItem.storageLocation
+        : [...stored].sort((a, b) => b[1] - a[1])[0]?.[0] ?? selectedItem?.storageLocation ?? undefined;
+    const locationLabel = (id?: string) => lookup.locationOptions.find((location) => location.value === id)?.label ?? id;
+    const pickLocation = chooseLocation || !storedLocationId;
+    const destinationLocationId = isAdd && !pickLocation ? storedLocationId : formData.locationId;
     const sourceStock = new Map<string, number>();
     for (const position of positions.data ?? []) {
         if (position.availableQuantity <= 0) continue;
@@ -197,11 +230,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
 
     function changeType(value: TransactionType) {
         setCustodyKey('');
+        setChooseLocation(false);
         setFormData((prev) => ({
             ...prev,
             transactionType: value,
             assetInstanceId: undefined,
             locationId: undefined,
+            lotId: value === 'checkin' ? undefined : prev.lotId,
+            newLot: value === 'added' ? prev.newLot ?? (prev.lotId ? undefined : { ...BLANK_LOT }) : undefined,
             userId: undefined,
             orderId: undefined,
             eventOccurrenceId: value === 'checkout' ? prev.eventOccurrenceId : undefined,
@@ -217,12 +253,14 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
         // Enter inside the restock section must not post a checkout.
         if (restocking && isConsumable) return;
         if ((isCheckout ? !canCheckout : !canEditStock)
-            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing) return;
+            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing || lotMissing) return;
         const general = isCheckout && usage === 'general';
         onSubmit({
             ...formData,
             quantityChanged: isSerialized ? 1 : quantity,
-            locationId: isCheckout && !isSerialized ? sourceLocationId : formData.locationId,
+            locationId: isCheckout && !isSerialized ? sourceLocationId : isAdd ? destinationLocationId : formData.locationId,
+            lotId: newLot ? undefined : formData.lotId,
+            newLot: newLot ? { ...newLot, lotNumber: newLotNumber } : undefined,
             ...(general ? { eventOccurrenceId: undefined, eventType: undefined, faction: undefined } : {}),
         });
     }
@@ -238,7 +276,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     value={formData.itemId}
                     onChange={(e) => {
                         const nextItem = items.find((item) => item.id === e.target.value);
-                        setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined }));
+                        setFormData((prev) => ({ ...prev, itemId: e.target.value, assetInstanceId: undefined, lotId: undefined, newLot: prev.transactionType === 'added' ? { ...BLANK_LOT } : undefined, locationId: undefined }));
+                        setChooseLocation(false);
                         setQuantityUnit(usesPercentage(nextItem) ? 'percent' : 'items');
                         setQuantityInput(usesPercentage(nextItem) ? '100' : '1');
                     }}
@@ -340,13 +379,54 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                     {sourceOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label} ({formatQuantity(selectedItem, location.quantity)})</MenuItem>)}
                 </TextField>}
                 {isCheckout && noSource && <Alert severity="warning">{t('forms.transactionForm.noLocationHoldsUsableStock')}</Alert>}
-                {!isCheckout && !isSerialized && <TextField select label={t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
-                    <MenuItem value="">{formData.transactionType === 'checkin' ? t('forms.transactionForm.itemReturnLocation') : t('forms.transactionForm.itemDefaultLocation')}</MenuItem>
-                    {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
-                </TextField>}
-                {selectedItem?.trackingMode === 'lot_tracked' && <TextField select label={t('enum.value.lot')} value={formData.lotId ?? ''} required={!isCheckout} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
+                {isCheckout && isLotTracked && <TextField select label={t('enum.value.lot')} value={formData.lotId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, lotId: event.target.value || undefined }))}>
                     <MenuItem value="">{t('forms.transactionForm.automaticEarliestExpiryFirst')}</MenuItem>
-                    {(lots.data ?? []).map((lot) => <MenuItem key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.expiryDate ?? lot.bestBeforeDate ?? ''} · {lot.status ? formatStatus(lot.status) : ''}</MenuItem>)}
+                    {usableLotList.map((lot) => <MenuItem key={lot.id} value={lot.id}>{lotLabel(lot)}</MenuItem>)}
+                </TextField>}
+                {isAdd && isLotTracked && <>
+                    <TextField select required label={t('enum.value.lot')} value={newLot ? NEW_LOT : formData.lotId ?? ''}
+                        error={!newLot && !lots.isLoading && !usableLots.has(formData.lotId ?? '')}
+                        helperText={t('forms.transactionForm.lotsAreCreatedWithTheirFirstStock')}
+                        onChange={(event) => setFormData((previous) => event.target.value === NEW_LOT
+                            ? { ...previous, lotId: undefined, newLot: previous.newLot ?? { ...BLANK_LOT } }
+                            : { ...previous, lotId: event.target.value || undefined, newLot: undefined })}>
+                        <MenuItem value={NEW_LOT}>{t('forms.transactionForm.newLot')}</MenuItem>
+                        {usableLotList.map((lot) => <MenuItem key={lot.id} value={lot.id}>{lotLabel(lot)}</MenuItem>)}
+                    </TextField>
+                    {newLot && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '3fr 3fr 2fr' }, gap: 2 }}>
+                        <TextField required label={t('operations.stockOperations.lotNumber')} value={newLot.lotNumber}
+                            error={newLotDuplicate} helperText={newLotDuplicate ? t('forms.transactionForm.lotNumberAlreadyExists') : undefined}
+                            onChange={(event) => setFormData((previous) => ({ ...previous, newLot: { ...newLot, lotNumber: event.target.value } }))} />
+                        <DateField type="date" label={t('operations.stockOperations.expiryDate')} value={newLot.expiryDate ?? ''} slotProps={{ inputLabel: { shrink: true } }}
+                            onChange={(event) => setFormData((previous) => ({ ...previous, newLot: { ...newLot, expiryDate: event.target.value === '' ? undefined : Number(event.target.value) } }))} />
+                        <TextField select required label={t('common.status')} value={newLot.status ?? 'available'}
+                            onChange={(event) => setFormData((previous) => ({ ...previous, newLot: { ...newLot, status: event.target.value as typeof LOT_STATUSES[number] } }))}>
+                            {LOT_STATUSES.map((status) => <MenuItem key={status} value={status}>{formatStatus(status)}</MenuItem>)}
+                        </TextField>
+                    </Box>}
+                </>}
+                {isAdd && !isSerialized && !pickLocation && <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                    <Box>
+                        <Typography variant="body2" color="text.secondary">{t('forms.transactionForm.storedAt')}</Typography>
+                        <Typography sx={{ fontWeight: 600 }}>{locationLabel(storedLocationId)}</Typography>
+                    </Box>
+                    <Button title={translate('forms.transactionForm.storeThisStockAtAnotherLocation')} variant="outlined" size="small" startIcon={<EditLocationAltOutlinedIcon />}
+                        onClick={() => { setChooseLocation(true); setFormData((previous) => ({ ...previous, locationId: storedLocationId })); }}>
+                        {t('forms.transactionForm.storeSomewhereElse')}
+                    </Button>
+                </Box>}
+                {isAdd && !isSerialized && pickLocation && <TextField select required label={t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''}
+                    helperText={storedLocationId ? undefined : t('forms.transactionForm.noStockYetChooseWhereToStoreIt')}
+                    onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                    {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}{stored.has(location.value) ? ` (${formatQuantity(selectedItem, stored.get(location.value)!)})` : ''}</MenuItem>)}
+                </TextField>}
+                {isAdd && !isSerialized && chooseLocation && storedLocationId && <Button variant="text" size="small" sx={{ alignSelf: 'flex-start' }}
+                    onClick={() => { setChooseLocation(false); setFormData((previous) => ({ ...previous, locationId: undefined })); }}>
+                    {t('forms.transactionForm.keepAtLocation', { location: locationLabel(storedLocationId) ?? '' })}
+                </Button>}
+                {formData.transactionType === 'checkin' && !isSerialized && <TextField select label={t('forms.transactionForm.destinationLocation')} value={formData.locationId ?? ''} onChange={(event) => setFormData((previous) => ({ ...previous, locationId: event.target.value || undefined }))}>
+                    <MenuItem value="">{t('forms.transactionForm.itemReturnLocation')}</MenuItem>
+                    {lookup.locationOptions.map((location) => <MenuItem key={location.value} value={location.value}>{location.label}</MenuItem>)}
                 </TextField>}
                 {formData.transactionType === 'checkin' && (
                     <>
@@ -466,6 +546,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         color="inherit"
                         onClick={() => {
                             setCustodyKey('');
+                            setChooseLocation(false);
                             setFormData(initialForm());
                             setUsage(initialUsage);
                             setQuantityInput(initialQuantityInput);
@@ -481,7 +562,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                         type="submit"
                         variant="contained"
                         disabled={isLoading || !formData.itemId || !formData.reason
-                            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing}
+                            || (!isSerialized && quantityInvalid) || checkoutContextMissing || custodySourceMissing || assetSelectionMissing || lotMissing
+                            || (isAdd && !isSerialized && !destinationLocationId)}
                         sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
                     >
                         {t('forms.transactionForm.postTransaction')}

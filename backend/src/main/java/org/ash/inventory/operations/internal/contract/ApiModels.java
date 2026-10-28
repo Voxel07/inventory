@@ -75,6 +75,7 @@ public final class ApiModels {
             @NotNull UUID itemId, @NotNull DomainEnums.TransactionType transactionType,
             @Min(1) int quantityChanged, String reason, String notes, String eventType, String faction,
             UUID assetInstanceId, UUID userId, UUID idempotencyKey, UUID eventOccurrenceId, UUID locationId, UUID lotId,
+            @jakarta.validation.Valid org.ash.inventory.operations.internal.contract.dto.StockDtos.LotInput newLot,
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
 
     public record EventInput(

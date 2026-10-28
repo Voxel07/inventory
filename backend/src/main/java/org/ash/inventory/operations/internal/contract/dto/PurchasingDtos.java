@@ -38,7 +38,7 @@ public final class PurchasingDtos {
             String notes) {}
 
     public record ReceiptLineInput(@NotNull UUID purchaseOrderLineId, @Min(0) int acceptedQuantity,
-            @Min(0) int damagedQuantity, @Min(0) int rejectedQuantity, UUID lotId,
+            @Min(0) int damagedQuantity, @Min(0) int rejectedQuantity, UUID lotId, @Valid StockDtos.LotInput newLot,
             List<String> assetCodes, String receivingNotes) {}
     public record GoodsReceiptInput(@NotNull UUID purchaseOrderId, String receiptNumber,
             @NotNull UUID receivingLocationId, Instant receivedAt, @NotNull UUID idempotencyKey,

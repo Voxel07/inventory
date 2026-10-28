@@ -1,6 +1,7 @@
 import { csvDate, isCsvDate } from './eventLogistics';
 import type { CsvItemLot } from '../../types/csvImport';
 import { inputChoice, inputRows, inputText } from '../inputValues';
+import { LOT_STATUSES } from '../../types/operations';
 
 /** Lots is a JSON array; quantities belong to individual batches, not an automatic opening lot. */
 export function parseItemLots(value: string | undefined): CsvItemLot[] | undefined {
@@ -15,20 +16,14 @@ export function parseItemLots(value: string | undefined): CsvItemLot[] | undefin
     if (typeof row.quantity !== 'number' || !Number.isSafeInteger(row.quantity) || row.quantity < 0) {
       throw new Error(`Charge ${lotNumber}: quantity muss eine nichtnegative ganze Zahl sein`);
     }
-    const text = (key: string) => row[key] == null ? undefined : inputText(row[key]).trim();
-    const date = (key: string) => {
-      const value = text(key);
-      if (value && (!isCsvDate(value))) {
-        throw new Error(`Charge ${lotNumber}: ${key} muss ein gültiges Datum (DD-MM-YYYY) sein`);
-      }
-      return value ? csvDate(value) : undefined;
-    };
+    // A lot is a number, an expiry date and a status; its stock is the quantity booked with it.
+    const expiry = row.expiryDate == null ? '' : inputText(row.expiryDate).trim();
+    if (expiry && !isCsvDate(expiry)) throw new Error(`Charge ${lotNumber}: expiryDate muss ein gültiges Datum (DD-MM-YYYY) sein`);
+    if (row.quantity === 0) throw new Error(`Charge ${lotNumber}: Eine Charge entsteht nur mit Bestand (quantity > 0)`);
     return {
       lotNumber, quantity: row.quantity,
-      supplierLot: text('supplierLot'), manufactureDate: date('manufactureDate'),
-      expiryDate: date('expiryDate'), bestBeforeDate: date('bestBeforeDate'),
-      storageRequirements: text('storageRequirements'), notes: text('notes'),
-      status: row.status == null ? undefined : inputChoice(row.status, ['available', 'hold', 'recalled', 'expired', 'depleted']),
+      expiryDate: expiry ? csvDate(expiry) : undefined,
+      status: row.status == null ? undefined : inputChoice(row.status, LOT_STATUSES),
     };
   });
 }

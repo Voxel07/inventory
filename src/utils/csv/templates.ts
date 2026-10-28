@@ -6,8 +6,8 @@ const quote = (value: string) => /[;"\r\n]/.test(value) ? `"${value.replaceAll('
 const quoteJson = (value: unknown) => quote(JSON.stringify(value));
 
 const sampleLots = [
-  { lotNumber: 'VB-2026-03', quantity: 12, supplierLot: 'SAG-77812', manufactureDate: '02-03-2026', expiryDate: '01-03-2028', notes: 'Ältere Charge zuerst verwenden' },
-  { lotNumber: 'VB-2026-08', quantity: 6, bestBeforeDate: '15-08-2028', storageRequirements: 'Trocken und unter 25 °C lagern', status: 'available' },
+  { lotNumber: 'VB-2026-03', quantity: 12, expiryDate: '01-03-2028' },
+  { lotNumber: 'VB-2026-08', quantity: 6, expiryDate: '15-08-2028', status: 'available' },
 ];
 
 function csv(header: readonly string[], rows: Record<string, string>[]): string {
@@ -58,14 +58,10 @@ export function generateSampleCombinedCsv(): string {
     { Typ: 'AllgemeineBestellung', Name: 'Catering', Eventtyp: 'DE', Eventdatum: '13-06-2026', BestellteArtikel: quote('Heringe 30cm (10er Set): 2'), RueckgabeArtikel: quote('Heringe 30cm (10er Set): 1'), Bestellstatus: 'partially_returned', Zweck: 'Catering-Zelt' },
     { Typ: 'Return', Name: 'Heringe 30cm (10er Set)', Menge: '1', Eventtyp: 'DE', Eventdatum: '13-06-2026', Bestellname: 'Catering' },
     { Typ: 'Ausleihe', Name: 'Zeltgestänge 4x4m', Menge: '1', Eventtyp: 'DE', Fraktion: 'KGG' },
-    // `@row:<Name>` passes the lot created by an earlier row to the stock booking.
-    { Typ: 'Aktion', Name: 'charge-desi-2026-03', Aktion: 'lot', Beschreibung: 'Charge anlegen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-03', supplierLot: 'SAG-77812', manufactureDate: '02-03-2026', expiryDate: '01-03-2028' }) },
-    { Typ: 'Aktion', Name: 'bestand-desi-2026-03', Aktion: 'stock', Beschreibung: 'Bestand der Charge buchen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 12, reason: 'Anfangsbestand', lotId: '@row:charge-desi-2026-03' }) },
-    { Typ: 'Aktion', Name: 'charge-desi-2026-08', Aktion: 'lot', Beschreibung: 'Zweite Charge anlegen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', lotNumber: 'CH-2026-08', expiryDate: '15-08-2028', storageRequirements: 'Unter 25 °C lagern' }) },
-    { Typ: 'Aktion', Name: 'bestand-desi-2026-08', Aktion: 'stock', Beschreibung: 'Bestand der Charge buchen',
-      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 6, reason: 'Anfangsbestand', lotId: '@row:charge-desi-2026-08' }) },
+    // A lot is created by the stock booking that brings its first units in (`newLot`); later bookings name `lotNumber`.
+    { Typ: 'Aktion', Name: 'bestand-desi-2026-03', Aktion: 'stock', Beschreibung: 'Neue Charge mit Bestand buchen',
+      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 12, reason: 'Anfangsbestand', locationId: '@location:Lager A / Sanität', newLot: { lotNumber: 'CH-2026-03', expiryDate: '01-03-2028' } }) },
+    { Typ: 'Aktion', Name: 'bestand-desi-2026-08', Aktion: 'stock', Beschreibung: 'Zweite Charge mit Bestand buchen',
+      Daten: quoteJson({ itemId: '@item:Desinfektionsmittel 1L', transactionType: 'adjusted', quantityChanged: 6, reason: 'Anfangsbestand', locationId: '@location:Lager A / Sanität', newLot: { lotNumber: 'CH-2026-08', expiryDate: '15-08-2028', status: 'available' } }) },
   ]);
 }

@@ -44,7 +44,7 @@ public class ActionInboxOrm extends EntityOrm {
         return entityManager.createQuery("from PurchaseOrder p join fetch p.vendor where p.status in (ordered, partially_received)", PurchaseOrder.class).getResultList();
     }
     public List<InventoryLot> availableLots(java.time.LocalDate deadline) {
-        return entityManager.createQuery("from InventoryLot l join fetch l.item where l.status = available and (l.expiryDate <= :deadline or l.bestBeforeDate <= :deadline)", InventoryLot.class)
+        return entityManager.createQuery("from InventoryLot l join fetch l.item where l.status = available and l.expiryDate <= :deadline", InventoryLot.class)
                 .setParameter("deadline", deadline).getResultList();
     }
     public List<MaintenanceSchedule> activeSchedules(java.util.UUID actor) {

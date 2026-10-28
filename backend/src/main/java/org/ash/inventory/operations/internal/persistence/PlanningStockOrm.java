@@ -64,7 +64,7 @@ public class PlanningStockOrm {
             rows("position", "p.item_id", null, "p.location_id", null, null, null,
                     "p.quantity_on_hand", "p.quantity_damaged", null, "p.quantity_quarantined",
                     "p.quantity_in_transit", null, null, null, null, null, null, "p.lot_id is not null",
-                    "l.id is null or (l.status = 'available' and (l.expiry_date is null or l.expiry_date >= :today) and (l.best_before_date is null or l.best_before_date >= :today))",
+                    "l.id is null or (l.status = 'available' and (l.expiry_date is null or l.expiry_date >= :today))",
                     null, null, "inventory_positions p join scope s on s.id = p.item_id left join inventory_lots l on l.id = p.lot_id"),
             rows("asset", "a.item_id", "a.id", "a.current_location_id",
                     "a.availability_status", "a.condition_status", null, null, null, null, null,

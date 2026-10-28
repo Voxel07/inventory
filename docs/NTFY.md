@@ -28,7 +28,7 @@ Compose creates the container's `NTFY_AUTH_USERS` as `inventory:<hash>:user`, `N
 
 ## Public URL and proxy
 
-`INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL` also sets ntfy's `NTFY_BASE_URL`, so the server and API use the same public subscription address. Use a reachable HTTPS address in production. For local use, both default to `http://localhost:8090`; update the public URL if you change `NTFY_PORT`.
+`INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL` also sets ntfy's `NTFY_BASE_URL`, so the server and API use the same public subscription address. Use a reachable HTTPS address in production. Notification click links start with `INVENTORY_PUBLIC_URL` (the app's public address, e.g. `https://inventory.example.com`); it defaults to `http://localhost:5173`, so set it in production too. The API logs a startup warning while either URL points at localhost. For local use, both default to `http://localhost:8090`; update the public URL if you change `NTFY_PORT`.
 
 Port 8090 binds to loopback by default. A host reverse proxy can forward HTTPS to `127.0.0.1:8090`. A container reverse proxy must share a Docker network with ntfy and forward to `ntfy:80`; no published ports are needed for that setup. With custom networks, the API must share ntfy's internal network as well.
 

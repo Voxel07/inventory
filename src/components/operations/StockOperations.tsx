@@ -5,7 +5,7 @@ import { CollapsibleOperationLines, OperationLines } from './OperationLines';
 import { OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
-import { transferInput, countInput, lotCreateInput, lotUpdateInput } from '../../services/operationsInputs';
+import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
@@ -20,6 +20,7 @@ import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import type { Item } from '../../types';
 import type { Count, Lot, Transfer } from '../../types/operations';
+import { lotFields } from './lotFields';
 import { Fields, OperationForm } from './OperationForm';
 import type { Field, Values } from '../../types/operationForm';
 import { translate, useT } from '../../utils/naming';
@@ -125,7 +126,7 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
   const assets = useItemAssets(item.trackingMode === 'serialized' ? item.id : undefined);
   const lots = useCompleteList(queryKeys.operations(`lots:${item.id}`), operationsApi.lots({ itemId: item.id }), { enabled: item.trackingMode === 'lot_tracked' });
   const [today] = useState(() => calendarDate());
-  const usableLots = (lots.data ?? []).filter(lot => lot.status === 'available' && (!lot.expiryDate || lot.expiryDate >= today) && (!lot.bestBeforeDate || lot.bestBeforeDate >= today));
+  const usableLots = (lots.data ?? []).filter(lot => lot.status === 'available' && (!lot.expiryDate || lot.expiryDate >= today));
   const availableAssets = (assets.data ?? []).filter(asset => asset.active && asset.availabilityStatus === 'available' && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus));
   const availablePositions = (positions.data ?? []).filter(position => position.transferableQuantity > 0 && (item.trackingMode !== 'lot_tracked' || usableLots.some(lot => lot.id === position.lotId)));
   function available(locationId: string, lotId?: string) {
@@ -220,26 +221,21 @@ export function CountsPanel() {
 }
 
 /**
- * Lots of one item (`itemId`: the parent is fixed and never chosen) or of every lot-tracked item. A lot's item is
- * chosen once at creation; editing changes batch metadata only. `canEdit` gates mutations; viewers still see
- * each lot's stock by location.
+ * Lots of one item (`itemId`) or of every lot-tracked item. A lot is only created by the stock booking that brings
+ * its first units in ("Add stock" with a new lot, or a goods receipt); here a lot's number, expiry and hold status
+ * can be corrected. `canEdit` gates mutations; viewers still see each lot's stock by location.
  */
 export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit?: boolean } = {}) {
   const t = useT();
   const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
   const items = useItemsByIds(itemId ? [itemId] : (lots.data ?? []).map(lot => lot.itemId));
-  const fixedItem = items.data?.find(item => item.id === itemId);
   const quantityLabel = (itemId: string, quantity: number) => {
     const item = items.data?.find(item => item.id === itemId);
     return item ? formatQuantity(item, quantity) : '—';
   };
-  const [edit, setEdit] = useState<Lot | { itemId: string } | null>(null);
-  const [choosing, setChoosing] = useState(false);
-  const creating = edit !== null && !('id' in edit);
-  const parentName = edit === null ? '' : 'id' in edit ? edit.itemName : fixedItem?.id === edit.itemId ? fixedItem.name : '';
+  const [edit, setEdit] = useState<Lot | null>(null);
   return <Stack spacing={2}>
-    {canEdit && <Button title={translate('operations.stockOperations.createANewInventoryLot')} variant="contained"
-      onClick={() => itemId ? setEdit({ itemId }) : setChoosing(true)}>{t('operations.stockOperations.newLot')}</Button>}
+    {canEdit && <Alert severity="info">{t('operations.stockOperations.lotsAreCreatedWhenStockIsAdded')}</Alert>}
     <QueryFeedback isLoading={lots.isLoading || items.isLoading} error={lots.error || items.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.stockOperations.noLotsYet')} />
     {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={canEdit ? [
         { key: 'stock', label: t('operations.stockOperations.addStock'), title: translate('operations.stockOperations.bookStockForThisLot'), pinned: true,
@@ -249,27 +245,18 @@ export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit
         {!itemId && <><Link component={RouterLink} to={`/items/${lot.itemId}`} underline="hover">{lot.itemName}</Link>{lot.itemSku ? ` (${lot.itemSku})` : ''}{!lot.itemActive && ` · ${t('operations.stockOperations.retired')}`} · </>}{lot.lotNumber}
         {lot.empty && <Typography component="span" variant="caption" color="text.secondary"> · {t('operations.stockOperations.noStock')}</Typography>}
       </>}>
-      <Typography>{t('operations.stockOperations.expiry')}: {formatDate(lot.expiryDate)} · {t('operations.stockOperations.bestBefore')}: {formatDate(lot.bestBeforeDate)}{lot.supplierLot ? ` · ${t('operations.stockOperations.supplierLot')}: ${lot.supplierLot}` : ''}</Typography>
-      {lot.storageRequirements || lot.notes ? <Typography>{lot.storageRequirements} {lot.notes}</Typography> : null}
+      <Typography>{t('operations.stockOperations.expiry')}: {formatDate(lot.expiryDate)}</Typography>
       {lot.stock.length > 0 && <OperationLines label={t('operations.stockOperations.stockOfThisLot')}
         headers={[t('enum.value.location'), t('operations.stockOperations.onHand'), t('enum.itemStatus.available'), t('enum.transactionType.reserved'), t('enum.itemStatus.damaged'), t('enum.value.quarantine'), t('enum.value.in_transit')]}
         rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('operations.stockOperations.restrictedLocation'), ...[row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit].map(quantity => quantityLabel(lot.itemId, quantity))] }))} />}
     </OperationListEntry>)}
     <LoadMore list={lots} />
-    {choosing && <OperationForm title={t('operations.stockOperations.newLot')} submitLabel={t('common.next')} onClose={() => setChoosing(false)}
-      fields={[{ key: 'itemId', label: t('operations.stockOperations.itemLotTracked'), type: 'item', itemFilter: (item) => item.trackingMode === 'lot_tracked', required: true }]}
-      onSave={async (values) => { setChoosing(false); setEdit({ itemId: String(values.itemId) }); }} />}
-    {edit && <OperationForm title={creating ? t('operations.stockOperations.newLot2') : `${t('enum.value.lot')} ${'lotNumber' in edit ? edit.lotNumber : ''}`}
-      initial={creating ? { status: 'available' } : Object.fromEntries(Object.entries(edit).filter(([, value]) => typeof value === 'string'))}
-      onClose={() => setEdit(null)} fields={[
-      { key: 'lotNumber', label: t('operations.stockOperations.lotNumber'), required: true }, { key: 'supplierLot', label: t('operations.stockOperations.supplierLot') },
-      { key: 'manufactureDate', label: t('operations.stockOperations.manufactured'), type: 'date' }, { key: 'expiryDate', label: t('operations.stockOperations.expiryDate'), type: 'date' }, { key: 'bestBeforeDate', label: t('operations.stockOperations.bestBefore2'), type: 'date' },
-      { key: 'status', label: t('common.status'), required: true, options: ['available', 'hold', 'recalled', 'expired', 'depleted'].map((value) => ({ value, label: formatStatus(value) })) },
-      { key: 'storageRequirements', label: t('operations.stockOperations.storageRequirements'), multiline: true }, { key: 'notes', label: t('common.notes2'), multiline: true },
-    ]} onSave={(values) => 'id' in edit
-      ? operationsApi.updateLot(edit.id, lotUpdateInput(optionalValues(values)))
-      : operationsApi.createLot(lotCreateInput(optionalValues({ ...values, itemId: edit.itemId })))}>
-      {parentName && <Alert severity="info">{t('common.item')}: {parentName}{creating ? ` · ${t('operations.stockOperations.aLotHoldsNoStockUntilItIsReceivedOr')}` : ''}</Alert>}
+    {edit && <OperationForm title={`${t('enum.value.lot')} ${edit.lotNumber}`}
+      initial={{ lotNumber: edit.lotNumber, expiryDate: edit.expiryDate ?? '', status: edit.status }}
+      onClose={() => setEdit(null)} fields={lotFields(t)}
+      onSave={(values) => operationsApi.updateLot(edit.id, lotInput(values))}>
+      <Alert severity="info">{t('common.item')}: {edit.itemName}</Alert>
     </OperationForm>}
   </Stack>;
 }
+

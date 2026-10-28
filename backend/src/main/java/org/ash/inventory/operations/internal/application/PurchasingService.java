@@ -26,6 +26,7 @@ import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class PurchasingService {
     @jakarta.inject.Inject InventoryReceiptService stockReceipts;
+    @jakarta.inject.Inject StockManagementService lots;
     private final PurchasingOrm orm;
     private final ActorService actors;
     private final DomainEventService events;
@@ -211,6 +213,7 @@ public class PurchasingService {
         var receiptLines = new ArrayList<GoodsReceiptLine>();
         var stock = new ArrayList<InventoryReceiptService.ReceiptStock>();
         var assetCodes = new HashSet<String>();
+        var newLots = new HashMap<String, InventoryLot>();
         long acceptedTotal = 0;
         long damagedTotal = 0;
         long rejectedTotal = 0;
@@ -231,7 +234,7 @@ public class PurchasingService {
             if (stockReceived > orderLine.remainingQuantity()) {
                 throw ApiException.conflict("Received quantity exceeds the remaining quantity for " + orderLine.item.name);
             }
-            var lot = validateReceiptTracking(orderLine.item, inputLine, stockReceived, assetCodes);
+            var lot = validateReceiptTracking(orderLine.item, inputLine, stockReceived, assetCodes, newLots);
             var line = new GoodsReceiptLine();
             line.goodsReceipt = receipt;
             line.purchaseOrderLine = orderLine;
@@ -332,9 +335,12 @@ public class PurchasingService {
         return document(value);
     }
 
-    /** {@code receiptCodes} spans the whole receipt: assets are booked only after every line validated. */
+    /**
+     * {@code receiptCodes} spans the whole receipt: assets are booked only after every line validated. A new lot is
+     * created here, with the stock it receives; {@code newLots} lets two lines of one delivery share that new lot.
+     */
     private InventoryLot validateReceiptTracking(Item item, PurchasingDtos.ReceiptLineInput input, int stockReceived,
-            Set<String> receiptCodes) {
+            Set<String> receiptCodes, Map<String, InventoryLot> newLots) {
         if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
             var codes = input.assetCodes() == null ? List.<String>of() : input.assetCodes();
             if (codes.size() != stockReceived) {
@@ -344,19 +350,30 @@ public class PurchasingService {
                 var code = requiredText(raw, "assetCode").toUpperCase(Locale.ROOT);
                 if (!receiptCodes.add(code) || orm.assetCodeExists(code)) throw ApiException.conflict("Asset code already exists: " + code);
             }
-            if (input.lotId() != null) throw ApiException.badRequest("Serialized receipt lines cannot reference a lot");
+            if (input.lotId() != null || input.newLot() != null) throw ApiException.badRequest("Serialized receipt lines cannot reference a lot");
             return null;
         }
         if (input.assetCodes() != null && !input.assetCodes().isEmpty()) {
             throw ApiException.badRequest("Asset codes are only valid for serialized receipt lines");
         }
         if (item.trackingMode == DomainEnums.TrackingMode.lot_tracked) {
-            if (input.lotId() == null) throw ApiException.badRequest("lotId is required for lot-tracked receipts");
+            if (input.newLot() != null) {
+                if (input.lotId() != null) throw ApiException.badRequest("Choose an existing lot or a new lot, not both");
+                if (stockReceived < 1) throw ApiException.badRequest("A new lot needs received stock");
+                var number = input.newLot().lotNumber() == null ? "" : input.newLot().lotNumber().trim().toLowerCase(Locale.ROOT);
+                var created = newLots.get(item.id + ":" + number);
+                if (created == null) {
+                    created = lots.newLot(item, input.newLot());
+                    newLots.put(item.id + ":" + number, created);
+                }
+                return created;
+            }
+            if (input.lotId() == null) throw ApiException.badRequest("lotId or newLot is required for lot-tracked receipts");
             var lot = orm.require(InventoryLot.class, input.lotId(), "Inventory lot");
             if (!lot.item.id.equals(item.id)) throw ApiException.badRequest("Lot does not belong to receipt item");
             return lot;
         }
-        if (input.lotId() != null) throw ApiException.badRequest("Bulk receipt lines cannot reference a lot");
+        if (input.lotId() != null || input.newLot() != null) throw ApiException.badRequest("Bulk receipt lines cannot reference a lot");
         return null;
     }
 

@@ -1,6 +1,7 @@
 import type { ActorSummary } from './user';
 import type { EventType } from './event';
 import type { AssetInstance } from './item';
+import type { LotInput } from './operations';
 
 export interface StockTransaction {
   reversesId?: string;
@@ -47,6 +48,8 @@ export interface TransactionFormData {
   occurredAt?: number;
   locationId?: string;
   lotId?: string;
+  /** A lot created by this stock addition, instead of an existing `lotId`. */
+  newLot?: LotInput;
   eventOccurrenceId?: string;
   itemId: string;
   transactionType: TransactionType;

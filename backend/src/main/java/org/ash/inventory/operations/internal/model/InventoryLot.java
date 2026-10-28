@@ -20,16 +20,9 @@ import java.time.LocalDate;
 public class InventoryLot extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "item_id") public Item item;
     @Column(name = "lot_number", nullable = false) public String lotNumber;
-    @Column(name = "supplier_lot") public String supplierLot;
-    @Column(name = "manufacture_date") public LocalDate manufactureDate;
     @Column(name = "expiry_date") public LocalDate expiryDate;
-    @Column(name = "best_before_date") public LocalDate bestBeforeDate;
-    @Column(name = "storage_requirements") public String storageRequirements;
     @Enumerated(EnumType.STRING) @Column(nullable = false) public DomainEnums.LotStatus status = DomainEnums.LotStatus.available;
-    public String notes;
     public boolean usableOn(LocalDate date) {
-        return status == DomainEnums.LotStatus.available
-                && (expiryDate == null || !expiryDate.isBefore(date))
-                && (bestBeforeDate == null || !bestBeforeDate.isBefore(date));
+        return status == DomainEnums.LotStatus.available && (expiryDate == null || !expiryDate.isBefore(date));
     }
 }

@@ -1,8 +1,8 @@
 import { type ItemFormData, type AssemblyFormData, type EventReportFormData, type FactionOrderFormData, type GeneralOrderFormData, type EventType } from './index';
 import type { EventAttendeeInput, EventTimelineInput } from './eventLogistics';
-import type { LotCreateInput } from './operations';
+import type { LotInput } from './operations';
 
-export type CsvItemLot = Omit<LotCreateInput, 'itemId'> & { quantity: number };
+export type CsvItemLot = LotInput & { quantity: number };
 
 export interface ParsedItemRow {
   index: number;

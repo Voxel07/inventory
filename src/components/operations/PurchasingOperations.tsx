@@ -5,7 +5,8 @@ import { formatCents } from '../../utils/money';
 import { OperationLines } from './OperationLines';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
-import { lotCreateInput, receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
+import { receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
+import { lotFields } from './lotFields';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../utils/queryKeys';
 import { loadAllPages } from '../../services/apiPagination';
@@ -13,7 +14,7 @@ import type { Lot } from '../../types/operations';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Box, Card, CardContent, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -96,8 +97,7 @@ export function PurchaseDraft({ order, initialLines, eventId, onClose }: { order
 /** Choice label of an existing batch: identity, dates and current stock, so a delivery is matched deliberately. */
 function lotChoiceLabel(lot: Lot, t: Translator): string {
   const onHand = lot.stock.reduce((sum, row) => sum + row.onHand, 0);
-  return [lot.lotNumber, lot.supplierLot && `${t('common.supplier')}: ${lot.supplierLot}`,
-    lot.expiryDate && `${t('operations.purchasingOperations.expiry')}: ${formatDate(lot.expiryDate)}`, lot.bestBeforeDate && `${t('operations.purchasingOperations.bestBefore')}: ${formatDate(lot.bestBeforeDate)}`,
+  return [lot.lotNumber, lot.expiryDate && `${t('operations.purchasingOperations.expiry')}: ${formatDate(lot.expiryDate)}`,
     `${t('common.stock')}: ${onHand}`, lot.status !== 'available' && formatStatus(lot.status)].filter(Boolean).join(' · ');
 }
 
@@ -112,7 +112,6 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
   const lots = useQuery({ queryKey: queryKeys.operations(`receive-lots:${lotItemIds.join(',')}`), enabled: lookup.complete,
     queryFn: async () => (await Promise.all(lotItemIds.map(itemId => loadAllPages(operationsApi.lots({ itemId }))))).flat() });
   const [key] = useState(() => crypto.randomUUID());
-  const createdLots = useRef(new Map<string, string>());
   const [receivedAt] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
   if (!ready && !lookup.error && !lots.error && lookup.complete && lots.isSuccess) setReady(true);
@@ -129,6 +128,7 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     initial[`rejected:${line.id}`] = 0;
     initial[`notes:${line.id}`] = '';
     initial[`lot:${line.id}`] = '';
+    initial[`${line.id}:status`] = 'available';
     if (trackingOf(line.itemId) === 'serialized') initial[`codes:${line.id}`] = Array.from({ length: line.remainingQuantity }, (_, unit) => `ASSET-${key.slice(0, 8).toUpperCase()}-${index + 1}-${unit + 1}`).join('\n');
   });
   return <OperationForm title={`${t('operations.purchasingOperations.receiveDelivery2')} · ${order.orderNumber}`} initial={initial} onClose={onClose} fields={values => [
@@ -148,40 +148,26 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
           { key: `lot:${line.id}`, label: t('operations.purchasingOperations.batchOfThisDelivery'), required: received > 0,
             help: t('operations.purchasingOperations.recordANewBatchOrExplicitlyChooseTheExistingBatch'),
             options: [{ value: '__new__', label: t('operations.purchasingOperations.recordANewBatch') }, ...(lots.data ?? []).filter(lot => lot.itemId === line.itemId).map(lot => ({ value: lot.id, label: lotChoiceLabel(lot, t) }))] },
-          ...(newLot ? [
-            { key: `lotNumber:${line.id}`, label: t('operations.purchasingOperations.lotNumber'), required: received > 0 },
-            { key: `supplierLot:${line.id}`, label: t('operations.purchasingOperations.supplierLot') },
-            { key: `manufactureDate:${line.id}`, label: t('operations.purchasingOperations.manufactured'), type: 'date' as const },
-            { key: `expiryDate:${line.id}`, label: t('operations.purchasingOperations.expiryDate'), type: 'date' as const },
-            { key: `bestBeforeDate:${line.id}`, label: t('operations.purchasingOperations.bestBefore2'), type: 'date' as const },
-          ] : []),
+          // A new batch is created by the receipt itself, together with its first stock.
+          ...(newLot ? lotFields(t, `${line.id}:`, received > 0) : []),
         ] : []),
         { key: `notes:${line.id}`, label: t('operations.purchasingOperations.inspectionNotesOptional') },
       ];
     }), { key: 'notes', label: t('operations.purchasingOperations.notesOptional'), multiline: true },
   ]} onSave={async values => {
-    const receiptLines = lines.map(line => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`]), damagedQuantity: Number(values[`damaged:${line.id}`]), rejectedQuantity: Number(values[`rejected:${line.id}`]), lotId: trackingOf(line.itemId) === 'lot_tracked' && values[`lot:${line.id}`] !== '__new__' ? String(values[`lot:${line.id}`] || '') || null : null, assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map(code => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null }));
+    const newLotOf = (line: PurchaseOrder['lines'][number]) => trackingOf(line.itemId) === 'lot_tracked' && values[`lot:${line.id}`] === '__new__';
+    const receiptLines = lines.map(line => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`]), damagedQuantity: Number(values[`damaged:${line.id}`]), rejectedQuantity: Number(values[`rejected:${line.id}`]),
+      lotId: trackingOf(line.itemId) === 'lot_tracked' && !newLotOf(line) ? String(values[`lot:${line.id}`] || '') || null : null,
+      newLot: newLotOf(line) ? { lotNumber: values[`${line.id}:lotNumber`], expiryDate: values[`${line.id}:expiryDate`], status: values[`${line.id}:status`] } : null,
+      assetCodes: String(values[`codes:${line.id}`] || '').split(/\r?\n/).map(code => code.trim()).filter(Boolean), receivingNotes: values[`notes:${line.id}`] || null }));
     for (const [index, line] of receiptLines.entries()) {
       if (line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > lines[index].remainingQuantity) return Promise.reject(new Error(t('operations.purchasingOperations.theTotalExceedsTheOutstandingOrderQuantity')));
       if (trackingOf(lines[index].itemId) === 'serialized' && line.assetCodes.length !== line.acceptedQuantity + line.damagedQuantity) return Promise.reject(new Error(t('operations.purchasingOperations.enterExactlyOneCodeForEachAcceptedOrDamagedAsset')));
       if (trackingOf(lines[index].itemId) === 'lot_tracked' && line.acceptedQuantity + line.damagedQuantity > 0 && !values[`lot:${lines[index].id}`]) return Promise.reject(new Error(t('operations.purchasingOperations.chooseANewOrAnExistingBatchForEveryDelivered')));
+      // A batch without delivered stock is never created.
+      if (line.acceptedQuantity + line.damagedQuantity === 0) line.newLot = null;
     }
     if (!receiptLines.some(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0)) return Promise.reject(new Error(t('operations.purchasingOperations.enterAtLeastOneDeliveredQuantity')));
-    for (const [index, line] of receiptLines.entries()) {
-      const ordered = lines[index];
-      if (trackingOf(ordered.itemId) !== 'lot_tracked' || values[`lot:${ordered.id}`] !== '__new__' || line.acceptedQuantity + line.damagedQuantity === 0) continue;
-      const lotNumber = String(values[`lotNumber:${ordered.id}`]).trim();
-      const cacheKey = `${ordered.itemId}:${lotNumber}`;
-      let lotId = createdLots.current.get(cacheKey);
-      if (!lotId) {
-        const lot = await operationsApi.createLot(lotCreateInput({ itemId: ordered.itemId, lotNumber, status: 'available',
-          supplierLot: values[`supplierLot:${ordered.id}`] ?? '', manufactureDate: values[`manufactureDate:${ordered.id}`] ?? '',
-          expiryDate: values[`expiryDate:${ordered.id}`] ?? '', bestBeforeDate: values[`bestBeforeDate:${ordered.id}`] ?? '' }));
-        lotId = lot.id;
-        createdLots.current.set(cacheKey, lotId);
-      }
-      line.lotId = lotId;
-    }
     return operationsApi.receive(receiptInput({ purchaseOrderId: order.id, receivingLocationId: values.receivingLocationId, receiptNumber: values.receiptNumber, receivedAt: Number(values.receivedAt), notes: values.notes || null, idempotencyKey: key, lines: receiptLines.filter(line => line.acceptedQuantity + line.damagedQuantity + line.rejectedQuantity > 0) }));
   }}>
     <Typography variant="body2" color="text.secondary">{t('operations.purchasingOperations.allOutstandingQuantitiesDefaultToAcceptedAdjustQuantitiesAssetCodes')}</Typography>

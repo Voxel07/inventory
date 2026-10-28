@@ -135,7 +135,7 @@ class DocsRemediationApiTest {
         notices.finish(ineligible,org.ash.inventory.notification.api.NotificationService.Outcome.SKIPPED,java.util.Set.of());
         var claimed=notices.claim();assertNotNull(claimed);assertEquals(ids.get(1),claimed.id());
         QuarkusTransaction.requiringNew().run(()->assertEquals("skipped",em.find(org.ash.inventory.notification.internal.Notification.class,ids.getFirst()).deliveryStatus));
-        notices.finish(new org.ash.inventory.notification.api.NotificationService.Delivery(claimed.id(),UUID.randomUUID(),claimed.recipientId(),claimed.orderId(),claimed.itemId(),java.util.Set.of()),org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of());
+        notices.finish(new org.ash.inventory.notification.api.NotificationService.Delivery(claimed.id(),UUID.randomUUID(),claimed.recipientId(),claimed.orderId(),claimed.itemId(),java.util.Set.of(),claimed.type(),claimed.payload()),org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of());
         QuarkusTransaction.requiringNew().run(()->assertEquals("sending",em.find(org.ash.inventory.notification.internal.Notification.class,claimed.id()).deliveryStatus));
         notices.finish(claimed,org.ash.inventory.notification.api.NotificationService.Outcome.SENT,java.util.Set.of());
         QuarkusTransaction.requiringNew().run(()->{

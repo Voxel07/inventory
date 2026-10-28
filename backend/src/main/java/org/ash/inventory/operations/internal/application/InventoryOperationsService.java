@@ -43,6 +43,7 @@ public class InventoryOperationsService {
     @jakarta.inject.Inject org.ash.inventory.operations.internal.media.MediaService media;
     @jakarta.inject.Inject EquipmentPolicy equipment;
     @jakarta.inject.Inject PositionService positions;
+    @jakarta.inject.Inject StockManagementService lots;
     @jakarta.inject.Inject CheckoutEligibility eligibility;
     @jakarta.inject.Inject StockReadService stockReads;
     @jakarta.inject.Inject CustodyOrm custody;
@@ -158,7 +159,7 @@ public class InventoryOperationsService {
             case checkout, transfer_out, written_off -> transaction.sourceLocation = item.storageLocation;
             default -> { }
         }
-        transaction.lot = positions.lot(item, input.lotId());
+        transaction.lot = transactionLot(item, input);
         if (input.locationId() != null) {
             if (input.transactionType() == DomainEnums.TransactionType.checkout) transaction.sourceLocation = positions.location(input.locationId());
             else transaction.destinationLocation = positions.location(input.locationId());
@@ -171,6 +172,15 @@ public class InventoryOperationsService {
         events.record("stock.changed", "item", item.id, actor.id, input.idempotencyKey(),
                 Map.of("itemId", item.id.toString(), "type", transaction.type.name(), "quantity", transaction.quantity));
         return transaction;
+    }
+
+    /** An existing lot, or the new lot this stock addition brings in: lots are never created without stock. */
+    private org.ash.inventory.operations.internal.model.InventoryLot transactionLot(Item item, ApiModels.TransactionInput input) {
+        if (input.newLot() == null) return positions.lot(item, input.lotId());
+        if (input.lotId() != null) throw ApiException.badRequest("Choose an existing lot or a new lot, not both");
+        if (input.transactionType() != DomainEnums.TransactionType.added && input.transactionType() != DomainEnums.TransactionType.adjusted)
+            throw ApiException.badRequest("A new lot can only be created by adding stock");
+        return lots.newLot(item, input.newLot());
     }
 
     /** Consumables are used up, never returned: a direct checkout is consumed at once, so no checked-out stock or custody remains. */

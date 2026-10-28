@@ -8,7 +8,7 @@ import { apiRequest } from './apiClient';
 import { loadAllPages } from './apiPagination';
 import { optionalText, inputNumber } from '../utils/inputValues';
 import { equipmentProfileInput, equipmentCommitmentInput } from './equipmentInputs';
-import { lotCreateInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
+import { lotInput, scheduleInput, receiptInput, transferInput, countInput, repairInput, repairTransitionInput } from './operationsInputs';
 import { loanApi } from './loanService';
 import { memberApi } from './memberService';
 import { inputChoice, inputText } from '../utils/inputValues';
@@ -82,13 +82,23 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
     let result: { id: string };
     switch (row.operation) {
       case 'stock': {
+        // `newLot` creates the lot with this booking; `lotNumber` names an existing lot of the item. A re-import whose
+        // new lot already exists books into it, so an interrupted import resumes.
+        const newLot = data.newLot == null ? undefined : lotInput(data.newLot as Record<string, unknown>);
+        const lotNumber = newLot?.lotNumber ?? optionalText(data.lotNumber);
+        const existingLot = lotNumber ? (await collection(`lots:${itemId}`, () => loadAllPages(operationsApi.lots({ itemId }))))
+          .find((lot) => lot.lotNumber.toLowerCase() === lotNumber.toLowerCase()) : undefined;
+        if (lotNumber && !newLot && !existingLot) throw new Error(translate('services.csvOperationImport.referenceCouldNotBeResolvedValue', { value: lotNumber }));
         result = await apiRequest<StockTransaction>('/api/transactions', { method: 'POST', body: {
           itemId, transactionType: inputChoice(data.transactionType, ['adjusted', 'checkout', 'checkin']),
           quantityChanged: inputNumber(data.quantityChanged), reason: inputText(data.reason), notes: optionalText(data.notes),
-          assetInstanceId: optionalText(data.assetInstanceId), locationId: optionalText(data.locationId), lotId: optionalText(data.lotId),
+          assetInstanceId: optionalText(data.assetInstanceId), locationId: optionalText(data.locationId),
+          lotId: existingLot?.id ?? optionalText(data.lotId), newLot: existingLot ? undefined : newLot,
           eventType: optionalText(data.eventType), eventOccurrenceId: optionalText(data.eventOccurrenceId), faction: optionalText(data.faction),
           occurredAt: optionalNumber(data.occurredAt), idempotencyKey: key,
         } });
+        // The booking created a lot: later rows may name it by number.
+        if (newLot && !existingLot) loaded.delete(`lots:${itemId}`);
         break;
       }
       case 'damage': {
@@ -114,11 +124,6 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
           || (stages.includes(target) && stages.indexOf(repair.status) > stages.indexOf(target))
           || (repair.status === 'written_off' && ['triaged', 'awaiting_repair', 'in_repair'].includes(target));
         result = completed ? repair : await remember('repairs', await operationsApi.repairCommand(repair.id, repairTransitionInput({ ...data, idempotencyKey: key })));
-        break;
-      }
-      case 'lot': {
-        const existing = (await collection(`lots:${itemId}`, () => loadAllPages(operationsApi.lots({ itemId })))).find((lot) => lot.lotNumber === data.lotNumber);
-        result = existing ?? await remember(`lots:${itemId}`, await operationsApi.createLot(lotCreateInput(data)));
         break;
       }
       case 'maintenance': {

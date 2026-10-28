@@ -1,9 +1,10 @@
 export interface Position { id: string; itemId: string; itemName: string; locationId: string; lotId?: string; quantityOnHand: number; quantityReserved: number; quantityDamaged: number; quantityQuarantined: number; quantityInTransit: number; availableQuantity: number; transferableQuantity: number; lastCountedAt?: number }
-type LotStatus = 'available' | 'hold' | 'recalled' | 'expired' | 'depleted';
+export const LOT_STATUSES = ['available', 'hold', 'recalled', 'expired', 'depleted'] as const;
+export type LotStatus = typeof LOT_STATUSES[number];
 /** Lot quantities at one location; `available` excludes damage, quarantine and the lot's FEFO share of reservations. */
 interface LotStock { locationId: string | null; locationName: string | null; onHand: number; available: number; reserved: number; damaged: number; quarantined: number; inTransit: number }
 /** `status` is eligibility; `empty` (nothing on hand or in transit) is computed independently. */
-export interface Lot { id: string; itemId: string; itemName: string; itemSku?: string; itemActive: boolean; lotNumber: string; supplierLot?: string; manufactureDate?: number; expiryDate?: number; bestBeforeDate?: number; storageRequirements?: string; status: LotStatus; notes?: string; stock: LotStock[]; empty: boolean }
+export interface Lot { id: string; itemId: string; itemName: string; itemSku?: string; itemActive: boolean; lotNumber: string; expiryDate?: number; status: LotStatus; stock: LotStock[]; empty: boolean }
 interface TransferLine { id: string; itemId: string; itemName: string; assetInstanceId?: string; assetCode?: string; lotId?: string; requestedQuantity: number; pickedQuantity: number; receivedQuantity: number; discrepancyQuantity: number; discrepancyNotes?: string }
 export interface Transfer { id: string; transferNumber: string; sourceLocationId: string; destinationLocationId: string; status: string; dispatchedAt?: number; receivedAt?: number; notes?: string; lines: TransferLine[] }
 interface CountLine { id: string; itemId: string; itemName: string; assetCode?: string; lotId?: string; locationId?: string; expectedQuantity?: number; countedQuantity?: number; recountedQuantity?: number; approvedQuantity?: number; varianceQuantity?: number; countedById?: string; notes?: string }
@@ -20,9 +21,8 @@ export interface VendorDocument { id: string; vendorId: string; purchaseOrderId?
 export interface OutboxEvent { id: string; eventType: string; aggregateType: string; aggregateId: string; status: string; attemptCount: number; lastError?: string; occurredAt: number }
 export interface SyncAudit { id: string; operationType: string; syncStatus: string; conflictMessage?: string; createdAt: number; userId: string; commandId: string; retryCount: number }
 
-/** Batch metadata; the parent item is chosen once, at creation (LotCreateInput). */
-export interface LotUpdateInput { lotNumber: string; supplierLot?: string | null; manufactureDate?: number | null; expiryDate?: number | null; bestBeforeDate?: number | null; storageRequirements?: string | null; status?: LotStatus; notes?: string | null }
-export interface LotCreateInput extends LotUpdateInput { itemId: string }
+/** A lot's number, expiry and eligibility. A new lot is only created by the stock booking that brings its first units in. */
+export interface LotInput { lotNumber: string; expiryDate?: number | null; status?: LotStatus }
 export interface TransferInput { transferNumber?: string | null; sourceLocationId: string; destinationLocationId: string; idempotencyKey: string; notes?: string | null; lines: { itemId: string; assetInstanceId?: string | null; lotId?: string | null; quantity: number }[] }
 interface TransferCommandInput { idempotencyKey: string; notes?: string | null }
 export interface TransferReceiveInput extends TransferCommandInput { lines: { transferLineId: string; receivedQuantity: number; discrepancyQuantity: number; discrepancyNotes?: string | null }[] }
@@ -35,6 +35,6 @@ export interface ScheduleInput { itemId: string; assetInstanceId?: string | null
 export interface RepairInput { damageReportId: string; repairOwnerId?: string | null; vendorId?: string | null; partsAndCostNotes?: string | null; notes?: string | null; occurredAt?: number | null }
 type RepairStatus = 'reported' | 'triaged' | 'awaiting_repair' | 'in_repair' | 'repaired' | 'verified' | 'returned_to_service' | 'written_off';
 export interface RepairTransitionInput { status: RepairStatus; amount?: number | null; repairOwnerId?: string | null; vendorId?: string | null; verificationResult?: string | null; notes?: string | null; idempotencyKey?: string | null; occurredAt?: number | null }
-export interface ReceiptLineInput { purchaseOrderLineId: string; acceptedQuantity: number; damagedQuantity: number; rejectedQuantity: number; lotId?: string | null; assetCodes?: string[]; receivingNotes?: string | null }
+export interface ReceiptLineInput { purchaseOrderLineId: string; acceptedQuantity: number; damagedQuantity: number; rejectedQuantity: number; lotId?: string | null; newLot?: LotInput | null; assetCodes?: string[]; receivingNotes?: string | null }
 export interface ReceiptInput { purchaseOrderId: string; receiptNumber?: string | null; receivingLocationId: string; receivedAt?: number | null; idempotencyKey: string; notes?: string | null; lines: ReceiptLineInput[] }
 export interface VendorDocumentInput { vendorId: string; purchaseOrderId?: string | null; goodsReceiptId?: string | null; documentType: 'invoice' | 'delivery_note' | 'quote' | 'warranty' | 'certificate' | 'other'; documentDate?: number | null; referenceNumber?: string | null; totalAmountCents?: number | null; currency?: string | null; retentionUntil?: number | null; notes?: string | null }

@@ -3,7 +3,7 @@ import { apiPage, apiRequest, apiFileUrl, fetchMedia, uploadMedia, type ApiQuery
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { fieldCommand } from './fieldCommand';
 
-import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, OutboxEvent, SyncAudit, LotCreateInput, LotUpdateInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
+import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, OutboxEvent, SyncAudit, LotInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
 
 const list = <T>(path: string, query: ApiQuery = {}) => (page: number, size: number) => apiPage<T>(`/api/${path}`, page, size, { query });
 const save = <T>(path: string, data: unknown, id?: string) => apiRequest<T>(`/api/${path}${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: data });
@@ -11,8 +11,7 @@ export const operationsApi = {
   assets: (query: ApiQuery = {}) => list<AssetInstance>('inventory-assets', query),
   positions: (query: ApiQuery = {}) => list<Position>('inventory-positions', query),
   lots: (query: ApiQuery = {}) => list<Lot>('inventory-lots', query),
-  createLot: (data: LotCreateInput) => save<Lot>('inventory-lots', data),
-  updateLot: (id: string, data: LotUpdateInput) => save<Lot>('inventory-lots', data, id),
+  updateLot: (id: string, data: LotInput) => save<Lot>('inventory-lots', data, id),
   transfers: list<Transfer>('transfers'),
   createTransfer: (data: TransferInput) => save<Transfer>('transfers', data),
   transferCommand: <A extends keyof TransferCommands>(id: string, action: A, data: TransferCommands[A]) => action === 'receive'

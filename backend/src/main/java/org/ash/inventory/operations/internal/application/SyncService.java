@@ -193,7 +193,7 @@ public class SyncService {
                 var value = validated(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
                         value.reason(), value.notes(), value.eventType(), value.faction(), value.assetInstanceId(), value.userId(),
-                        action.idempotencyKey(), value.eventOccurrenceId(), value.locationId(), value.lotId(), value.occurredAt());
+                        action.idempotencyKey(), value.eventOccurrenceId(), value.locationId(), value.lotId(), value.newLot(), value.occurredAt());
                 yield mapper.transaction(inventory.transact(input));
             }
             case "order.prepare" -> {

@@ -6,7 +6,6 @@ export const CSV_OPERATIONS = {
   damage: { label: 'utils.csvOperations.operationLabels.damage', requiredFields: ['itemId', 'amount', 'description', 'severity'] },
   repair: { label: 'utils.csvOperations.operationLabels.repair', requiredFields: ['damageReportId'] },
   repair_transition: { label: 'utils.csvOperations.operationLabels.repair_transition', requiredFields: ['repairId', 'status'] },
-  lot: { label: 'utils.csvOperations.operationLabels.lot', requiredFields: ['itemId', 'lotNumber'] },
   maintenance: { label: 'utils.csvOperations.operationLabels.maintenance', requiredFields: ['itemId', 'maintenanceType', 'intervalType', 'intervalValue'] },
   purchase: { label: 'utils.csvOperations.operationLabels.purchase', requiredFields: ['vendorName', 'orderNumber', 'orderDate', 'lines'] },
   receipt: { label: 'utils.csvOperations.operationLabels.receipt', requiredFields: ['purchaseOrderId', 'receivingLocationId', 'lines'] },
@@ -57,6 +56,9 @@ export function parseOperationsFromCsv(rows: Record<string, string>[], items: It
         }
         if (operation === 'stock' && !['adjusted', 'checkout', 'checkin'].includes(String(data.transactionType))) {
           throw new Error(translate('utils.csvOperations.stockChangesUseAdjustedCheckoutOrCheckinWriteOffsAre'));
+        }
+        if (operation === 'stock' && data.newLot != null && data.transactionType !== 'adjusted') {
+          throw new Error(translate('utils.csvOperations.newLotsOnlyWithAddedStock'));
         }
         if (operation === 'stock' && data.transactionType === 'checkout' && (data.eventType || data.eventOccurrenceId) && !data.faction) {
           throw new Error(translate('utils.csvOperations.eventCheckoutsRequireAFaction'));
