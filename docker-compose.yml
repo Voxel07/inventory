@@ -50,11 +50,9 @@ services:
       INVENTORY_BOOTSTRAP_ADMINS: ${INVENTORY_BOOTSTRAP_ADMINS:-}
       INVENTORY_NOTIFICATION_WEBHOOK_URL: ${INVENTORY_NOTIFICATION_WEBHOOK_URL:-}
       INVENTORY_NOTIFICATION_WEBHOOK_TOKEN: ${INVENTORY_NOTIFICATION_WEBHOOK_TOKEN:-}
-      # ntfy push server the API publishes to: HTTPS (e.g. https://ntfy.sh) or an internal container (http://ntfy).
-      # The public URL is the subscribe address shown on the profile page (empty: the publish URL).
-      # Auth: an access token (tk_...) or username/password; leave empty for open servers.
-      INVENTORY_NOTIFICATION_NTFY_URL: ${INVENTORY_NOTIFICATION_NTFY_URL:-}
-      INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL: ${INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL:-}
+      # Publish over the shared Docker network; ntfy uses the same public URL and publisher token.
+      INVENTORY_NOTIFICATION_NTFY_URL: ${INVENTORY_NOTIFICATION_NTFY_URL:-http://ntfy}
+      INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL: ${INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL:-http://localhost:8090}
       INVENTORY_NOTIFICATION_NTFY_TOKEN: ${INVENTORY_NOTIFICATION_NTFY_TOKEN:-}
       INVENTORY_NOTIFICATION_NTFY_USERNAME: ${INVENTORY_NOTIFICATION_NTFY_USERNAME:-}
       INVENTORY_NOTIFICATION_NTFY_PASSWORD: ${INVENTORY_NOTIFICATION_NTFY_PASSWORD:-}
@@ -113,6 +111,36 @@ services:
     # (CORS preflights included) itself, without CORS headers.
     restart: unless-stopped
 
+  # Setup and credentials: docs/NTFY.md. Shares the default network with the API.
+  ntfy:
+    image: binwiederhier/ntfy:v2.34.0
+    command: ["serve"]
+    environment:
+      TZ: ${INVENTORY_TIMEZONE:-Europe/Berlin}
+      NTFY_BASE_URL: ${INVENTORY_NOTIFICATION_NTFY_PUBLIC_URL:-http://localhost:8090}
+      NTFY_LISTEN_HTTP: ":80"
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: read-only
+      NTFY_AUTH_USERS: "inventory:${NTFY_PASSWORD_HASH:?Set NTFY_PASSWORD_HASH to a bcrypt hash (see docs/NTFY.md)}:user"
+      NTFY_AUTH_ACCESS: "inventory:*:wo"
+      NTFY_AUTH_TOKENS: "inventory:${INVENTORY_NOTIFICATION_NTFY_TOKEN:?Set INVENTORY_NOTIFICATION_NTFY_TOKEN to an ntfy token (see docs/NTFY.md)}:Inventory API"
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+    ports:
+      - "${NTFY_BIND_ADDRESS:-127.0.0.1}:${NTFY_PORT:-8090}:80"
+    volumes:
+      - inventory-ntfy-cache:/var/cache/ntfy
+      - inventory-ntfy-auth:/var/lib/ntfy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 http://127.0.0.1:80/v1/health -O - | grep -Eq '\"healthy\"[[:space:]]*:[[:space:]]*true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    init: true
+    restart: unless-stopped
+
   inventory-app:
     build:
       context: .
@@ -136,3 +164,5 @@ services:
 volumes:
   inventory-postgres:
   inventory-media:
+  inventory-ntfy-cache:
+  inventory-ntfy-auth:
