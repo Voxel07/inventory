@@ -115,12 +115,14 @@ const lotOrderNumber = `PO-SAMPLE-LOT-${crypto.randomUUID().slice(0, 8)}`;
 const lotOrder = await api('/purchase-orders', { orderNumber: lotOrderNumber, vendorId: vendor.id, lines: [{ itemId: lotItem.id, orderedQuantity: 4, unitPriceCents: 100 }] });
 await api(`/purchase-orders/${lotOrder.id}/transitions`, { status: 'ordered' }, 200);
 const lotBefore = await tool('get_item_details', { itemId: lotItem.id });
-const lot = await api('/inventory-lots', { itemId: lotItem.id, lotNumber: `SAMPLE-${crypto.randomUUID().slice(0, 8)}`, status: 'available' });
+// The receipt creates its lot; replaying it with the same key must not create a second lot.
+const lotNumber = `SAMPLE-${crypto.randomUUID().slice(0, 8)}`;
 const lotReceipt = { purchaseOrderId: lotOrder.id, receivingLocationId: target.storageLocation, idempotencyKey: crypto.randomUUID(),
-  lines: [{ purchaseOrderLineId: lotOrder.lines[0].id, lotId: lot.id, acceptedQuantity: 4, damagedQuantity: 0, rejectedQuantity: 0 }] };
+  lines: [{ purchaseOrderLineId: lotOrder.lines[0].id, newLot: { lotNumber, status: 'available' }, acceptedQuantity: 4, damagedQuantity: 0, rejectedQuantity: 0 }] };
 await api('/goods-receipts', lotReceipt);
 await api('/goods-receipts', lotReceipt);
 const lotAfter = await tool('get_item_details', { itemId: lotItem.id });
 assert.equal(lotAfter.stock.onHand, lotBefore.stock.onHand + 4);
+assert.equal((await api(`/inventory-lots?itemId=${lotItem.id}`)).filter((entry: { lotNumber: string }) => entry.lotNumber === lotNumber).length, 1);
 console.log(JSON.stringify({ mcpTools: discovery.tools.length, sampleItems: parsed.length, sampleAssemblies: parsedAssemblies.length, receiptAdded: 5,
   lotReceiptAdded: 4, transferred: 2, countResumedAndPosted: true, itemId: target.id, locationId: target.storageLocation }, null, 2));

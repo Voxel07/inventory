@@ -87,7 +87,7 @@ if (query.has('storagePreview')) {
     asset('inactive-a', 'inactive', 'available', { active: false }));
 }
 const lots: Lot[] = [{ id: 'lot-1', itemId: 'item-1', itemName: 'Radio', itemActive: true, lotNumber: 'LOT-PREVIEW', status: 'available', expiryDate: 1798761600000,
-  bestBeforeDate: 1798675200000, storageRequirements: 'Dry storage', notes: 'Fixture lot', empty: false,
+  empty: false,
   stock: [{ locationId: 'location-a', locationName: 'Shelf A', onHand: 5, available: 5, reserved: 0, damaged: 0, quarantined: 0, inTransit: 0 }] }];
 const schedules: Schedule[] = [{ id: 'schedule-1', itemId: 'item-1', itemName: 'Radio', maintenanceType: 'battery_test', intervalType: 'date', intervalValue: 30,
   nextDueAt: 1792022400000, active: true, checkoutBlocking: true }];
