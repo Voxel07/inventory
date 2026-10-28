@@ -15,7 +15,7 @@ export function fixtureUser(role: UserRole): User {
 }
 
 export function fixtureStock(quantity: number, overrides: Partial<ItemStock> = {}): ItemStock {
-  return { totalOwned: quantity, onHand: quantity, checkedOut: 0, inTransit: 0, damaged: 0, reserved: 0, available: quantity, ordered: 0, ...overrides };
+  return { totalOwned: quantity, onHand: quantity, checkedOut: 0, inTransit: 0, damaged: 0, reserved: 0, available: quantity, maintenance: 0, ordered: 0, ...overrides };
 }
 
 export function fixtureLocation(fields: Pick<StorageLocation, 'id' | 'name'> & Partial<StorageLocation>): StorageLocation {

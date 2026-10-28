@@ -1247,6 +1247,63 @@ CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON m
 INSERT INTO source_revisions (name, shard) SELECT 'factions', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON factions FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
 
+-- Availability history records observed totals, including policy changes without ledger movements.
+create table item_stock_history (
+    id uuid primary key,
+    created_at bigint not null,
+    updated_at bigint not null,
+    sequence bigint generated always as identity unique,
+    item_id uuid not null references items(id) on delete cascade,
+    total_stock integer not null check (total_stock >= 0),
+    available_stock integer not null check (available_stock >= 0 and available_stock <= total_stock)
+);
+create index ix_item_stock_history on item_stock_history(item_id, sequence);
+
+-- Collect affected items in the command transaction; snapshot after its final flush.
+-- Transaction-scoped keys avoid contention between unrelated commands and disappear on rollback.
+create table stock_history_pending (
+    item_id uuid not null references items(id) on delete cascade,
+    transaction_id bigint not null,
+    primary key (transaction_id, item_id)
+);
+create index ix_stock_history_pending_item on stock_history_pending(item_id);
+
+create function queue_stock_history() returns trigger language plpgsql as $$
+declare
+    row_data jsonb;
+    affected uuid;
+begin
+    for row_data in select unnest(array[
+        case when TG_OP <> 'INSERT' then to_jsonb(OLD) end,
+        case when TG_OP <> 'DELETE' then to_jsonb(NEW) end
+    ]) loop
+        if row_data is null then continue; end if;
+        if TG_TABLE_NAME = 'loan_arrangements' then
+            execute format('select item_id from %I.equipment_commitments where id = $1', TG_TABLE_SCHEMA)
+                into affected using (row_data->>'commitment_id')::uuid;
+        else
+            affected := (row_data->>TG_ARGV[0])::uuid;
+        end if;
+        if affected is not null then
+            execute format('insert into %I.stock_history_pending(item_id, transaction_id) select id, txid_current() from %I.items where id = $1 on conflict do nothing', TG_TABLE_SCHEMA, TG_TABLE_SCHEMA)
+                using affected;
+        end if;
+    end loop;
+    return null;
+end $$;
+
+create trigger stock_history_changed after insert or update on items for each row execute function queue_stock_history('id');
+create trigger stock_history_changed after insert or update or delete on stock_transactions for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on asset_instances for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on inventory_positions for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on inventory_lots for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on stock_reservations for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on maintenance_schedules for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on damage_reports for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on member_requests for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on equipment_commitments for each row execute function queue_stock_history('item_id');
+create trigger stock_history_changed after insert or update or delete on loan_arrangements for each row execute function queue_stock_history('commitment_id');
+
 -- Reference data: event types and their factions. Planners add more through /api/factions.
 INSERT INTO factions (id, created_at, updated_at, is_active, event_type, name, slug)
 SELECT gen_random_uuid(), (extract(epoch from now()) * 1000)::bigint, (extract(epoch from now()) * 1000)::bigint, true, event_type, name, slug FROM (VALUES

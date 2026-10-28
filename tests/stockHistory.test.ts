@@ -1,46 +1,43 @@
 import { expect, test } from 'bun:test';
-import { buildStockHistory, stockDelta } from '../src/utils/stockHistory';
-import type { StockTransaction, TransactionType } from '../src/types';
+import { buildStockHistory } from '../src/utils/stockHistory';
+import type { StockHistoryPoint } from '../src/types/item';
 
-function transaction(transactionType: TransactionType, quantityChanged: number, timestamp: number): StockTransaction {
-  return { id: String(timestamp), itemId: 'item', transactionType, quantityChanged, timestamp, userId: 'actor', reason: '', notes: '', created: timestamp, updated: timestamp };
+function snapshot(id: string, timestamp: number, total: number, available: number): StockHistoryPoint {
+  return { id, timestamp, total, available };
 }
 
-test('receipts appear in history without discarding stock predating the ledger', () => {
+test('checkout changes availability while preserving total owned stock', () => {
   const history = buildStockHistory([
-    transaction('received', 5, 1790935200000),
-    transaction('checkout', 2, 1790938800000),
-  ], 13);
-  expect(history.map(point => point.stock)).toEqual([15, 13]);
+    snapshot('received', 1000, 5, 5),
+    snapshot('checkout', 2000, 5, 3),
+  ], 2000);
+  expect(history.map(point => [point.total, point.available])).toEqual([[5, 5], [5, 3]]);
 });
 
-test('an added entry does not force an incorrect zero opening balance', () => {
+test('inspection holds and releases use stored availability without a stock movement', () => {
   const history = buildStockHistory([
-    transaction('added', 4, 1790935200000),
-    transaction('received', 3, 1790938800000),
-  ], 17);
-  expect(history.map(point => point.stock)).toEqual([14, 17]);
+    snapshot('initial', 1000, 4, 4),
+    snapshot('inspection-due', 2000, 4, 0),
+    snapshot('inspection-completed', 3000, 4, 4),
+  ], 3000);
+  expect(history.map(point => point.total)).toEqual([4, 4, 4]);
+  expect(history.map(point => point.available)).toEqual([4, 0, 4]);
 });
 
-test('signed adjustments, transfers and write-offs reconcile to current on-hand stock', () => {
-  const history = buildStockHistory([
-    transaction('written_off', 1, 1790949600000),
-    transaction('adjusted', -2, 1790935200000),
-    transaction('transfer_out', 3, 1790938800000),
-    transaction('transfer_in', 3, 1790942400000),
-    transaction('damaged', 2, 1790946000000),
-  ], 7);
-  expect(history.map(point => point.stock)).toEqual([8, 5, 8, 8, 7]);
-  expect(stockDelta(transaction('consumed', 2, 1790953200000))).toBe(0);
-  expect(stockDelta(transaction('repaired', 2, 1790953200000))).toBe(0);
+test('the last observation extends to now without changing the input or inventing earlier stock', () => {
+  const points = [snapshot('initial', 1000, 4, 0)];
+  expect(buildStockHistory(points, 2000)).toEqual([
+    points[0], snapshot('current', 2000, 4, 0),
+  ]);
+  expect(points).toHaveLength(1);
+  expect(buildStockHistory([], 2000)).toEqual([]);
 });
 
-test('transactions within the same minute stay separate chart points', () => {
+test('observations with identical timestamps keep their database sequence order', () => {
   const history = buildStockHistory([
-    transaction('received', 5, 1790935205000),
-    transaction('checkout', 2, 1790935240000),
-  ], 3);
-  expect(history[0].date).toBe(history[1].date);
+    snapshot('received', 1000, 5, 5),
+    snapshot('checkout', 1000, 5, 3),
+  ], 1000);
   expect(new Set(history.map(point => point.id)).size).toBe(2);
-  expect(history.map(point => point.stock)).toEqual([5, 3]);
+  expect(history.map(point => point.available)).toEqual([5, 3]);
 });

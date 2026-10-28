@@ -38,7 +38,9 @@ The finer inventory/orders/purchasing/events/identity split in the [review](MODU
 
 `INVENTORY_PROCESS_ROLE` accepts `all` (single-node default), `api`, or `worker`. Worker-only processes reject `/api` and `/mcp` traffic with 503 while retaining health/telemetry endpoints. `INVENTORY_WORKER_JOBS` selects `all` or a comma-separated set:
 
-`outbox,notifications,reminders,digests,reports,media,retention,sessions`
+`outbox,notifications,reminders,digests,reports,media,retention,sessions,stock-history`
+
+`stock-history` observes total and available stock every minute, including time-based maintenance and equipment availability changes. Inventory commands record changed snapshots in their own transaction. The history starts when recording begins; earlier availability is not reconstructed from movement quantities.
 
 Each job can also be disabled with `inventory.workers.<job>.enabled=false`. API processes do not dispatch outbox wakeups or run business jobs. SSE subscriptions stay on API processes; worker publishers use Redis in the cluster template.
 

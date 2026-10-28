@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Alert, Divider, Link, Paper, Stack, TextField, Typography } from '@mui/material';
+import { useRef, useState } from 'react';
+import { Divider, Link, Paper, Stack, TextField, Typography } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from './ActionButtons';
+import { AlertsManager, type AlertsManagerHandle } from './AlertsManager';
 import { useAuth } from '../../hooks/useAuth';
 import { useT } from '../../utils/naming';
 import { queryKeys } from '../../utils/queryKeys';
@@ -22,6 +23,7 @@ export function NotificationSettingsCard() {
 function NotificationSettingsForm({ settings, userId }: { settings: NotificationSettings; userId?: string }) {
   const t = useT();
   const client = useQueryClient();
+  const alerts = useRef<AlertsManagerHandle>(null);
   const [topic, setTopic] = useState(settings.ntfyTopic ?? '');
   const [webhook, setWebhook] = useState(settings.webhookUrl ?? '');
   const trimmedTopic = topic.trim();
@@ -31,18 +33,24 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
   const unchanged = trimmedTopic === (settings.ntfyTopic ?? '') && trimmedWebhook === (settings.webhookUrl ?? '');
   const save = useMutation({
     mutationFn: () => updateNotificationSettings({ ntfyTopic: trimmedTopic || null, webhookUrl: trimmedWebhook || null }),
-    onSuccess: (saved) => client.setQueryData(queryKeys.notificationSettings(userId), saved),
+    onSuccess: (saved) => {
+      client.setQueryData(queryKeys.notificationSettings(userId), saved);
+      alerts.current?.showAlert('success', t('profile.notifications.saved'));
+    },
+    onError: (error) => alerts.current?.showAlert('error', error.message),
   });
-  const test = useMutation({ mutationFn: sendNtfyTest });
+  const test = useMutation({
+    mutationFn: sendNtfyTest,
+    onSuccess: () => alerts.current?.showAlert('success', t('profile.ntfy.testSent')),
+    onError: (error) => alerts.current?.showAlert('error', error.message),
+  });
   const server = settings.ntfyServer?.replace(/\/+$/, '');
 
   return (
     <Paper variant="outlined" sx={{ mt: 3, p: 2.5, width: '100%' }}>
       <Stack spacing={1.5}>
         <Typography variant="h6">{t('profile.notifications.title')}</Typography>
-        <Typography variant="body2" color="text.secondary">{t('profile.notifications.description')}</Typography>
         <Typography variant="subtitle1">{t('profile.webhook.title')}</Typography>
-        <Typography variant="body2" color="text.secondary">{t('profile.webhook.description')}</Typography>
         <TextField fullWidth size="small" type="url" label={t('profile.webhook.url')} value={webhook} error={webhookInvalid} disabled={save.isPending}
           placeholder="https://" helperText={webhookInvalid ? t('profile.webhook.invalid') : t('profile.webhook.urlHelp')}
           slotProps={{ htmlInput: { maxLength: 2048, autoComplete: 'off', spellCheck: false } }}
@@ -51,7 +59,6 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
           <>
             <Divider />
             <Typography variant="subtitle1">{t('profile.ntfy.title')}</Typography>
-            <Typography variant="body2" color="text.secondary">{t('profile.ntfy.description')}</Typography>
             <TextField fullWidth size="small" label={t('profile.ntfy.topic')} value={topic} error={topicInvalid} disabled={save.isPending}
               helperText={t('profile.ntfy.topicHelp')} slotProps={{ htmlInput: { maxLength: 64 } }}
               onChange={(event) => { setTopic(event.target.value); save.reset(); test.reset(); }} />
@@ -66,8 +73,6 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
                   disabled={test.isPending || save.isPending || trimmedTopic !== settings.ntfyTopic} onClick={() => test.mutate()}>
                   {t('profile.ntfy.test')}
                 </Button>
-                {test.isSuccess && <Alert severity="success">{t('profile.ntfy.testSent')}</Alert>}
-                {test.error && <Alert severity="error">{test.error.message}</Alert>}
               </>
             )}
           </>
@@ -76,8 +81,7 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
           disabled={topicInvalid || webhookInvalid || save.isPending || unchanged} onClick={() => save.mutate()}>
           {t('common.save')}
         </Button>
-        {save.isSuccess && <Alert severity="success">{t('profile.notifications.saved')}</Alert>}
-        {save.error && <Alert severity="error">{save.error.message}</Alert>}
+        <AlertsManager ref={alerts} />
       </Stack>
     </Paper>
   );

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createResourceHooks } from './useResourceApi';
-import { itemApi, getItemAssets, getItemCategories, getItemNames, createItemAsset, recodeItemAssets, writeOffItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime } from '../services/inventoryService';
+import { itemApi, getItemAssets, getItemCategories, getItemNames, createItemAsset, recodeItemAssets, writeOffItemAssets, updateItemAsset, deleteItemAsset, getAssetRuntime, logAssetRuntime, getItemStockHistory } from '../services/inventoryService';
 import { useCompleteList, usePagedList } from './usePagedList';
+import type { StockHistoryPoint } from '../types/item';
 import type { Item, ItemFormData, AssetInstance, AssetInstanceInput, AssetRecodeInput, RuntimeEntry, RuntimeInput } from '../types';
 
 export const {
@@ -40,6 +41,11 @@ function chunks<T>(values: readonly T[], size: number): T[][] {
 export function useItemAssets(itemId: string | undefined) {
   return useCompleteList<AssetInstance>(['items', itemId, 'assets'], (page, size) => getItemAssets(itemId!, page, size),
     { enabled: Boolean(itemId) });
+}
+
+export function useItemStockHistory(itemId: string | undefined) {
+  return useCompleteList<StockHistoryPoint>(['items', itemId, 'stock-history'],
+    (page, size) => getItemStockHistory(itemId!, page, size), { enabled: Boolean(itemId) });
 }
 
 export function useCreateItemAsset(itemId: string | undefined) {

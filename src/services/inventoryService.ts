@@ -6,6 +6,7 @@ import { loadAllPages, type Page } from './apiPagination';
 import { consumeStagedImages, stageImage } from './stagedImageService';
 import { createCrudResourceApi } from './resourceFactory';
 import { assertAuthSession, type AuthSessionContext } from './authManager';
+import type { StockHistoryPoint } from '../types/item';
 
 async function uploadItemImages(files: File[] = [], context: AuthSessionContext): Promise<string[]> {
   assertAuthSession(context);
@@ -52,6 +53,8 @@ export const itemApi = createCrudResourceApi<Item, ItemFormData>(
 );
 
 export const getItem = itemApi.getById;
+export const getItemStockHistory = (itemId: string, page: number, size: number) =>
+  apiPage<StockHistoryPoint>(`/api/items/${itemId}/stock-history`, page, size);
 export const getItemBySku = (sku: string) => apiRequest<Item>(`/api/items/by-sku/${encodeURIComponent(sku)}`);
 
 /** One import row: created without `id`, otherwise updated; `assetCodes` register serialized units. */

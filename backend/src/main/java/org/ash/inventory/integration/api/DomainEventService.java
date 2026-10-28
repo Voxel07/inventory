@@ -26,10 +26,14 @@ public class DomainEventService {
     private final OutboxOrm orm;
     @jakarta.inject.Inject jakarta.transaction.TransactionSynchronizationRegistry transactions;
     @jakarta.inject.Inject jakarta.enterprise.event.Event<OutboxCommitted> committed;
+    @jakarta.inject.Inject jakarta.enterprise.event.Event<Recorded> recorded;
     @jakarta.inject.Inject InventoryTelemetry telemetry;
 
     /** Fired after a transaction that wrote outbox rows commits, so this node dispatches without waiting for the poll. */
     public record OutboxCommitted() {}
+
+    /** Lets projections join the command transaction without depending on the command's aggregate type. */
+    public record Recorded() {}
 
     public DomainEventService(OutboxOrm orm) {
         this.orm = orm;
@@ -53,6 +57,7 @@ public class DomainEventService {
                 event.payload = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
                 event.traceContext.putAll(telemetry.captureTraceContext());
                 orm.persist(event);
+                recorded.fire(new Recorded());
                 // Observe committed changes once, rather than retries of outbox publication or rolled-back commands.
                 var attributes = Attributes.builder().put("event_type", type)
                         .put("aggregate_type", aggregateType).build();

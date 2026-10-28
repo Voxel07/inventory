@@ -74,7 +74,15 @@ export interface ItemStock {
   damaged: number;
   reserved: number;
   available: number;
+  maintenance: number;
   ordered: number;
+}
+
+export interface StockHistoryPoint {
+  id: string;
+  timestamp: number;
+  total: number;
+  available: number;
 }
 
 interface MaintenanceBlock {

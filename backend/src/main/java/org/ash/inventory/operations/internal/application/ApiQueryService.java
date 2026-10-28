@@ -60,6 +60,7 @@ public class ApiQueryService {
     @jakarta.inject.Inject com.fasterxml.jackson.databind.ObjectMapper json;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.persistence.SourceRevisionOrm revisions;
     @jakarta.inject.Inject @io.quarkus.cache.CacheName("inventory-summary") io.quarkus.cache.Cache summaries;
+    @jakarta.inject.Inject StockHistoryService stockHistory;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
@@ -127,6 +128,13 @@ public class ApiQueryService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public ApiResponses.ItemResponse item(UUID id) {
         return projectItem(catalog.getVisibleItem(id));
+    }
+
+    @Transactional
+    public List<ApiResponses.StockHistoryResponse> stockHistory(UUID id, int page, int size) {
+        var item = catalog.getVisibleItem(id);
+        var bounds = bounds(page, size);
+        return stockHistory.history(item, bounds.offset(), bounds.limit());
     }
 
     @org.ash.inventory.platform.persistence.ConsistentRead

@@ -181,7 +181,7 @@ services:
     environment:
       <<: *inventory-api-environment
       INVENTORY_PROCESS_ROLE: worker
-      INVENTORY_WORKER_JOBS: outbox,reminders,digests,media,retention,sessions
+      INVENTORY_WORKER_JOBS: outbox,reminders,digests,media,retention,sessions,stock-history
       DB_POOL_SIZE: ${WORKER_DB_POOL_SIZE:-3}
 
   # Independently scalable delivery pool. No application HTTP port is published.

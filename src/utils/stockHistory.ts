@@ -1,25 +1,9 @@
-import type { StockTransaction } from '../types';
-import { formatDateTime } from './dateFormat';
+import type { StockHistoryPoint } from '../types/item';
 
-/** Physical on-hand movements, matching the stock ledger rather than availability policy. */
-export function stockDelta(transaction: StockTransaction): number {
-  switch (transaction.transactionType) {
-    case 'added': case 'received': case 'adjusted': case 'checkin': case 'transfer_in':
-      return transaction.quantityChanged;
-    case 'checkout': case 'written_off': case 'transfer_out':
-      return -transaction.quantityChanged;
-    default:
-      return 0;
-  }
-}
-
-/** One point per transaction, keyed by id: formatted times repeat within a minute and would collide on a category axis. */
-export function buildStockHistory(transactions: StockTransaction[], currentOnHand: number) {
-  const sorted = [...transactions].sort((a, b) => a.timestamp - b.timestamp);
-  // Anchor the final point to the current snapshot, including stock predating the ledger.
-  let stock = currentOnHand - sorted.reduce((sum, transaction) => sum + stockDelta(transaction), 0);
-  return sorted.map(transaction => {
-    stock += stockDelta(transaction);
-    return { id: transaction.id, date: formatDateTime(transaction.timestamp), stock };
-  });
+/** Extend the last observation to now without inventing availability before recording began. */
+export function buildStockHistory(points: StockHistoryPoint[], now = Date.now()): StockHistoryPoint[] {
+  const history = [...points].sort((a, b) => a.timestamp - b.timestamp);
+  const last = history.at(-1);
+  if (last && now > last.timestamp) history.push({ ...last, id: 'current', timestamp: now });
+  return history;
 }

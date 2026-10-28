@@ -9,8 +9,8 @@ import { useT } from '../../utils/naming';
 export type RowAction = { label: string; icon: ReactNode; onClick: () => void; destructive?: boolean };
 
 /**
- * A compact catalog record for phones and tablets: the name wraps freely,
- * availability stays on its own line, and explicit actions live behind "More".
+ * A compact catalog record for phones and tablets: the name truncates to leave
+ * room for availability on the same line, and explicit actions live behind "More".
  */
 export function CatalogRow({ to, title, primary, secondary, selectable, selected, onToggleSelected, onOpenMenu, onClick }: {
   to: string;
@@ -32,10 +32,12 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
       flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
       '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { bgcolor: 'action.focus', outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
     }}>
-      <Typography component="span" sx={{ display: 'block', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.35 }}>{title}</Typography>
-      <Typography component="span" variant="body2" className="tabular" sx={{ display: 'block', mt: 0.25 }}>
-        {primary}
-      </Typography>
+      <Box component="span" sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+        <Typography component="span" noWrap title={title} sx={{ flex: 1, minWidth: 0, fontWeight: 600, lineHeight: 1.35 }}>{title}</Typography>
+        <Typography component="span" variant="body2" className="tabular" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {primary}
+        </Typography>
+      </Box>
       {secondary && <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{secondary}</Typography>}
     </ButtonBase>
     {onOpenMenu && <IconButton title={t('lists.catalogParts.moreActionsForTitle', { title: title })} aria-haspopup="menu"

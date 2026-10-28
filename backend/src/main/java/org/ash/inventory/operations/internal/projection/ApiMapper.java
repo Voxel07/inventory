@@ -218,6 +218,7 @@ public class ApiMapper {
                 state.damaged(),
                 state.reserved(),
                 state.available(),
+                maintenance.quantity(value, state),
                 ordered
         );
 

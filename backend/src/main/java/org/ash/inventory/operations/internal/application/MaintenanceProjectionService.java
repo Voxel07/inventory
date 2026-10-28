@@ -19,12 +19,16 @@ public class MaintenanceProjectionService {
     @Inject MaintenanceEvaluationService evaluation;
     private final Map<UUID,List<MaintenanceSchedule>> schedules=new HashMap<>();
     private final Map<UUID,MaintenancePolicy.Status> statuses=new HashMap<>();
+    private final Map<UUID,List<AssetInstance>> assets=new HashMap<>();
     public void prepare(Collection<Item> items) {
         var ids=items.stream().map(i->i.id).filter(Objects::nonNull).filter(id->!schedules.containsKey(id)).distinct().toList();
         if(ids.isEmpty())return;
         ids.forEach(id->schedules.put(id,new ArrayList<>()));
         var rows=em.createQuery("from MaintenanceSchedule s left join fetch s.assetInstance a where s.active=true and s.item.id in :ids and (a is null or a.active=true)",MaintenanceSchedule.class).setParameter("ids",ids).getResultList();
         rows.forEach(s->schedules.get(s.item.id).add(s)); statuses.putAll(evaluation.statuses(rows,Instant.now()));
+        var serialized = items.stream().filter(i -> ids.contains(i.id) && i.trackingMode == DomainEnums.TrackingMode.serialized).map(i -> i.id).toList();
+        if (!serialized.isEmpty()) em.createQuery("from AssetInstance a where a.active=true and a.item.id in :ids", AssetInstance.class)
+                .setParameter("ids", serialized).getResultList().forEach(a -> assets.computeIfAbsent(a.item.id, ignored -> new ArrayList<>()).add(a));
     }
     private List<MaintenanceSchedule> applicable(Item item,AssetInstance asset) {
         prepare(List.of(item)); return schedules.getOrDefault(item.id,List.of()).stream()
@@ -50,5 +54,19 @@ public class MaintenanceProjectionService {
         var values=applicable(item,asset).stream().map(s->statuses.get(s.id)).toList();
         if(values.contains(MaintenancePolicy.Status.due)||values.contains(MaintenancePolicy.Status.unknown))return "overdue";
         return values.contains(MaintenancePolicy.Status.warning)?"due_soon":"certified";
+    }
+
+    /** Count affected stock, once per unit, rather than counting overlapping maintenance plans. */
+    public int quantity(Item item, StockState stock) {
+        prepare(List.of(item));
+        var blocking = applicable(item, null).stream()
+                .filter(s -> s.checkoutBlocking && MaintenancePolicy.blocksCheckout(statuses.get(s.id))).toList();
+        if (item.outOfService || blocking.stream().anyMatch(s -> s.assetInstance == null)) return stock.onHand();
+        if (item.trackingMode != DomainEnums.TrackingMode.serialized) return 0;
+        var blockedAssets = blocking.stream().map(s -> s.assetInstance.id).collect(java.util.stream.Collectors.toSet());
+        return Math.toIntExact(assets.getOrDefault(item.id, List.of()).stream()
+                .filter(a -> StockPolicy.classify(a).onHand() > 0)
+                .filter(a -> a.outOfService || a.availabilityStatus == DomainEnums.AssetState.in_maintenance || blockedAssets.contains(a.id))
+                .count());
     }
 }

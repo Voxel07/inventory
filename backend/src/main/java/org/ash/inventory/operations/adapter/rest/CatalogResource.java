@@ -75,6 +75,11 @@ public class CatalogResource {
 
     @GET @Path("/items/{id}")
     public ApiResponses.ItemResponse item(@PathParam("id") UUID id) { return queries.item(id); }
+    @Paged @GET @Path("/items/{id}/stock-history")
+    public List<ApiResponses.StockHistoryResponse> stockHistory(@PathParam("id") UUID id,
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
+        return queries.stockHistory(id, page, size);
+    }
     @GET @Path("/items/by-sku/{sku:.+}")
     public ApiResponses.ItemResponse itemBySku(@PathParam("sku") String sku) { return queries.itemBySku(sku); }
     @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }

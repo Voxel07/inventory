@@ -28,8 +28,11 @@ public final class ApiResponses {
             int damaged,
             int reserved,
             int available,
+            int maintenance,
             int ordered
     ) {}
+
+    public record StockHistoryResponse(UUID id, Instant timestamp, int total, int available) {}
 
     public record UserResponse(
             UUID id,

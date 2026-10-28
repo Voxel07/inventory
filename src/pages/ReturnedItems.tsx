@@ -74,8 +74,8 @@ export function ReturnedItemsPage() {
     { field: 'expectedReturnLocationName', headerName: t('common.returnLocation'), minWidth: 160, flex: 1, valueGetter: (_, row) => row.expectedReturnLocationName || '—' },
     { field: 'created', headerName: t('pages.returnedItems.submitted'), width: 170, valueFormatter: (value: number) => formatDateTime(value) },
     { field: 'status', headerName: t('common.status'), width: 160, renderCell: ({ row }) => <Chip size="small" variant="outlined" color={statusColors[row.status]} label={labels[row.status]} /> },
-    { field: 'actions', headerName: '', sortable: false, filterable: false, width: 120,
-      renderCell: ({ row }) => <Button variant={row.status === 'pending' ? 'contained' : 'outlined'} size="small" aria-haspopup="dialog"
+    { field: 'actions', headerName: t('common.actions'), align: 'center', headerAlign: 'center', sortable: false, filterable: false, width: 120,
+      renderCell: ({ row }) => <Button variant={row.status === 'pending' ? 'contained' : 'outlined'} size="small" aria-haspopup="dialog" sx={{ mx: 'auto' }}
         aria-label={t('pages.returnedItems.reviewReturnOfItemName', { itemName: String(row.itemName) })} onClick={() => setReviewing(row)}>
         {row.status === 'pending' ? t('pages.returnedItems.review') : t('common.details')}
       </Button> },

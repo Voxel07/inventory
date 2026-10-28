@@ -4,6 +4,7 @@ import { useInboxCount } from '../../hooks/useInbox';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { Dialog } from './ClosableDialog';
 import { AppBar, Toolbar, Typography, Box, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
+import { amber, blue } from '@mui/material/colors';
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
@@ -18,12 +19,14 @@ import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
 import { useUIStore } from '../../store/uiStore';
 import { translate, useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
-import { useEffect, useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
 import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
-import { discardOfflineAction, discardSyncFailure, getOfflineActions, getSyncFailures, type OfflineAction, type SyncFailure } from '../../services/offlineQueue';
+import { discardSyncFailure, getSyncFailures, type SyncFailure } from '../../services/offlineQueue';
 import { resolveScannedCode } from '../../utils/codeResolver';
+import { getSnapshotStatus, restoreSnapshotStatus, subscribeSnapshot } from '../../services/offlineSnapshot';
 
 export function Header() {
     const { openActionInbox } = useActionInboxDialog();
@@ -35,18 +38,31 @@ export function Header() {
     const [syncIssuesOpen, setSyncIssuesOpen] = useState(false);
     const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
     const [queuedActionsOpen, setQueuedActionsOpen] = useState(false);
-    const [queuedActions, setQueuedActions] = useState<OfflineAction[]>([]);
-    const [discardingAction, setDiscardingAction] = useState(false);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isCompact = useMediaQuery(theme.breakpoints.down('md'));
-    const { online, queued, syncIssues, cachedAt, sync } = useOfflineStatus();
+    const { online, queued, syncIssues, sync } = useOfflineStatus();
+    const { generation } = useAuth();
+    const snapshot = useSyncExternalStore(subscribeSnapshot, getSnapshotStatus);
+    useEffect(() => { void restoreSnapshotStatus().catch(() => {}); }, [generation]);
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
     const [quickScanOpen, setQuickScanOpen] = useState(false);
     const [quickScanInput, setQuickScanInput] = useState('');
-    const syncPaused = sync.kind === 'paused';
-    const syncAttention = !online || queued > 0 || Boolean(cachedAt) || syncPaused;
+    const syncPending = queued > 0 || syncIssues > 0 || sync.kind !== 'idle' || snapshot.kind === 'downloading';
+    let syncColor = theme.palette.success.main;
+    let syncLabel = t('shared.header.inSync');
+    if (!online) {
+        const synced = snapshot.kind === 'complete' && !syncPending;
+        syncColor = synced ? amber[theme.palette.mode === 'dark' ? 300 : 700] : theme.palette.error.main;
+        syncLabel = t(synced ? 'header.offlineSynced' : 'header.offlineNotSynced');
+    } else if (syncIssues > 0 || sync.kind === 'paused') {
+        syncColor = theme.palette.error.main;
+        syncLabel = syncIssues > 0 ? t('header.syncIssues', { count: syncIssues }) : t('shared.header.syncPaused');
+    } else if (syncPending) {
+        syncColor = blue[theme.palette.mode === 'dark' ? 300 : 700];
+        syncLabel = queued > 0 ? t('header.queuedActions', { count: queued }) : t('operations.offlineStatusPanel.syncing');
+    }
 
     function openSyncIssues() {
         setSyncIssuesOpen(true);
@@ -61,31 +77,7 @@ export function Header() {
 
     function openQueuedActions() {
         setQueuedActionsOpen(true);
-        void getOfflineActions().then(setQueuedActions);
     }
-
-    async function discardAction(idempotencyKey: string): Promise<boolean> {
-        setDiscardingAction(true);
-        try {
-            await discardOfflineAction(idempotencyKey);
-            setQueuedActions(await getOfflineActions());
-            showSnackbar(t('header.queuedActionRemoved'), 'success');
-            return true;
-        } catch (error) {
-            showSnackbar(error instanceof Error && error.message === 'SYNC_IN_PROGRESS'
-                ? t('header.queuedActionSyncing') : t('header.queuedActionRemoveFailed'), 'error');
-            return false;
-        } finally {
-            setDiscardingAction(false);
-        }
-    }
-
-    useEffect(() => {
-        if (!queuedActionsOpen) return;
-        const refresh = () => { void getOfflineActions().then(setQueuedActions); };
-        window.addEventListener('ash-offline-queue', refresh);
-        return () => window.removeEventListener('ash-offline-queue', refresh);
-    }, [queuedActionsOpen]);
 
     async function handleQuickScanSubmit(e?: React.FormEvent, scannedCode?: string) {
         if (e) e.preventDefault();
@@ -188,29 +180,18 @@ export function Header() {
                         />
                     )
                 )}
-                {isMobile ? (
-                    <IconButton title={translate('shared.header.displayQueuedOfflineActions')}
-                        color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'inherit'}
-                        onClick={openQueuedActions}
-                        aria-label={t('header.viewQueuedActions')}
-                        sx={{ ml: 0.5 }}
-                    >
-                        <Badge badgeContent={queued > 0 ? queued : undefined} color={online ? 'warning' : 'error'}>
-                            {!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
-                        </Badge>
-                    </IconButton>
-                ) : (
-                    <Chip title={translate('shared.header.displayQueuedOfflineActions')}
-                        size="small"
-                        variant={syncAttention ? 'filled' : 'outlined'}
-                        color={!online || syncPaused ? 'error' : syncAttention ? 'warning' : 'default'}
-                        icon={!online ? <CloudOffIcon /> : syncAttention ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
-                        label={syncPaused ? translate('shared.header.syncPaused') : cachedAt ? t('header.cachedData') : online
-                            ? (queued ? t('header.queuedActions', { count: queued }) : translate('shared.header.inSync'))
-                            : t('header.offlineQueued', { count: queued })}
-                        onClick={openQueuedActions}
-                    />
-                )}
+                <IconButton title={syncLabel}
+                    onClick={openQueuedActions}
+                    aria-label={`${syncLabel}. ${t('header.viewQueuedActions')}`}
+                    aria-haspopup="dialog"
+                    sx={{ ml: 0.5, color: syncColor }}
+                >
+                    <Badge badgeContent={queued} max={99} sx={{
+                        '& .MuiBadge-badge': { bgcolor: syncColor, color: theme.palette.getContrastText(syncColor) },
+                    }}>
+                        {!online ? <CloudOffIcon /> : syncPending ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
+                    </Badge>
+                </IconButton>
             </Toolbar>
         </AppBar>
         <Dialog
@@ -253,10 +234,7 @@ export function Header() {
         />
         <QueuedActionsDialog
             open={queuedActionsOpen}
-            actions={queuedActions}
             onClose={() => setQueuedActionsOpen(false)}
-            onDiscard={discardAction}
-            discarding={discardingAction}
         />
         </>
     );

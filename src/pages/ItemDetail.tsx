@@ -46,9 +46,10 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
+    Legend,
     Tooltip as ChartTooltip,
 } from 'recharts';
-import { useItem, useUpdateItem, useItemCategories } from '../hooks/useItems';
+import { useItem, useUpdateItem, useItemCategories, useItemStockHistory } from '../hooks/useItems';
 import { locationLabel } from '../utils/locationHierarchy';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { formatQuantity, fromSteps, getItemStock } from '../utils/stock';
@@ -73,7 +74,6 @@ import { itemImageUrl } from '../utils/itemImages';
 import { useCreateReturnSubmission } from '../hooks/useReturnSubmissions';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getMaintenanceRecords } from '../services/maintenanceService';
-import { maintenanceTypeLabel } from '../components/maintenance/maintenanceSchedules';
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
     available: 'success',
@@ -104,6 +104,7 @@ export function ItemDetail() {
     const canTransact = item?.access?.privateResource ? item.access.canEdit : canOperateWarehouse(user);
     const canCheckout = canCheckoutItem(user, item);
     const { data: itemTransactionsData } = useTransactions({ itemId: itemId ?? undefined });
+    const { data: stockHistoryData = [], isLoading: historyLoading, isError: historyError, refetch: refetchHistory } = useItemStockHistory(itemId);
     const updateItem = useUpdateItem();
     const createTransaction = useCreateTransaction();
     const restock = useMutation({ mutationFn: (data: RestockCheckoutData) =>
@@ -151,8 +152,7 @@ export function ItemDetail() {
 
     const { totalStock, checkedOut, inTransit, damaged, remaining } = getItemStock(item);
 
-    const stockHistory = buildStockHistory(itemTransactions, item?.stock?.onHand ?? 0);
-    const historyDates = new Map(stockHistory.map((point) => [point.id, point.date]));
+    const stockHistory = buildStockHistory(stockHistoryData);
 
     function handleUpdate(data: ItemFormData) {
         if (!itemId) return;
@@ -242,25 +242,30 @@ export function ItemDetail() {
         : '';
     const txColor = (type: string) => type === 'checkout' ? 'warning' : type === 'added' ? 'info' : 'success';
 
-    const historyChart = stockHistory.length <= 1 && itemTransactions.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noTransactionHistoryYet')}</Typography>
+    const historyChart = historyLoading ? <Skeleton variant="rectangular" height={200} /> : historyError ? (
+        <StateMessage kind="error" title={t('pages.itemDetail.couldNotLoadStockHistory')}
+            action={<Button onClick={() => void refetchHistory()}>{t('common.tryAgain')}</Button>} />
+    ) : stockHistory.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noStockHistoryYet')}</Typography>
     ) : (
         <Box role="img" aria-label={t('pages.itemDetail.chartOfStockOverTime')}>
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={210}>
                 <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="id" tickFormatter={(id: string) => historyDates.get(id) ?? ''} stroke={theme.palette.text.secondary} fontSize={11} />
-                    <YAxis stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} tickFormatter={(value: number) => formatQuantity(item, value, false)} />
+                    <XAxis dataKey="timestamp" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(value: number) => formatDateTime(value)} stroke={theme.palette.text.secondary} fontSize={11} minTickGap={40} />
+                    <YAxis domain={[0, 'auto']} stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} tickFormatter={(value: number) => formatQuantity(item, value, false)} />
                     <ChartTooltip
                         isAnimationActive={false}
-                        labelFormatter={(id) => historyDates.get(String(id)) ?? ''}
+                        labelFormatter={(timestamp) => formatDateTime(Number(timestamp))}
                         formatter={(value) => formatQuantity(item, Number(value))}
                         contentStyle={{ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}`, borderRadius: 8 }}
                         labelStyle={{ color: theme.palette.text.primary, fontWeight: 600 }}
-                        itemStyle={{ color: theme.palette.primary.main }}
                     />
-                    <Line type="monotone" dataKey="stock" name={t('common.stock')} stroke={theme.palette.primary.main} strokeWidth={2}
-                        dot={{ fill: theme.palette.primary.main, r: 2 }} activeDot={{ r: 4, fill: theme.palette.primary.main }} />
+                    <Legend iconType="plainline" wrapperStyle={{ fontSize: '0.8125rem' }} />
+                    <Line type="stepAfter" dataKey="total" name={t('pages.itemDetail.total')} stroke={theme.palette.primary.main} strokeDasharray="6 3" strokeWidth={2}
+                        dot={stockHistory.length < 60 ? { r: 2 } : false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                    <Line type="stepAfter" dataKey="available" name={t('enum.itemStatus.available')} stroke={theme.palette.success.main} strokeWidth={2}
+                        dot={stockHistory.length < 60 ? { r: 2 } : false} activeDot={{ r: 4 }} isAnimationActive={false} />
                 </LineChart>
             </ResponsiveContainer>
         </Box>
@@ -365,6 +370,9 @@ export function ItemDetail() {
                         {!item.isConsumable && <Metric label={t('nav.checkedOut')}>{formatQuantity(item, checkedOut)}</Metric>}
                         <Metric label={t('pages.itemDetail.inTransit')}>{formatQuantity(item, inTransit)}</Metric>
                         <Metric label={t('pages.itemDetail.damaged')} color={damaged > 0 ? 'error.main' : undefined}>{formatQuantity(item, damaged)}</Metric>
+                        <Metric label={t('pages.itemDetail.maintenanceInspection')} color={(item.stock?.maintenance ?? 0) > 0 ? 'warning.main' : undefined}>
+                            {formatQuantity(item, item.stock?.maintenance ?? 0)}
+                        </Metric>
                         <Metric label={t('enum.value.ordered')}>{formatQuantity(item, item.stock?.ordered ?? 0)}</Metric>
                         <Metric label={t('pages.itemDetail.minimumStock')}>{formatQuantity(item, item.minStock ?? 0)}</Metric>
                         <Metric label={item.quantityDecimals === 2 ? t('forms.itemForm.fullUnitValue') : t('pages.itemDetail.unitValue')}>{formatMoney(item.value ?? 0)}</Metric>
@@ -375,27 +383,6 @@ export function ItemDetail() {
                             <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.itemsRemainingInOpenedBox', { count: item.containerRemainingCount ?? 0 })}</Metric>
                         </>}
                     </MetricList>
-                    {remaining <= 0 && (item.blockingMaintenance.length > 0 || item.maintenanceStatus === 'in_service') && (
-                        <Alert severity="warning" sx={{ mt: 1 }}>
-                            <Typography variant="subtitle2">{t('pages.itemDetail.whyNoStockIsAvailable')}</Typography>
-                            {item.maintenanceStatus === 'in_service' && <Typography variant="body2">{t('pages.itemDetail.outOfServiceBlocksCheckout')}</Typography>}
-                            {item.blockingMaintenance.length > 0 && <>
-                                <Typography variant="body2">{t('pages.itemDetail.maintenanceBlocksCheckout')}</Typography>
-                                <Box component="ul" sx={{ my: 0.5, pl: 2.5 }}>
-                                    {item.blockingMaintenance.map(block => <Box component="li" key={block.scheduleId}>
-                                        <Typography variant="body2">
-                                            {maintenanceTypeLabel(block.maintenanceType)}{block.assetCode ? ` · ${block.assetCode}` : ''}
-                                            {' — '}{block.status === 'unknown'
-                                                ? t('pages.itemDetail.maintenanceDataIncomplete')
-                                                : block.intervalType === 'date'
-                                                    ? t('pages.itemDetail.maintenanceOverdueSince', { date: formatDateTime(block.nextDueAt) })
-                                                    : t('pages.itemDetail.maintenanceMeterDue', { value: block.nextDueValue ?? '—', unit: formatStatus(block.intervalType) })}
-                                        </Typography>
-                                    </Box>)}
-                                </Box>
-                            </>}
-                        </Alert>
-                    )}
                     <ItemStockLocations key={item.id} item={item} />
                     {item.trackingMode === 'serialized' && (
                         <Box sx={{ mt: 1.5 }}>
