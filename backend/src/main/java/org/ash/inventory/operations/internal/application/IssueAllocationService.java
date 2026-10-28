@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
-import org.ash.inventory.operations.internal.model.*;
+import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.StockTransaction;
 import org.ash.inventory.operations.internal.persistence.IssueAllocationOrm;
 import org.ash.inventory.operations.internal.persistence.PositionOrm;
 import org.ash.inventory.platform.api.ApiException;

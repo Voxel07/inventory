@@ -86,6 +86,7 @@
         "media_cleanup_jobs",
         "member_requests",
         "order_history",
+        "order_item_requests",
         "order_line_asset_assignments",
         "order_lines",
         "orders",

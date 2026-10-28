@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
-import org.ash.inventory.operations.internal.model.*;
+import org.ash.inventory.operations.internal.model.InventoryPosition;
+import org.ash.inventory.operations.internal.model.StockTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
