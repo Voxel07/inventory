@@ -4,7 +4,7 @@ The backend has six enforced modules under `org.ash.inventory`. The module polic
 
 | Module | Owns | Public boundary |
 |---|---|---|
-| `operations` | 57 tables: inventory, fulfillment, purchasing documents, event logistics, identity, privacy, media registry/cleanup, reminders and source revisions | REST/MCP/offline adapters live inside this module. Other modules receive owner facts or authorization decisions through ports they declare. |
+| `operations` | 60 tables: inventory, stock history, fulfillment, purchasing documents, event logistics, identity, privacy, media registry/cleanup, reminders and source revisions | REST/MCP/offline adapters live inside this module. Other modules receive owner facts or authorization decisions through ports they declare. |
 | `notification` | `notifications` | Enqueue, recipient-scoped views/read state, personal-data export/erase, leased delivery; IDs and value records only |
 | `reporting` | `operational_reports`, `report_rebuild_jobs` | Generations, queries/exports, job status; `ReportSource` and `ReportPolicy` ports |
 | `blobs` | Opaque objects in local storage/S3; no database tables | Put/read/copy/delete and canonical keys; no resource authorization or transaction callbacks |

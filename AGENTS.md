@@ -32,3 +32,8 @@ This project is in active **new development**. Follow these mandatory rules:
 - Always Create a markdown file with all findings sorted by priority. Keep it short don't write to much explainer text
 - Track the progress of the tasks in the same file
 - Other problems that are found during the investigation of the other problems should also be fixed and documented as well
+
+## 7. Architecture Boundaries
+- After changing backend code, the baseline schema, the module ownership policy, or the architecture checker, run `python3 scripts/check-architecture.py` from the repository root (use `python` if that is the available Python 3 executable).
+- This static check does not build or run the app and is required even when builds and test suites are prohibited.
+- Fix all reported boundary violations before completing the task. Keep table ownership in `backend/architecture/modules.json` aligned with the baseline schema; register new tables under their owning module.
