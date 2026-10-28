@@ -1,4 +1,5 @@
 import { apiPage, apiRequest } from './apiClient';
+import type { OrderItemRequest } from '../types';
 
 export type ProcurementDeficit = {
   committedStock?: number;
@@ -24,6 +25,11 @@ export type ProcurementDeficit = {
   orderedStock: number;
   recommendedAction: 'purchase' | 'rent_or_purchase' | 'obtain_commitment';
 };
+
+/** Opening lines of a new purchase draft, e.g. procurement shortages or an order request. */
+export type PurchaseDraftLine = { itemId: string; orderedQuantity: number };
+/** Still to order for a shortage: at least one unit. */
+export const shortageLine = (row: ProcurementDeficit): PurchaseDraftLine => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock) });
 
 export type Vendor = { id: string; name: string; active: boolean; contactPerson?: string; email?: string; phone?: string; address?: string; website?: string; paymentNotes?: string; preferredVendor?: boolean; internalNotes?: string };
 type PurchaseOrderLine = { id: string; itemId: string; itemName: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPriceCents: number };
@@ -51,3 +57,15 @@ export function getProcurementDeficits(eventOccurrenceId?: string): Promise<Proc
 }
 
 export const overrideForecast = (data: object) => apiRequest<void>('/api/procurement/overrides', { method: 'POST', body: data });
+
+/** One request for something the inventory does not hold, with the order it came from. */
+export type ItemRequestQueueEntry = {
+  request: OrderItemRequest; orderId: string; orderKind: 'faction' | 'general'; orderLabel: string; orderStatus: string;
+  faction?: string; eventOccurrenceId?: string; eventName?: string; eventDate?: number; requestedBy: string;
+};
+export const getItemRequestQueue = (eventOccurrenceId?: string, includeResolved = false) =>
+  apiRequest<ItemRequestQueueEntry[]>('/api/procurement/item-requests', { query: { eventOccurrenceId, includeResolved } });
+export const assignRequestItem = (id: string, itemId: string) =>
+  apiRequest<ItemRequestQueueEntry>(`/api/procurement/item-requests/${id}/item`, { method: 'POST', body: { itemId } });
+export const declineItemRequest = (id: string, reason: string) =>
+  apiRequest<ItemRequestQueueEntry>(`/api/procurement/item-requests/${id}/decline`, { method: 'POST', body: { reason } });

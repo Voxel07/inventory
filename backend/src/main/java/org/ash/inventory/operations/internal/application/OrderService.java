@@ -15,6 +15,7 @@ import org.ash.inventory.operations.internal.model.Faction;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.OrderHistory;
+import org.ash.inventory.operations.internal.model.OrderItemRequest;
 import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.OrderLineAssetAssignment;
 import org.ash.inventory.operations.internal.model.ReturnReconciliation;
@@ -120,6 +121,7 @@ public class OrderService {
         order.createdBy = actor;
         order.orderCode = nextOrderCode(event, faction);
         orm.persist(order);
+        replaceItemRequests(order, input.itemRequests());
         replaceLines(order, input);
         audit(order, actor, "created", null, DomainEnums.OrderStatus.draft, input.idempotencyKey(), input.notes(), lineSnapshot(order));
         orderEvent("order.created", order, actor, input.idempotencyKey());
@@ -144,15 +146,18 @@ public class OrderService {
         for (var line : source.lines) {
             items.merge(line.item.id, line.requestedQuantity, Integer::sum);
         }
+        // Linked requests are order lines by now and declined ones stay declined; only open ones carry over.
+        var requests = source.itemRequests.stream().filter(request -> request.status() == OrderItemRequest.Status.open)
+                .map(request -> new ApiModels.ItemRequestInput(null, request.name, request.quantity, request.link, request.note)).toList();
         if (source.kind == InventoryOrder.Kind.general)
-            return createGeneral(new ApiModels.GeneralOrderInput(source.name, source.purpose, eventId, items, commandId));
+            return createGeneral(new ApiModels.GeneralOrderInput(source.name, source.purpose, eventId, items, requests, commandId));
         var contents = requestedContents(source);
         items.clear();
         contents.items().forEach((key, quantity) -> items.put(UUID.fromString(key), quantity));
         var assemblies = new LinkedHashMap<UUID,Integer>();
         contents.assemblies().forEach((key, quantity) -> assemblies.put(UUID.fromString(key), quantity));
         return create(new ApiModels.OrderInput(event.eventType, source.faction.slug, event.startDate, eventId, source.faction.id,
-                null, null, null, null, null, source.notes, items, assemblies, commandId));
+                null, null, null, null, null, source.notes, items, assemblies, requests, commandId));
     }
 
     private static void requireOpenEvent(EventOccurrence event) {
@@ -207,6 +212,7 @@ public class OrderService {
         order.eventOccurrence = input.eventOccurrenceId() == null ? null : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event");
         requireOpenEvent(order.eventOccurrence);
         requireBeforeDeadline(order.eventOccurrence);
+        replaceItemRequests(order, input.itemRequests());
         if (order.id != null) orm.deleteLines(order);
         if (input.requestedQuantities() == null) return;
         for (var entry : input.requestedQuantities().entrySet()) {
@@ -249,8 +255,10 @@ public class OrderService {
         order.requestedPickupDate = input.requestedPickupDate();
         order.collectorName = input.collectorName();
         order.notes = input.notes();
+        replaceItemRequests(order, input.itemRequests());
         replaceLines(order, input);
         var changes = contentChanges(before, requestedContents(order));
+        changes.put("itemRequests", requestSnapshot(order));
         if (!previousEventId.equals(event.id)) changes.put("eventOccurrenceId", event.id.toString());
         if (!previousFactionId.equals(faction.id)) changes.put("factionId", faction.id.toString());
         audit(order, actors.current(), "updated", order.status, order.status, null, input.notes(), changes);
@@ -305,7 +313,10 @@ public class OrderService {
             int actualPrepared = Math.min(prepared, availableIncludingThisOrder);
             if (lockedItem.trackingMode != DomainEnums.TrackingMode.serialized) {
                 var selected = input.sourceAllocations() == null ? null : input.sourceAllocations().get(lockedItem.id);
-                sources.put(lockedItem.id, allocation.allocate(lockedItem, allocation.capacity(lockedItem, order.id), actualPrepared, selected));
+                var allocated = allocation.allocate(lockedItem, allocation.capacity(lockedItem, order.id), actualPrepared, selected,
+                        input.acknowledgeShortages() && order.kind == InventoryOrder.Kind.faction);
+                actualPrepared = allocated.values().stream().mapToInt(Integer::intValue).sum();
+                sources.put(lockedItem.id, allocated);
             } else if (input.sourceAllocations() != null && input.sourceAllocations().containsKey(lockedItem.id)) {
                 throw ApiException.badRequest("Serialized preparation selects assets, not quantity positions");
             }
@@ -640,7 +651,8 @@ public class OrderService {
                 transaction.order = order; transaction.eventOccurrence = order.eventOccurrence;
                 transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
                 transaction.faction = order.factionLabel(); transaction.type = DomainEnums.TransactionType.checkout;
-                transaction.quantity = source.getValue(); transaction.availabilityBefore = inventory.stock(item).available();
+                transaction.quantity = source.getValue();
+                transaction.availabilityBefore = inventory.availableFor(item, order.eventOccurrence, ownReservation);
                 transaction.reason = "Order pickup " + order.label();
                 transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup:" + (position == null ? "unlocated" : position.id));
                 transaction.clientCommandId = idempotencyKey;
@@ -708,8 +720,79 @@ public class OrderService {
                 }
             }
         }
-        if (count == 0)
-            throw ApiException.badRequest("Add at least one item or assembly to the order");
+        if (count == 0 && order.itemRequests.isEmpty())
+            throw ApiException.badRequest("Add at least one item, assembly or request to the order");
+    }
+
+    /**
+     * Open requests follow the input; linked, ordered or declined ones belong to procurement and stay as they are.
+     * Without a list (e.g. CSV imports) the requests are left unchanged.
+     */
+    private void replaceItemRequests(InventoryOrder order, List<ApiModels.ItemRequestInput> inputs) {
+        if (inputs == null) return;
+        var existing = new LinkedHashMap<UUID, OrderItemRequest>();
+        order.itemRequests.forEach(request -> existing.put(request.id, request));
+        var kept = new HashSet<UUID>();
+        int lineNumber = 0;
+        for (var input : inputs) {
+            var request = input.id() == null ? null : existing.get(input.id());
+            if (input.id() != null && request == null) throw ApiException.badRequest("Item request not found on this order");
+            if (request != null) {
+                kept.add(request.id);
+                request.lineNumber = lineNumber++;
+                if (request.status() != OrderItemRequest.Status.open) continue;
+            } else {
+                request = new OrderItemRequest();
+                request.order = order;
+                request.lineNumber = lineNumber++;
+                order.itemRequests.add(request);
+            }
+            request.name = requiredText(input.name(), "Request name").trim();
+            if (request.name.length() > 160) throw ApiException.badRequest("Request name is too long");
+            if (input.quantity() < 1) throw ApiException.badRequest("Request quantity must be at least 1");
+            request.quantity = input.quantity();
+            request.link = requestLink(input.link());
+            request.note = input.note() == null || input.note().isBlank() ? null : input.note().trim();
+        }
+        order.itemRequests.removeIf(request -> request.id != null && !kept.contains(request.id)
+                && request.status() == OrderItemRequest.Status.open);
+        // Handled requests the input left out keep their place after the listed ones.
+        for (var request : order.itemRequests) if (request.id != null && !kept.contains(request.id)) request.lineNumber = lineNumber++;
+        order.itemRequests.sort(java.util.Comparator.comparingInt(request -> request.lineNumber));
+    }
+
+    /** Orders still being put together take a linked request's item as a line; later ones only record the link. */
+    private static final Set<DomainEnums.OrderStatus> TAKES_REQUESTED_LINES = Set.of(DomainEnums.OrderStatus.draft,
+            DomainEnums.OrderStatus.submitted, DomainEnums.OrderStatus.preparing);
+
+    /** Procurement linked an item to the request (the order is locked by the caller). */
+    void attachRequestedItem(OrderItemRequest request, UserAccount actor) {
+        var order = request.order;
+        boolean lineAdded = TAKES_REQUESTED_LINES.contains(order.status);
+        if (lineAdded) addLine(order, request.item, null, request.quantity);
+        audit(order, actor, "item_request_resolved", order.status, order.status, null, null, Map.of(
+                "request", request.name, "itemId", request.item.id.toString(), "quantity", request.quantity, "lineAdded", lineAdded));
+        orderEvent("order.item_request_resolved", order, actor, null);
+    }
+
+    /** Procurement declined the request (the order is locked by the caller). */
+    void recordRequestDecline(OrderItemRequest request, UserAccount actor) {
+        var order = request.order;
+        audit(order, actor, "item_request_declined", order.status, order.status, null, request.declineReason,
+                Map.of("request", request.name, "quantity", request.quantity));
+        orderEvent("order.item_request_declined", order, actor, null);
+    }
+
+    private static String requestLink(String value) {
+        if (value == null || value.isBlank()) return null;
+        var link = value.trim();
+        if (link.length() > 2000 || !link.matches("(?i)https?://\\S+")) throw ApiException.badRequest("Request link must be an http(s) URL");
+        return link;
+    }
+
+    private List<Map<String, Object>> requestSnapshot(InventoryOrder order) {
+        return order.itemRequests.stream().map(request -> Map.<String, Object>of(
+                "name", request.name, "quantity", request.quantity, "status", request.status().name())).toList();
     }
 
     private void addLine(InventoryOrder order, Item item, Assembly assembly, int quantity) {
@@ -892,7 +975,7 @@ public class OrderService {
                 int take = Math.min(left, entry.getValue());
                 if (take == 0) continue;
                 reserve(order, line, actor, entry.getKey(), take);
-                if (line.sourceLocation == null) line.sourceLocation = entry.getKey().location;
+                if (line.sourceLocation == null && entry.getKey() != null) line.sourceLocation = entry.getKey().location;
                 entry.setValue(entry.getValue() - take); left -= take;
                 if (left == 0) break;
             }
@@ -1289,7 +1372,7 @@ public class OrderService {
             rows.add(row);
         }
         var contents = requestedContents(order);
-        return Map.of("lines", rows, "items", contents.items(), "assemblies", contents.assemblies());
+        return Map.of("lines", rows, "items", contents.items(), "assemblies", contents.assemblies(), "itemRequests", requestSnapshot(order));
     }
 
     private RequestedContents requestedContents(InventoryOrder order) {

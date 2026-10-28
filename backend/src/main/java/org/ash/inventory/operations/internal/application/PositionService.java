@@ -60,8 +60,8 @@ public class PositionService {
         return orm.positions(item).stream().mapToInt(p -> p.quantityInTransit).sum();
     }
 
-    /** Stock and open reservations of one item per location, read once per command. */
-    public record Capacity(List<InventoryPosition> positions, Map<UUID, Integer> reserved) {
+    /** Exact position capacity plus usable unlocated bulk stock, excluding the current order's reservations. */
+    public record Capacity(List<InventoryPosition> positions, Map<UUID, Integer> reserved, int unlocatedAvailable) {
         public int availableAt(StorageLocation source) {
             if (source == null) return Integer.MAX_VALUE;
             return Math.max(0, positions.stream().filter(p -> p.location.id.equals(source.id))
@@ -76,7 +76,7 @@ public class PositionService {
             return result;
         }
 
-        /** FEFO share of the location's reservations held by one position. */
+        /** Outstanding reservations held by this exact position. */
         public int reservedAt(InventoryPosition position) {
             return reserved.getOrDefault(position.id, 0);
         }
@@ -84,7 +84,9 @@ public class PositionService {
 
     public Capacity capacity(Item item, UUID exceptOrder) {
         return new Capacity(orm.positions(item),
-                orm.reservedByPosition(List.of(item.id), exceptOrder));
+                orm.reservedByPosition(List.of(item.id), exceptOrder),
+                item.trackingMode == DomainEnums.TrackingMode.bulk && item.storageLocation == null
+                        ? orm.unlocatedAvailable(item, exceptOrder) : 0);
     }
 
     public int availableAt(Item item, StorageLocation source, UUID exceptOrder) {
@@ -183,8 +185,6 @@ public class PositionService {
                 throw ApiException.badRequest("Lot-tracked stock requires a lot and a receiving location");
             if (destination == null) return; // Unlocated stock remains visible in the item total.
             LocationHierarchyService.requireActiveStockLocation(destination);
-            if (tx.item.trackingMode == DomainEnums.TrackingMode.lot_tracked && tx.lot == null)
-                throw ApiException.badRequest("Select a lot for lot-tracked stock additions");
             tx.destinationLocation = destination;
             var p = orm.position(tx.item, destination, tx.lot);
             p.quantityOnHand += tx.quantity;
@@ -193,6 +193,12 @@ public class PositionService {
         }
         var source = tx.sourceLocation == null ? tx.item.storageLocation : tx.sourceLocation;
         if (tx.type == DomainEnums.TransactionType.checkout) equipment.assertSource(tx.item, source);
+        if (tx.order != null && tx.type == DomainEnums.TransactionType.checkout && source == null
+                && tx.item.trackingMode == DomainEnums.TrackingMode.bulk) {
+            if (tx.quantity > orm.unlocatedAvailable(tx.item, tx.order.id))
+                throw ApiException.conflict("Unlocated stock is reserved or unavailable");
+            return; // A null order source explicitly issues its unlocated reservation, never another bin.
+        }
         var all = orm.positions(tx.item);
         var reserved = orm.reservedByPosition(List.of(tx.item.id), tx.order == null ? null : tx.order.id);
         if (tx.type == DomainEnums.TransactionType.checkout && source != null

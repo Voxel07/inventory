@@ -40,6 +40,8 @@ interface Props {
     categories?: string[];
     onSubmit: (data: ItemFormData) => void;
     isLoading?: boolean;
+    /** Prefill for a new item, e.g. from an order request for something the inventory does not hold. */
+    defaults?: Partial<ItemFormData>;
 }
 
 export function ItemForm({
@@ -50,6 +52,7 @@ export function ItemForm({
     categories = [],
     onSubmit,
     isLoading,
+    defaults,
 }: Props) {
     const t = useT();
     const { eventTypes } = useFactionCatalog();
@@ -86,11 +89,12 @@ export function ItemForm({
         fuelConsumptionLitersPer100Km: initialData?.fuelConsumptionLitersPer100Km,
         batteryReplacementDue: initialData?.batteryReplacementDue,
         bestBeforeDate: initialData?.bestBeforeDate,
+        ...(initialData ? {} : defaults),
     });
     const [isBulkPackage, setIsBulkPackage] = useState((initialData?.containerSize ?? 0) > 0);
     const [hasOpenedContainer, setHasOpenedContainer] = useState(false);
     const [numericInputs, setNumericInputs] = useState({
-        amount: '',
+        amount: !initialData && defaults?.amount != null ? String(defaults.amount) : '',
         minStock: String(fromSteps(initialData, initialData?.minStock ?? 0)),
         value: String(initialData?.value ?? 0),
         containerSize: initialData?.containerSize == null ? '' : String(initialData.containerSize),

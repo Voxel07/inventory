@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * Tenants only manage their own private inventory. This allow-list fails closed for every other API
- * (orders, events, warehouses, operations, reports, sync, ...) in addition to the per-service checks
+ * (orders, events, warehouses, reports, ...) in addition to the per-service checks
  * and the visibility predicates that hide public resources from tenants.
  */
 @Provider
@@ -40,6 +40,7 @@ public class TenantScopeFilter implements ContainerRequestFilter {
         if (!path.startsWith("api/") || path.startsWith("api/auth/")) return;
         if (ActorService.seesOrganization(actors.current())) return;
         if (TENANT_PATHS.stream().anyMatch(prefix -> matches(path, prefix))) return;
+        // SyncService independently allow-lists tenant actions before dispatch/replay.
         if (path.equals("api/sync") && request.getMethod().equals("POST")) return;
         if (TENANT_HISTORY.contains(path)) {
             // Each stock booking, including batch rows, checks its item's operation permissions.

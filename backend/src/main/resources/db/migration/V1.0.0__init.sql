@@ -263,6 +263,26 @@ create table order_lines (
     primary key (id)
 );
 
+-- Things the inventory does not hold yet; procurement links an item, orders it or declines the request.
+create table order_item_requests (
+    line_number integer not null,
+    quantity integer not null check (quantity > 0),
+    created_at bigint not null,
+    updated_at bigint not null,
+    declined_at bigint,
+    order_id uuid not null,
+    id uuid not null,
+    item_id uuid,
+    purchase_order_id uuid,
+    resolved_by uuid,
+    name varchar(160) not null,
+    link varchar(2000),
+    note varchar(2000),
+    decline_reason varchar(2000),
+    constraint ck_item_request_decline check ((declined_at is null) = (decline_reason is null)),
+    primary key (id)
+);
+
 create table orders (
     kind varchar(16) not null check (kind in ('faction', 'general')),
     name varchar(160),
@@ -933,6 +953,12 @@ create index ix_orders_kind_status on orders (kind, status);
 alter table order_lines add constraint fk_order_line_source foreign key (source_location_id) references storage_locations(id);
 create index ix_order_lines_item on order_lines (item_id);
 create index ix_order_lines_order on order_lines (order_id);
+alter table order_item_requests add constraint fk_item_request_order foreign key (order_id) references orders(id);
+alter table order_item_requests add constraint fk_item_request_item foreign key (item_id) references items(id);
+alter table order_item_requests add constraint fk_item_request_purchase foreign key (purchase_order_id) references purchase_orders(id);
+alter table order_item_requests add constraint fk_item_request_resolver foreign key (resolved_by) references app_users(id);
+create index ix_item_requests_order on order_item_requests (order_id);
+create index ix_item_requests_item on order_item_requests (item_id) where item_id is not null;
 create index ix_purchase_lines_item on purchase_order_lines (item_id, purchase_order_id);
 alter table if exists assembly_items add constraint FK4gy48ars675efhc1kyjqkvu7n foreign key (assembly_id) references assemblies;
 alter table if exists assembly_items add constraint FKq6cfebw2dybsanpmpubg7yx7l foreign key (item_id) references items;

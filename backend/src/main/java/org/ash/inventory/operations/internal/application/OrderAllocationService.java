@@ -20,9 +20,10 @@ public class OrderAllocationService {
     @Inject PositionService positions;
     @Inject ActorService actors;
 
-    /** Exact position allocations, FEFO across all accessible sources when no selection is supplied. */
+    /** FEFO across operable sources; a null position records the separately reserved unlocated remainder.
+     * Acknowledged shortages apply only to automatic allocation, never to explicit source choices. */
     public Map<InventoryPosition, Integer> allocate(Item item, PositionService.Capacity capacity, int quantity,
-            Map<UUID, Integer> selected) {
+            Map<UUID, Integer> selected, boolean acknowledgeShortage) {
         var result = new LinkedHashMap<InventoryPosition, Integer>();
         if (quantity == 0) {
             if (selected != null && !selected.isEmpty()) throw ApiException.badRequest("No source is needed for zero prepared quantity");
@@ -36,7 +37,7 @@ public class OrderAllocationService {
             int amount = selected == null ? Math.min(left, Math.max(0, position.availableQuantity() - capacity.reservedAt(position)))
                     : selected.getOrDefault(position.id, 0);
             if (amount == 0) continue;
-            if (!internal.test(position.location) || !actors.canViewLocation(position.location)) {
+            if (!internal.test(position.location) || !actors.canUseLocation(position.location)) {
                 if (selected != null) throw ApiException.notFound("Source position not found");
                 continue;
             }
@@ -48,8 +49,11 @@ public class OrderAllocationService {
         }
         if (selected != null && !result.keySet().stream().map(p -> p.id).collect(java.util.stream.Collectors.toSet()).containsAll(selected.keySet()))
             throw ApiException.badRequest("Sources must belong to the prepared item");
-        if (left > 0 && !(selected == null && capacity.positions().isEmpty() && item.storageLocation == null
-                && item.trackingMode == DomainEnums.TrackingMode.bulk))
+        if (selected == null && left > 0 && internal.test(null)) {
+            int unlocated = Math.min(left, capacity.unlocatedAvailable());
+            if (unlocated > 0) { result.put(null, unlocated); left -= unlocated; }
+        }
+        if (left > 0 && (selected != null || !acknowledgeShortage))
             throw ApiException.conflict("Insufficient stock across the accessible sources for " + item.name);
         return result;
     }

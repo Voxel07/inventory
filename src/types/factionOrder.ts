@@ -4,6 +4,7 @@ import type { EventType } from './event';
 import type { ActorSummary } from './user';
 import type { OrderStatus } from './orderCommands';
 import type { OrderHistoryEntry } from './orderHistory';
+import type { OrderItemRequest, OrderItemRequestInput } from './order';
 import type { StorageLocation } from './item';
 
 /** Reference data from GET /api/factions. Memberships are `EVENT:slug` keys (see {@link FactionOrder.factionKey}). */
@@ -48,6 +49,7 @@ export interface FactionOrder {
   missingQuantities?: Record<string, number>;
   damagedQuantities?: Record<string, number>;
   writtenOffQuantities?: Record<string, number>;
+  itemRequests: OrderItemRequest[];
   notes?: string;
   createdBy: string;
   preparedBy?: string;
@@ -85,5 +87,6 @@ export interface FactionOrderFormData {
   requestedQuantities: Record<string, number>;
   assemblyIds: string[];
   requestedAssemblyQuantities: Record<string, number>;
+  itemRequests?: OrderItemRequestInput[];
   notes?: string;
 }

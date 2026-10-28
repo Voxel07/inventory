@@ -376,7 +376,19 @@ public class PurchasingService {
             orm.persist(line);
             result.add(line);
         }
+        linkItemRequests(order, itemIds);
         return result;
+    }
+
+    /**
+     * Requests whose item is on this purchase order count as ordered: a line dropped by an edit releases its
+     * requests, and requests still waiting for their item are taken up, whichever screen drafted the order.
+     */
+    private void linkItemRequests(PurchaseOrder order, Set<UUID> itemIds) {
+        for (var request : orm.itemRequests(order))
+            if (!itemIds.contains(request.item.id)) request.purchaseOrder = null;
+        var eventId = order.eventOccurrence == null ? null : order.eventOccurrence.id;
+        for (var request : orm.itemRequestsAwaitingPurchase(itemIds, eventId)) request.purchaseOrder = order;
     }
 
     private List<PurchasingDtos.PurchaseOrderResponse> purchaseOrderResponses(List<PurchaseOrder> values) {

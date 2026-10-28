@@ -5,9 +5,10 @@ export function noticeText(notification: AppNotification, key: string): string |
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
-/** Secondary line of a notice: order context, or the request source of an item someone asked for. */
+/** Secondary line of a notice: order context, the request source of an item someone asked for, or why a request was declined. */
 export function noticeDetails(notification: AppNotification): string {
-  const keys = notification.type === 'item_requested' ? ['reference'] : ['faction', 'groupNames', 'pickupLocation'];
+  const keys = notification.type === 'item_requested' ? ['reference']
+    : notification.type === 'item_request_declined' ? ['reason', 'reference'] : ['faction', 'groupNames', 'pickupLocation'];
   return keys.map((key) => noticeText(notification, key)).filter(Boolean).join(' · ');
 }
 

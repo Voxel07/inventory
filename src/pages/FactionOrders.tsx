@@ -37,6 +37,7 @@ import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
 import { useOrderEventSelection } from '../hooks/useOrderEventSelection';
+import { ItemRequestBadge } from '../components/orders/ItemRequests';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 const ACTIVE_ORDER_STATUSES: readonly FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'];
@@ -162,6 +163,7 @@ export function FactionOrders() {
         <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>
           {t('common.pickupLocation')}: {pickupLabel(order)}
         </Typography>
+        <ItemRequestBadge requests={order.itemRequests} />
       </>,
       status: statusLabel(order.status),
       statusColor: statusColor(order.status),

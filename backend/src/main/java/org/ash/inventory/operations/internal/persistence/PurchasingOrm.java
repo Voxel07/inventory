@@ -3,6 +3,7 @@ package org.ash.inventory.operations.internal.persistence;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.GoodsReceipt;
 import org.ash.inventory.operations.internal.model.GoodsReceiptLine;
+import org.ash.inventory.operations.internal.model.OrderItemRequest;
 import org.ash.inventory.operations.internal.model.PurchaseOrder;
 import org.ash.inventory.operations.internal.model.PurchaseOrderLine;
 import org.ash.inventory.operations.internal.model.Vendor;
@@ -74,6 +75,23 @@ public class PurchasingOrm extends EntityOrm {
         return entityManager.createQuery("select line from PurchaseOrderLine line join fetch line.item where line.purchaseOrder = :order order by line.createdAt", PurchaseOrderLine.class)
                 .setParameter("order", order).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     }
+    public List<OrderItemRequest> itemRequests(PurchaseOrder order) {
+        return entityManager.createQuery("from OrderItemRequest request where request.purchaseOrder = :order", OrderItemRequest.class)
+                .setParameter("order", order).getResultList();
+    }
+
+    /** Linked, undeclined requests without a live purchase order; {@code eventId} skips orders of other events. */
+    public List<OrderItemRequest> itemRequestsAwaitingPurchase(Collection<UUID> itemIds, UUID eventId) {
+        if (itemIds.isEmpty()) return List.of();
+        var query = entityManager.createQuery("select request from OrderItemRequest request join request.order o"
+                + " left join request.purchaseOrder purchase where request.item.id in :itemIds and request.declinedAt is null"
+                + " and o.status <> cancelled and (purchase is null or purchase.status = cancelled)"
+                + (eventId == null ? "" : " and (o.eventOccurrence is null or o.eventOccurrence.id = :eventId)"), OrderItemRequest.class)
+                .setParameter("itemIds", itemIds);
+        if (eventId != null) query.setParameter("eventId", eventId);
+        return query.getResultList();
+    }
+
     public void removePurchaseOrderLines(PurchaseOrder order) {
         entityManager.createQuery("delete from PurchaseOrderLine line where line.purchaseOrder = :order")
                 .setParameter("order", order).executeUpdate();

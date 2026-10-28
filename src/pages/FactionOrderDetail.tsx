@@ -6,7 +6,8 @@ import { useEquipmentAvailability } from '../hooks/useEquipment';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, DialogContent, DialogTitle, LinearProgress, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, DialogContent, DialogTitle, LinearProgress, Paper, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { ItemRequestList } from '../components/orders/ItemRequests';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
 import { RestockUnusedDialog } from '../components/orders/RestockUnused';
@@ -342,6 +343,11 @@ export function FactionOrderDetail() {
         isStartingPreparation={startPreparation.isPending}
         isReopeningPreparation={reopenPreparation.isPending}
       />
+
+      {order.itemRequests?.length ? <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>{t('itemRequests.section')}</Typography>
+        <ItemRequestList requests={order.itemRequests} />
+      </Paper> : null}
 
       <OrderPickupGroups kind="faction" orderId={order.id} />
       {/* From preparation on, staff need the kit breakdown and reserved serial numbers; it is read-only after preparing. */}

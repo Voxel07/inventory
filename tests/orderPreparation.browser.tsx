@@ -43,7 +43,7 @@ const factionOrder = (id: string, faction: string, status: FactionOrderStatus, e
   kind: 'faction', id, orderCode: `LS27-${faction}-01`, factionKey: `LS:${faction.toLowerCase()}`, eventType: 'LS', faction, eventDate: 1812758400000, eventOccurrenceId: 'ls-2027',
   requestedPickupDate: 1812585600000, status, itemIds: ['seal', 'fence'], requestedQuantities: { seal: 2, fence: 6 }, preparedQuantities: {},
   assemblyIds: ['power'], requestedAssemblyQuantities: { power: 1 }, preparedAssemblyQuantities: {}, assetAssignments: {}, reservedQuantities: {},
-  notes: 'Bitte Zaunelemente gebündelt bereitstellen.', createdBy: 'preview', history: [], created: FIXTURE_TIME, updated: FIXTURE_TIME,
+  notes: 'Bitte Zaunelemente gebündelt bereitstellen.', itemRequests: [], createdBy: 'preview', history: [], created: FIXTURE_TIME, updated: FIXTURE_TIME,
   // The API expands every line item, including assembly components (generator, fuel).
   expand: { itemIds: items.filter((entry) => ['seal', 'fence', 'generator', 'fuel'].includes(entry.id)), assemblyIds: assemblies }, ...extra,
 });
@@ -55,7 +55,7 @@ const factionOrders = [
 const generalOrder = (id: string, name: string, purpose: string, eventOccurrenceId: string, status: GeneralOrder['status'], extra: Partial<GeneralOrder>): GeneralOrder => ({
   kind: 'general', id, name, purpose, eventOccurrenceId, status, requestedQuantities: {}, preparedQuantities: {}, handedOverQuantities: {}, returnedQuantities: {},
   consumedQuantities: {}, damagedQuantities: {}, missingQuantities: {}, writtenOffQuantities: {}, reconciledAssets: {}, assetAssignments: {},
-  itemNames: { table: 'Biertisch' }, history: [], createdBy: 'preview', created: FIXTURE_TIME, updated: FIXTURE_TIME, ...extra,
+  itemNames: { table: 'Biertisch' }, itemRequests: [], history: [], createdBy: 'preview', created: FIXTURE_TIME, updated: FIXTURE_TIME, ...extra,
 });
 const generalOrders = [
   generalOrder('general-1', 'Technikzelt LightSim 2027', 'Strom und Licht im Technikzelt', 'ls-2027', 'submitted', { requestedQuantities: { table: 2 } }),

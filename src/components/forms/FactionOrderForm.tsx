@@ -55,6 +55,8 @@ import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { OrderCatalogPager, ORDER_CATALOG_PAGE_SIZE } from '../orders/OrderCatalogPager';
 import { QuantityControl } from '../orders/QuantityControl';
 import { CatalogSearchField } from '../orders/CatalogSearchField';
+import { ItemRequestEditor } from '../orders/ItemRequests';
+import { toItemRequestDrafts, toItemRequestInputs, type ItemRequestDraft } from '../../utils/itemRequests';
 import { catalogPage, filterCatalogAssemblies } from '../../utils/orderCatalog';
 
 type ResourceViewMode = 'list' | 'tiles';
@@ -111,6 +113,7 @@ export function FactionOrderForm({
     initialData?.requestedPickupDate ?? '',
   );
   const [notes, setNotes] = useState(initialData?.notes ?? '');
+  const [itemRequests, setItemRequests] = useState<ItemRequestDraft[]>(() => toItemRequestDrafts(initialData?.itemRequests));
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(initialData ? factionOrderItemBaseline(initialData) : {}).map(([id, value]) => [id, String(value)])),
   );
@@ -262,6 +265,7 @@ export function FactionOrderForm({
       requestedQuantities,
       assemblyIds: Object.keys(requestedAssemblyQuantities),
       requestedAssemblyQuantities,
+      itemRequests: toItemRequestInputs(itemRequests),
       notes: notes.trim(),
     });
   }
@@ -596,6 +600,8 @@ export function FactionOrderForm({
           </Box>
         )}
 
+        <ItemRequestEditor value={itemRequests} onChange={setItemRequests} />
+
         <TextField
           label={t('common.notes')}
           value={notes}
@@ -610,7 +616,7 @@ export function FactionOrderForm({
           variant="contained"
           size="large"
           startIcon={<SaveIcon />}
-          disabled={isLoading || !selectedEvent || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0)}
+          disabled={isLoading || !selectedEvent || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0 && itemRequests.length === 0)}
         >
           {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('forms.factionOrderForm.createOrderList'))}
         </Button>

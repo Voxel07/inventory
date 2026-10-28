@@ -53,7 +53,8 @@ export function localWriteChange(path: string): LocalWriteChange {
     case 'goods-receipts': return change('goods_receipt.posted');
     case 'vendor-documents': return change('vendor_document.attached');
     case 'loans': return change('loan.changed');
-    case 'procurement': return change('planning.overridden');
+    // Item request decisions change the requesting order; forecast overrides only the planning.
+    case 'procurement': return change(id === 'item-requests' ? 'order.changed' : 'planning.overridden');
     case 'reports': return change('report.rebuilt');
     case 'action-inbox': return change('reminder.changed');
     case 'notifications': return change('notification.read');
@@ -68,10 +69,10 @@ export function localWriteChange(path: string): LocalWriteChange {
 const custody = ['custody-balances', 'member-custody', 'member-storage', 'member-requests', 'return-submissions'];
 const stock = ['handover-evidence', 'items', 'assemblies', 'transactions', 'damageReports', 'maintenance', 'faction-orders', 'general-orders',
   'order-pickup-groups', 'item-responsibility',
-  'event-reports', 'procurement-deficits', 'loans', 'action-inbox', 'reports', 'notifications', ...custody,
+  'event-reports', 'procurement-deficits', 'procurement-item-requests', 'loans', 'action-inbox', 'reports', 'notifications', ...custody,
   'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets',
   'operations:counts', 'operations:lots', 'operations:transaction-lots', 'operations:stock-lot-labels', 'operations:schedules', 'operations:repairs'];
-const purchasing = ['purchase-orders', 'procurement-deficits', 'reports', 'action-inbox', 'operations:purchases', 'operations:receipts', 'operations:document-receipts'];
+const purchasing = ['purchase-orders', 'procurement-deficits', 'procurement-item-requests', 'reports', 'action-inbox', 'operations:purchases', 'operations:receipts', 'operations:document-receipts'];
 
 /** Permission changes, and events possibly missed while the stream was disconnected, can revoke private views. */
 export function revokesAccess(detail?: ApiChangeDetail): boolean {

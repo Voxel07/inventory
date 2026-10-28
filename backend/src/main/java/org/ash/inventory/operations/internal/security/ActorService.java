@@ -244,6 +244,12 @@ public class ActorService {
     public boolean canViewLocation(org.ash.inventory.operations.internal.model.StorageLocation location) {
         return location != null && privateAccess.allows(location.accessPolicy, current(), false);
     }
+    /** Same permission predicate as requireLocationAccess, without locking or throwing during source discovery. */
+    public boolean canUseLocation(org.ash.inventory.operations.internal.model.StorageLocation location) {
+        return location != null && (privateAccess.allows(location.accessPolicy, current(), true)
+                || inUsageCommand() && location.accessPolicy != null && location.accessPolicy.publicUse
+                    && privateAccess.allows(location.accessPolicy, current(), false));
+    }
     public void requireLocationAccess(org.ash.inventory.operations.internal.model.StorageLocation location, boolean edit) {
         if (location == null) throw ApiException.notFound("Location not found");
         privateAccess.require(location.accessPolicy, current(), edit, inUsageCommand());

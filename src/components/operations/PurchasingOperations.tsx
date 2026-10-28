@@ -21,7 +21,7 @@ import { useEventReports } from '../../hooks/useEvents';
 import { useOperationCommand, useOperationList } from '../../hooks/useOperations';
 import { canOperateWarehouse } from '../../utils/access';
 import { translate, useT, type Translator } from '../../utils/naming';
-import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type ProcurementDeficit, type PurchaseOrder, type Vendor } from '../../services/procurementService';
+import { createPurchaseOrder, getPurchaseOrders, getVendors, saveVendor, transitionPurchaseOrder, updatePurchaseOrder, type PurchaseDraftLine, type PurchaseOrder, type Vendor } from '../../services/procurementService';
 import { operationsApi } from '../../services/operationsService';
 import { LoadMore } from '../shared/LoadMore';
 import { useCompleteList } from '../../hooks/usePagedList';
@@ -66,10 +66,10 @@ export function PurchasingPanel() {
   </Stack>;
 }
 
-export function PurchaseDraft({ order, selected, selectedRows, eventId, onClose }: { order?: PurchaseOrder; selected?: ProcurementDeficit; selectedRows?: ProcurementDeficit[]; eventId: string; onClose: () => void }) {
+export function PurchaseDraft({ order, initialLines, eventId, onClose }: { order?: PurchaseOrder; initialLines?: PurchaseDraftLine[]; eventId: string; onClose: () => void }) {
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
-  const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? selectedRows?.map((row) => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock), price: 0 })) ?? [{ itemId: selected?.itemId ?? '', orderedQuantity: selected ? Math.max(1, selected.netDeficit - selected.orderedStock) : 1, price: 0 }]);
+  const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? (initialLines?.length ? initialLines : [{ itemId: '', orderedQuantity: 1 }]).map((line) => ({ ...line, price: 0 })));
   const measures = useStockLookups(lines.map(line => String(line.itemId || '')));
   const [newVendor, setNewVendor] = useState(false);
   return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" onSubmit={(event) => {

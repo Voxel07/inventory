@@ -24,6 +24,9 @@ public class InventoryOrder extends BaseEntity {
     @jakarta.persistence.OneToMany(mappedBy = "order", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     @jakarta.persistence.OrderBy("lineNumber, createdAt, id") @org.hibernate.annotations.BatchSize(size = 64)
     public java.util.List<OrderLine> lines = new java.util.ArrayList<>();
+    @jakarta.persistence.OneToMany(mappedBy = "order", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("lineNumber, createdAt, id") @org.hibernate.annotations.BatchSize(size = 64)
+    public java.util.List<OrderItemRequest> itemRequests = new java.util.ArrayList<>();
     @jakarta.persistence.OneToMany(mappedBy = "order") @org.hibernate.annotations.BatchSize(size = 64)
     public java.util.List<StockReservation> reservations = new java.util.ArrayList<>();
 

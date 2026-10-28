@@ -88,11 +88,19 @@ public final class ApiModels {
             LocalDate requestedPickupDate,
             UUID pickupLocation, Double pickupLatitude, Double pickupLongitude, String collectorName, String notes,
             Map<UUID, Integer> requestedQuantities, Map<UUID, Integer> requestedAssemblyQuantities,
-            UUID idempotencyKey) {}
+            List<@Valid ItemRequestInput> itemRequests, UUID idempotencyKey) {}
 
     public record GeneralOrderInput(@NotBlank @jakarta.validation.constraints.Size(max = 160) String name,
             @NotBlank @jakarta.validation.constraints.Size(max = 4000) String purpose,
-            UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities, UUID idempotencyKey) {}
+            UUID eventOccurrenceId, Map<UUID, Integer> requestedQuantities, List<@Valid ItemRequestInput> itemRequests,
+            UUID idempotencyKey) {}
+
+    /** Something the inventory does not hold yet; {@code id} names an existing open request of the order. */
+    public record ItemRequestInput(UUID id, @NotBlank @Size(max = 160) String name, @Min(1) int quantity,
+            @Size(max = 2000) String link, @Size(max = 2000) String note) {}
+
+    public record ItemRequestAssignment(@NotNull UUID itemId) {}
+    public record ItemRequestDecline(@NotBlank @Size(max = 2000) String reason) {}
 
     public record PreparationInput(Map<@NotNull UUID, @NotNull @Min(0) Integer> preparedQuantities,
             Map<@NotNull UUID, @NotNull List<@NotNull UUID>> assetAssignments,

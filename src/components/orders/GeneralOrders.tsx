@@ -43,6 +43,8 @@ import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 import { useUIStore } from '../../store/uiStore';
 import { OrderEventFilter } from './OrderEventFilter';
+import { ItemRequestBadge, ItemRequestEditor, ItemRequestList } from './ItemRequests';
+import { toItemRequestDrafts, toItemRequestInputs, type ItemRequestDraft } from '../../utils/itemRequests';
 
 const ACTIVE_STATUSES = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'] as const;
 const HISTORY_STATUSES = ['returned', 'closed', 'cancelled'] as const;
@@ -81,6 +83,7 @@ export function GeneralOrders() {
   const [eventId, setEventId] = useState('');
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [itemSearch, setItemSearch] = useState('');
+  const [itemRequests, setItemRequests] = useState<ItemRequestDraft[]>([]);
 
   const eventMap = new Map(events.map((event) => [event.id, event]));
   // Closed events take no new orders.
@@ -102,12 +105,14 @@ export function GeneralOrders() {
     setPurpose(order?.purpose ?? '');
     setEventId(order ? order.eventOccurrenceId ?? '' : selectedEventId || currentEvent?.id || '');
     setQuantities(Object.fromEntries(Object.entries(order?.requestedQuantities ?? {}).map(([id, quantity]) => [id, String(quantity)])));
+    setItemRequests(toItemRequestDrafts(order?.itemRequests));
     setItemSearch('');
   }
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const requestedQuantities = toPositiveIntegerQuantities(quantities);
-    const data = { name: name.trim(), purpose: purpose.trim(), eventOccurrenceId: eventId || undefined, requestedQuantities };
+    const data = { name: name.trim(), purpose: purpose.trim(), eventOccurrenceId: eventId || undefined, requestedQuantities,
+      itemRequests: toItemRequestInputs(itemRequests) };
     const callbacks = feedback.callbacks(editing === 'new' ? t('orders.generalOrders.orderCreated') : t('orders.generalOrders.orderUpdated'), () => setEditing(null));
     if (editing === 'new') createOrder.mutate(data, callbacks);
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
@@ -138,9 +143,13 @@ export function GeneralOrders() {
       id: order.id,
       title: order.name,
       subtitle: <>{order.purpose} · {eventName(order.eventOccurrenceId)}</>,
-      details: <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {t('enum.value.ordered')}: {itemCount} · {t('common.prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
-      </Typography>,
+      details: <>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {t('enum.value.ordered')}: {itemCount} · {t('common.prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
+        </Typography>
+        <ItemRequestBadge requests={order.itemRequests} />
+        {order.itemRequests?.length ? <Box sx={{ mt: 1 }}><ItemRequestList requests={order.itemRequests} /></Box> : null}
+      </>,
       status: t(statusLabels[order.status ?? 'draft']),
       statusColor,
       actions: <>
@@ -230,11 +239,13 @@ export function GeneralOrders() {
               </Paper>)}
             </Stack>
           </Box>}
+          <Divider />
+          <ItemRequestEditor value={itemRequests} onChange={setItemRequests} />
         </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
           <Button title={editing === 'new'
             ? translate('orders.generalOrders.createThisOrderWithTheEnteredQuantities')
             : translate('orders.generalOrders.updateThisOrderWithTheChangedQuantities')}
-            type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || !Object.values(quantities).some((value) => Number(value) > 0)}>
+            type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || (!Object.values(quantities).some((value) => Number(value) > 0) && itemRequests.length === 0)}>
             {editing === 'new' ? t('orders.generalOrders.createOrder') : t('orders.generalOrders.updateOrder')}
           </Button></DialogActions>
       </Box>

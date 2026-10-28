@@ -73,6 +73,7 @@ public final class ApiResponses {
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
             List<OrderHistoryResponse> history,
+            List<OrderItemRequestResponse> itemRequests,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, Map<String, Integer>> sourceAllocations
     ) implements OrderDetail {}
 
@@ -97,6 +98,7 @@ public final class ApiResponses {
             Map<String, Integer> missingQuantities,
             Map<String, Integer> writtenOffQuantities,
             Map<String, List<String>> reconciledAssets,
+            List<OrderItemRequestResponse> itemRequests,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand, Map<String, Map<String, Integer>> sourceAllocations
     ) {}
 
@@ -363,9 +365,19 @@ public final class ApiResponses {
             Map<String, List<AssetInstanceResponse>> assetAssignments,
             List<OrderLineResponse> lines,
             List<OrderHistoryResponse> history,
+            List<OrderItemRequestResponse> itemRequests,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
             , Map<String, Map<String, Integer>> sourceAllocations
     ) implements OrderDetail {}
+
+    /** Something an order asks for outside the inventory; {@code status} follows from the item and purchase order links. */
+    public record OrderItemRequestResponse(UUID id, String name, int quantity, String link, String note, String status,
+            UUID itemId, String itemName, UUID purchaseOrderId, String purchaseOrderNumber, String purchaseOrderStatus,
+            String declineReason, String resolvedBy, Instant declinedAt) {}
+
+    /** One request in the procurement queue, with the order it came from. */
+    public record ItemRequestQueueEntry(OrderItemRequestResponse request, UUID orderId, String orderKind, String orderLabel,
+            String orderStatus, String faction, UUID eventOccurrenceId, String eventName, LocalDate eventDate, String requestedBy) {}
 
     /** Compact order list projection; expensive audit, asset, and item expansions are detail-only. */
     public record OrderSummaryResponse(
@@ -401,6 +413,7 @@ public final class ApiResponses {
             Set<String> assemblyIds,
             Map<String, Integer> requestedAssemblyQuantities,
             Map<String, Integer> preparedAssemblyQuantities,
+            List<OrderItemRequestResponse> itemRequests,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 

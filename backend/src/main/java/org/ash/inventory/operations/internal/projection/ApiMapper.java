@@ -24,6 +24,7 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.ItemImage;
 import org.ash.inventory.operations.internal.model.MaintenanceRecord;
 import org.ash.inventory.operations.internal.model.OrderHistory;
+import org.ash.inventory.operations.internal.model.OrderItemRequest;
 import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.ReturnSubmission;
 import org.ash.inventory.operations.internal.model.RuntimeEntry;
@@ -98,6 +99,7 @@ public class ApiMapper {
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.operations.internal.model.OrderLine::reconciledAssetIds),
                 history.stream().map(this::history).toList(),
+                itemRequests(value),
                 Map.of("createdBy", actor(value.createdBy)), value.sourceAllocations()
         );
     }
@@ -124,6 +126,7 @@ public class ApiMapper {
                 value.quantities(line -> line.missingQuantity),
                 value.quantities(line -> line.writtenOffQuantity),
                 value.perItem(org.ash.inventory.operations.internal.model.OrderLine::reconciledAssetIds),
+                itemRequests(value),
                 Map.of("createdBy", actor(value.createdBy)), value.sourceAllocations()
         );
     }
@@ -499,6 +502,7 @@ public class ApiMapper {
                 assetAssignments,
                 orderLines,
                 history,
+                itemRequests(value),
                 expand,
                 sourceAllocations
         );
@@ -533,7 +537,30 @@ public class ApiMapper {
                 value.pickupLatitude, value.pickupLongitude, value.collectorName, value.notes,
                 requested.keySet(), requested, prepared, allocated, reserved, handedOver, returned, consumed,
                 missing, damaged, writtenOff, requestedAssemblies.keySet(), requestedAssemblies,
-                preparedAssemblies, expand);
+                preparedAssemblies, itemRequests(value), expand);
+    }
+
+    public List<ApiResponses.OrderItemRequestResponse> itemRequests(InventoryOrder value) {
+        return value.itemRequests.stream().map(this::itemRequest).toList();
+    }
+
+    public ApiResponses.OrderItemRequestResponse itemRequest(OrderItemRequest value) {
+        boolean itemVisible = value.item != null && accessPolicies.projectionAllows(value.item.accessPolicy);
+        var purchase = value.purchaseOrder;
+        return new ApiResponses.OrderItemRequestResponse(value.id, value.name, value.quantity, value.link, value.note,
+                value.status().name(), itemVisible ? value.item.id : null, itemVisible ? value.item.name : null,
+                purchase == null ? null : purchase.id, purchase == null ? null : purchase.orderNumber,
+                purchase == null ? null : purchase.status.name(), value.declineReason,
+                value.resolvedBy == null ? null : value.resolvedBy.name, value.declinedAt);
+    }
+
+    public ApiResponses.ItemRequestQueueEntry itemRequestQueueEntry(OrderItemRequest value) {
+        var order = value.order;
+        var event = order.eventOccurrence;
+        return new ApiResponses.ItemRequestQueueEntry(itemRequest(value), order.id, order.kind.name(), order.label(),
+                order.status.name(), order.faction == null ? null : order.faction.name,
+                event == null ? null : event.id, event == null ? null : event.name, event == null ? null : event.startDate,
+                order.createdBy.name);
     }
 
     public ApiResponses.DamageResponse damage(DamageReport value) {

@@ -63,6 +63,16 @@ public class PositionOrm {
                 """, org.ash.inventory.operations.internal.model.DamageReport.class).setParameter("item", item).getResultList()
                 .stream().filter(d -> d.positionQuantities.isEmpty()).toList();
     }
+    public int unlocatedAvailable(Item item, UUID exceptOrder) {
+        int damaged = unlocatedDamage(item).stream().mapToInt(d -> d.quantity - d.repairedQuantity - d.writtenOffQuantity).sum();
+        var query = em.createQuery("""
+                select coalesce(sum(r.reservedQuantity - r.releasedQuantity), 0) from StockReservation r
+                where r.item = :item and r.position is null and r.status in :statuses
+                """ + (exceptOrder == null ? "" : " and r.order.id <> :order"), Long.class)
+                .setParameter("item", item).setParameter("statuses", openReservationStatuses());
+        if (exceptOrder != null) query.setParameter("order", exceptOrder);
+        return Math.max(0, unlocatedBulk(item) - damaged - Math.toIntExact(query.getSingleResult()));
+    }
     private List<DomainEnums.ReservationStatus> openReservationStatuses() {
         return List.of(DomainEnums.ReservationStatus.active, DomainEnums.ReservationStatus.partially_released);
     }

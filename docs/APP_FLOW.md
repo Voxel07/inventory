@@ -85,6 +85,8 @@ The timeline defaults to **In game**; **Setup & preparation** covers constructio
 5. Receipt posting increases actual stock. Unreceived purchase quantities remain ordered supply and do not become owned or available stock.
 6. Authorized staff attach vendor documents and review the purchase/receipt history.
 
+Orders can also ask for things the inventory does not hold yet: the faction and general order forms take a name, quantity, buy link and note per request, and an order may consist of requests only. Requests show on the order lists and the faction order detail, and at the top of the procurement screen for the selected event scope. Procurement either creates the item from the request (prefilled item form) or links an existing item; while the order is draft, submitted or preparing, the item is added to it as a line. A purchase order containing the linked item marks the request ordered (received once the purchase order is received; a cancelled purchase order puts it back). Declining needs a reason, which reaches the requester as an in-app notice. Open requests stay editable on the order as long as the order is; handled ones are read-only.
+
 The procurement screen is narrower than access to purchasing tabs: HQ/planners access procurement, while warehouse crew also work on purchase orders and receiving through Operations.
 
 ## 5. Orders, preparation, handover and reconciliation

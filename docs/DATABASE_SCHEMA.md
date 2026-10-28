@@ -126,6 +126,7 @@ The position constraint uses `UNIQUE NULLS NOT DISTINCT (item_id, location_id, l
 | `factions` | UUID; unique `(event_type, slug)`, name and active flag |
 | `orders` | UUID; faction/general kind; creator and optional event/faction FKs; kind-specific metadata constraint, unique faction code, general name/purpose; status, pickup and lifecycle actors |
 | `order_lines` | UUID; order/item/source assembly/source location FKs; line order, requested, allocated, reserved, prepared, handed-over and reconciliation quantities |
+| `order_item_requests` | UUID; order FK and line number; requested name, quantity, optional http(s) buy link and note for something the inventory does not hold; optional item, purchase order and resolver FKs; decline reason/time (both or neither). Status is derived: declined, received/ordered via a non-cancelled purchase order, item created, open |
 | `order_line_asset_assignments` | UUID; order/line/asset FKs; unique `(order_id, asset_instance_id)`; reconciled flag |
 | `order_history` | Bigint identity; order/actor links, occurrence time, action/from/to, notes, JSON delta and unique idempotency key |
 | `custody_handovers` | UUID; order, marshal, collector and location FKs; unique handover code/idempotency key, type/time, acknowledgement key and condition confirmation |

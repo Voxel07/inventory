@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { OperationForm } from '../operations/OperationForm';
 import { PurchaseDraft } from '../operations/PurchasingOperations';
+import { shortageLine } from '../../services/procurementService';
 import type { ProcurementDeficit } from '../../services/procurementService';
 import { translate, useT } from '../../utils/naming';
 
@@ -18,6 +19,6 @@ export function SupplierDraft({ rows, eventId }: { rows: ProcurementDeficit[]; e
       if (!choice.length) throw new Error(t('procurement.supplierDraft.selectAtLeastOneItem'));
       setSelected(choice);
     }} submitLabel={t('procurement.supplierDraft.reviewDraft')} />}
-    {selected && <PurchaseDraft selectedRows={selected} eventId={eventId} onClose={() => setSelected(null)} />}
+    {selected && <PurchaseDraft initialLines={selected.map(shortageLine)} eventId={eventId} onClose={() => setSelected(null)} />}
   </>;
 }

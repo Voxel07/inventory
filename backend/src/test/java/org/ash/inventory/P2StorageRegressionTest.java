@@ -315,7 +315,7 @@ class P2StorageRegressionTest {
             var managed = em.find(Item.class, item.id);
             stats().clear();
             var capacity = allocation.capacity(managed, null);
-            var selected = allocation.allocate(managed, capacity, locations, null);
+            var selected = allocation.allocate(managed, capacity, locations, null, false);
             assertEquals(locations, selected.values().stream().mapToInt(Integer::intValue).sum());
             counts.add(stats().getPrepareStatementCount());
         }

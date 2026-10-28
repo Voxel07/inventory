@@ -24,6 +24,9 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class SyncService {
+    /** Tenant replay is limited to private-inventory workflows; each handler still authorizes every resource. */
+    private static final java.util.Set<String> TENANT_ACTIONS = java.util.Set.of(
+            "transaction", "count.submit", "count.recount", "transfer.receive", "return.accept");
     @jakarta.inject.Inject org.ash.inventory.operations.internal.persistence.SyncAuditOrm orm;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.ApiQueryService queries;
     @jakarta.inject.Inject jakarta.validation.Validator validator;
@@ -71,6 +74,11 @@ public class SyncService {
                     Attributes.builder().put("operation", operation).build());
             var replayed = new AtomicBoolean();
             try {
+                if (!ActorService.seesOrganization(actors.current()) && !TENANT_ACTIONS.contains(action.type())) {
+                    String message = "Offline action is not available for tenant accounts";
+                    activity.outcome("rejected");
+                    return new ApiResponses.SyncActionResponse(action.idempotencyKey(), "rejected", null, message);
+                }
                 var previous = audits.existing(action.idempotencyKey());
                 if (previous != null && (!previous.user.id.equals(actorId)
                         || !previous.operationType.equals(action.type()) || !objectMapper.valueToTree(previous.payload).equals(objectMapper.valueToTree(action.payload())))) {
@@ -170,7 +178,7 @@ public class SyncService {
                 if ("general".equals(action.payload().get("kind"))) {
                     var value = validated(action.payload(), ApiModels.GeneralOrderInput.class);
                     yield queries.projectGeneralOrder(orders.createGeneral(new ApiModels.GeneralOrderInput(
-                            value.name(), value.purpose(), value.eventOccurrenceId(), value.requestedQuantities(), action.idempotencyKey())));
+                            value.name(), value.purpose(), value.eventOccurrenceId(), value.requestedQuantities(), value.itemRequests(), action.idempotencyKey())));
                 }
                 if (!"faction".equals(action.payload().get("kind"))) throw ApiException.badRequest("Unknown order kind");
                 var value = validated(action.payload(), ApiModels.OrderInput.class);
@@ -178,10 +186,10 @@ public class SyncService {
                         value.eventType(), value.faction(), value.eventDate(), value.eventOccurrenceId(), value.factionId(),
                         value.requestedPickupDate(), value.pickupLocation(), value.pickupLatitude(), value.pickupLongitude(),
                         value.collectorName(), value.notes(), value.requestedQuantities(),
-                        value.requestedAssemblyQuantities(), action.idempotencyKey())));
+                        value.requestedAssemblyQuantities(), value.itemRequests(), action.idempotencyKey())));
             }
             case "transaction" -> {
-                // Same authorization as online: checkout needs ASH crew, other stock changes need item edit access.
+                // Same authorization as online: private editors or organization takeout; other changes need item edit.
                 var value = validated(action.payload(), ApiModels.TransactionInput.class);
                 var input = new ApiModels.TransactionInput(value.itemId(), value.transactionType(), value.quantityChanged(),
                         value.reason(), value.notes(), value.eventType(), value.faction(), value.assetInstanceId(), value.userId(),

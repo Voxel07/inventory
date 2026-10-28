@@ -7,6 +7,7 @@ import org.ash.inventory.operations.internal.model.Faction;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.OrderHistory;
+import org.ash.inventory.operations.internal.model.OrderItemRequest;
 import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.OrderLineAssetAssignment;
 import org.ash.inventory.operations.internal.model.StockReservation;
@@ -58,6 +59,23 @@ public class OrderOrm extends EntityOrm {
                 .setParameter("eventType", eventType).setParameter("faction", faction).setParameter("before", before.withDayOfYear(1));
         if (excludeId != null) query.setParameter("excludeId", excludeId);
         return InventoryAccessOrm.bind(query, accessActor.current()).setMaxResults(1).getResultStream().findFirst().orElse(null);
+    }
+
+    /** Procurement queue: requests of live orders, oldest first; without {@code includeResolved} only those still waiting. */
+    public List<OrderItemRequest> itemRequestQueue(UUID eventId, boolean includeResolved) {
+        var query = entityManager.createQuery("select request from OrderItemRequest request join fetch request.order o"
+                + " join fetch o.createdBy left join fetch o.eventOccurrence event left join fetch o.faction"
+                + " left join fetch request.item left join fetch request.purchaseOrder purchase left join fetch request.resolvedBy"
+                + " where o.status <> cancelled"
+                + (eventId == null ? "" : " and event.id = :eventId")
+                + (includeResolved ? "" : " and request.declinedAt is null and (purchase is null or purchase.status = cancelled)")
+                + " order by request.createdAt, request.lineNumber, request.id", OrderItemRequest.class);
+        if (eventId != null) query.setParameter("eventId", eventId);
+        return query.getResultList();
+    }
+
+    public OrderItemRequest findLockedItemRequest(UUID id) {
+        return entityManager.find(OrderItemRequest.class, id, LockModeType.PESSIMISTIC_WRITE);
     }
 
     public InventoryOrder findOrder(UUID id) { return entityManager.find(InventoryOrder.class, id); }

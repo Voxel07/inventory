@@ -37,9 +37,11 @@ import CategoryIcon from '@mui/icons-material/Category';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
-import { getProcurementDeficits, type ProcurementDeficit } from '../services/procurementService';
+import { getProcurementDeficits, shortageLine, type ProcurementDeficit } from '../services/procurementService';
 import { PurchaseDraft } from '../components/operations/PurchasingOperations';
 import { PlanningDetails } from '../components/procurement/PlanningDetails';
+import { ItemRequestQueue } from '../components/procurement/ItemRequestQueue';
+import { useItemRequestQueue } from '../hooks/useItemRequestQueue';
 import { useEventReports } from '../hooks/useEvents';
 import { translate, useT } from '../utils/naming';
 import { formatDate } from '../utils/dateFormat';
@@ -59,6 +61,8 @@ export function Procurement() {
     queryKey: ['procurement-deficits', eventId],
     queryFn: () => getProcurementDeficits(eventId || undefined),
   });
+  // Requests for things the inventory does not hold have no item yet; the exports list the waiting ones too.
+  const openRequests = (useItemRequestQueue(eventId).data ?? []).filter((entry) => entry.request.status === 'open' || entry.request.status === 'item_created');
 
   const groups = (() => {
     const result = new Map<string, typeof deficits>();
@@ -105,7 +109,10 @@ export function Procurement() {
       toOrder(row),
       row.recommendedAction,
     ]);
-    const csv = [header, ...rows]
+    const requestRows = openRequests.map(({ request, orderLabel }) => [
+      '', '', request.name, 'request', request.quantity, '', '', '', '', request.quantity, [orderLabel, request.link].filter(Boolean).join(' · '),
+    ]);
+    const csv = [header, ...rows, ...requestRows]
       .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
       .join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -192,6 +199,32 @@ export function Procurement() {
       y += 4;
     }
 
+    if (openRequests.length) {
+      if (y > 250) {
+        doc.addPage();
+        y = 18;
+      }
+      doc.setFillColor(255, 243, 224);
+      doc.rect(14, y - 4, 182, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(`${t('itemRequests.openRequests')} (${openRequests.length})`, 16, y + 1);
+      y += 8;
+      doc.setFontSize(8);
+      for (const { request, orderLabel } of openRequests) {
+        if (y > 275) {
+          doc.addPage();
+          y = 18;
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${request.quantity} × ${request.name}`, 14, y + 2);
+        doc.setFont('helvetica', 'normal');
+        const detail = doc.splitTextToSize([orderLabel, request.link, request.note].filter(Boolean).join(' · '), 110);
+        doc.text(detail, 86, y + 2);
+        y += Math.max(6, detail.length * 4);
+      }
+    }
+
     doc.save(`beschaffung-${eventId || 'alle-events'}.pdf`);
   }
 
@@ -202,9 +235,9 @@ export function Procurement() {
         description={t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}
         actions={<ActionBar actions={[
           { key: 'csv', label: t('pages.procurement.cSV'), title: translate('pages.procurement.downloadTheCurrentShortagesAsCSV'), icon: <DownloadIcon />,
-            disabled: !deficits.length, onClick: exportCsv },
+            disabled: !deficits.length && !openRequests.length, onClick: exportCsv },
           { key: 'pdf', label: t('pages.procurement.purchaseOrderPDF'), title: translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF'), icon: <PrintIcon />,
-            variant: 'contained', pinned: true, disabled: !deficits.length, onClick: exportPdf },
+            variant: 'contained', pinned: true, disabled: !deficits.length && !openRequests.length, onClick: exportPdf },
         ]} />}
       />
 
@@ -285,6 +318,8 @@ export function Procurement() {
           })}
         </Select>
       </FormControl>
+
+      <ItemRequestQueue eventId={eventId} />
 
       {error && (
         <Alert severity="error">
@@ -474,7 +509,7 @@ export function Procurement() {
         ))}
       </Stack>
       {!isPending && <PlanningDetails rows={deficits} eventId={eventId} />}
-      {orderItem && <PurchaseDraft key={orderItem.itemId} selected={orderItem} eventId={eventId} onClose={() => setOrderItem(null)} />}
+      {orderItem && <PurchaseDraft key={orderItem.itemId} initialLines={[shortageLine(orderItem)]} eventId={eventId} onClose={() => setOrderItem(null)} />}
     </Box>
   );
 }

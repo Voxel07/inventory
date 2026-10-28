@@ -39,6 +39,7 @@ public class OperationsResource {
     private final DomainEventService domainEvents;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.PlanningService planning;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.CustodyBalanceService custody;
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.application.ItemRequestService itemRequests;
 
     @GET @Path("/custody-balances")
     public List<org.ash.inventory.operations.internal.application.CustodyBalanceService.Balance> custodyBalances(@QueryParam("mine") boolean mine) {
@@ -142,6 +143,25 @@ public class OperationsResource {
     @Path("/procurement/deficits")
     public List<ApiResponses.DeficitResponse> deficits(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId) {
         return queries.deficits(eventOccurrenceId);
+    }
+
+    @GET
+    @Path("/procurement/item-requests")
+    public List<ApiResponses.ItemRequestQueueEntry> itemRequests(@QueryParam("eventOccurrenceId") UUID eventOccurrenceId,
+            @QueryParam("includeResolved") boolean includeResolved) {
+        return itemRequests.queue(eventOccurrenceId, includeResolved);
+    }
+
+    @POST
+    @Path("/procurement/item-requests/{id}/item")
+    public ApiResponses.ItemRequestQueueEntry assignRequestItem(@PathParam("id") UUID id, @Valid ApiModels.ItemRequestAssignment input) {
+        return itemRequests.assignItem(id, input.itemId());
+    }
+
+    @POST
+    @Path("/procurement/item-requests/{id}/decline")
+    public ApiResponses.ItemRequestQueueEntry declineRequest(@PathParam("id") UUID id, @Valid ApiModels.ItemRequestDecline input) {
+        return itemRequests.decline(id, input.reason());
     }
 
     @GET
