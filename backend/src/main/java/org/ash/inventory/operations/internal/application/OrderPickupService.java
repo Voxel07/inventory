@@ -76,6 +76,8 @@ public class OrderPickupService {
     @Transactional
     public Plan get(String kind, UUID id) {
         var data = load(kind, id, false); var actor = actors.current();
+        if (actor.role == DomainEnums.UserRole.faction_leader && !canViewAll(data, actor))
+            throw ApiException.forbidden("Order belongs to another faction");
         var groups = groups(data);
         if (!canViewAll(data, actor)) {
             groups = groups.stream().filter(g -> actor.id.equals(g.responsiblePersonId())).toList();
@@ -143,6 +145,7 @@ public class OrderPickupService {
         for (var entry : byPerson.entrySet()) {
             if (type.equals("order_group_ready") && entry.getKey().equals(data.creator.id)) continue;
             var recipient = orm.require(UserAccount.class, entry.getKey(), "Responsible person");
+            if (recipient.role == DomainEnums.UserRole.faction_leader && !canViewAll(data, recipient)) continue;
             var visible = entry.getValue().stream().map(g -> new Group(g.key, g.name, g.responsiblePersonId, g.responsiblePersonName,
                     g.pickupLocationId, g.pickupLocationName, g.items.stream().filter(l -> data.items.stream()
                             .anyMatch(i -> i.id.equals(l.itemId) && actors.canViewItem(i, recipient))).toList()))
@@ -218,7 +221,8 @@ public class OrderPickupService {
     }
 
     private boolean canViewAll(OrderData data, UserAccount actor) {
-        return actors.canViewFaction(actor);
+        return data.entity.kind == InventoryOrder.Kind.faction
+                ? actors.canViewFaction(actor, data.entity.faction) : actors.canViewGeneralOrders(actor);
     }
     /** The creator, while still allowed to order that kind of order, or a warehouse worker. */
     private boolean canEdit(OrderData data, UserAccount actor) {

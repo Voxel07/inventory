@@ -342,8 +342,8 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
                             aria-label={t('forms.transactionForm.usage')}
                             sx={{ '& .MuiToggleButton-root': { minHeight: 44, gap: 0.75, textTransform: 'none', fontWeight: 600 } }}
                         >
-                            <ToggleButton title={translate('forms.transactionForm.checkoutForAnEventAndAFaction')} value="event"><EventIcon fontSize="small" />{t('forms.transactionForm.eventInGame')}</ToggleButton>
-                            <ToggleButton title={translate('forms.transactionForm.checkoutOutsideTheGameEGWorkshopSetupOrTransport')} value="general"><HandymanOutlinedIcon fontSize="small" />{t('forms.transactionForm.generalNotInGame')}</ToggleButton>
+                            <ToggleButton title={translate('forms.transactionForm.checkoutForAnEventAndAFaction')} value="event"><EventIcon fontSize="small" />{t('forms.transactionForm.event')}</ToggleButton>
+                            <ToggleButton title={translate('forms.transactionForm.checkoutForGeneralUse')} value="general"><HandymanOutlinedIcon fontSize="small" />{t('forms.transactionForm.general')}</ToggleButton>
                         </ToggleButtonGroup>
                     </Box>
                 )}

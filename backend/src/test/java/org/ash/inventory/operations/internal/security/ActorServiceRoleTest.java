@@ -107,6 +107,33 @@ class ActorServiceRoleTest {
     }
 
     @Test
+    void factionLeadersReadOnlyAssignedFactionsAndCannotReadGeneralOrders() {
+        var actors = new ActorService(null, null, null, false, "inventory", java.util.Optional.empty());
+        var faction = new org.ash.inventory.operations.internal.model.Faction();
+        faction.eventType = "DE";
+        faction.slug = "kgg";
+        var user = new UserAccount();
+        user.setRoles(java.util.List.of(DomainEnums.UserRole.faction_leader));
+        user.factions.add("DE:kgg");
+        assertTrue(actors.canViewFaction(user, faction));
+        assertFalse(actors.canViewGeneralOrders(user));
+        faction.eventType = "LS";
+        assertFalse(actors.canViewFaction(user, faction));
+        user.factions.clear();
+        faction.eventType = "DE";
+        assertFalse(actors.canViewFaction(user, faction));
+        for (var role : java.util.List.of(DomainEnums.UserRole.read_only, DomainEnums.UserRole.ash,
+                DomainEnums.UserRole.warehouse_crew, DomainEnums.UserRole.admin)) {
+            user.setRoles(java.util.List.of(role));
+            assertTrue(actors.canViewFaction(user, faction));
+            assertTrue(actors.canViewGeneralOrders(user));
+        }
+        user.setRoles(java.util.List.of(DomainEnums.UserRole.tenant));
+        assertFalse(actors.canViewFaction(user, faction));
+        assertFalse(actors.canViewGeneralOrders(user));
+    }
+
+    @Test
     void productionRejectsDevelopmentAuthenticationAndMissingOidc() {
         assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(true, true));
         assertThrows(IllegalStateException.class, () -> ProductionAuthGuard.check(false, false));

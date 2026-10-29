@@ -251,7 +251,7 @@ export function FactionOrderDetail() {
   }
 
   const currentUser = user;
-  if (!canViewFaction(currentUser)) {
+  if (!canViewFaction(currentUser, order.factionKey)) {
     return (
       <Alert severity="error" action={<Button title={translate('pages.factionOrderDetail.returnToTheFactionOrderOverview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('pages.factionOrderDetail.backToOverview')}</Button>}>
         {t('pages.factionOrderDetail.youDoNotHaveAccessToThisFactionOrder')}

@@ -206,16 +206,18 @@ public class ApiQueryService {
         if (eventType == null || eventType.isBlank() || faction == null || faction.isBlank() || before == null)
             throw ApiException.badRequest("Event type, faction and comparison date are required");
         var value = orders.previousFactionOrder(eventType, faction, before, excludeId);
+        if (value != null) orderService.assertCanView(value);
         return value == null ? null : projectOrder(value);
     }
 
     @Transactional
     public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode,
             List<DomainEnums.OrderStatus> statuses, UUID eventId, int page, int size) {
-        // Every organization member reads all faction orders; writing is limited per faction.
         actors.requireReader();
+        var actor = actors.current();
+        var factionKeys = actor.role == DomainEnums.UserRole.faction_leader ? actor.factions : null;
         var bounds = bounds(page, size);
-        var values = orders.orders(eventType, faction, orderCode, null, statuses, eventId, bounds.offset(), bounds.limit());
+        var values = orders.orders(eventType, faction, orderCode, factionKeys, statuses, eventId, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
         var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.operations.internal.model.OrderLine>>();
@@ -292,6 +294,7 @@ public class ApiQueryService {
     public List<ApiResponses.GeneralOrderSummaryResponse> generalOrders(org.ash.inventory.operations.internal.persistence.OrderOrm.Filter filter, int page, int size) {
         actors.requireReader();
         var actor = actors.current();
+        if (!actors.canViewGeneralOrders(actor)) throw ApiException.forbidden("General order access required");
         var bounds = bounds(page, size);
         var values = orders.orders(actor, filter, bounds.offset(), bounds.limit());
         var names = generalOrderNames(values);
@@ -302,7 +305,7 @@ public class ApiQueryService {
     public ApiResponses.GeneralOrderResponse generalOrder(UUID id) {
         var order = orders.find(org.ash.inventory.operations.internal.model.InventoryOrder.class, id);
         if (order == null || order.kind != org.ash.inventory.operations.internal.model.InventoryOrder.Kind.general) throw ApiException.notFound("General order not found");
-        actors.requireReader();
+        orderService.assertCanView(order);
         return projectGeneralOrder(order);
     }
 

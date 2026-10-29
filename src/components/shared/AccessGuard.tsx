@@ -4,7 +4,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { canAccessProcurement, canManageInventory, canManageUsers, canViewCatalog, canViewOrganization } from '../../utils/access';
+import { canAccessProcurement, canAccessSharingGroups, canAccessWarehouseTasks, canManageInventory, canManageUsers, canViewCatalog, canViewOrganization } from '../../utils/access';
 import { useT } from '../../utils/naming';
 
 export function InventoryManagerGuard({ children }: { children: ReactNode }) {
@@ -38,6 +38,16 @@ export function CatalogAccessGuard({ children }: { children: ReactNode }) {
 export function AdminGuard({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   return canManageUsers(user) ? children : <Navigate to="/" replace />;
+}
+
+export function SharingGroupsGuard({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return canAccessSharingGroups(user) ? children : <Navigate to="/" replace />;
+}
+
+export function WarehouseTasksGuard({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return canAccessWarehouseTasks(user) ? children : <Navigate to="/" replace />;
 }
 
 export function ProcurementGuard({ children }: { children: ReactNode }) {

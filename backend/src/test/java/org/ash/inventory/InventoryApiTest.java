@@ -1279,10 +1279,15 @@ class InventoryApiTest {
                 .post("/api/orders/faction")
                 .then().statusCode(200)
                 .extract().path("id");
-        // Faction leaders read every faction's lists (read-only rights) but only change their own.
+        assignedFactionLeaderRequest().get("/api/orders/faction/" + adminCreatedAssignedOrderId)
+                .then().statusCode(200);
+        assignedFactionLeaderRequest().get("/api/orders/faction/" + adminCreatedAssignedOrderId + "/pickup-groups")
+                .then().statusCode(200);
         assignedFactionLeaderRequest()
                 .get("/api/orders/faction/" + unassignedOrderId)
-                .then().statusCode(200);
+                .then().statusCode(403);
+        assignedFactionLeaderRequest().get("/api/orders/faction/" + unassignedOrderId + "/pickup-groups")
+                .then().statusCode(403);
         assignedFactionLeaderRequest()
                 .body(unassignedOrder)
                 .patch("/api/orders/faction/" + unassignedOrderId)
@@ -1290,7 +1295,11 @@ class InventoryApiTest {
         assignedFactionLeaderRequest()
                 .get("/api/orders/faction")
                 .then().statusCode(200)
-                .body("faction", org.hamcrest.Matchers.hasItems("Allowed API faction", "Hidden API faction"));
+                .body("faction", org.hamcrest.Matchers.hasItem("Allowed API faction"))
+                .body("faction", org.hamcrest.Matchers.everyItem(equalTo("Allowed API faction")));
+        assignedFactionLeaderRequest().queryParam("faction", "Hidden API faction").get("/api/orders/faction")
+                .then().statusCode(200).body("size()", equalTo(0));
+        factionLeaderRequest().get("/api/orders/faction").then().statusCode(200).body("size()", equalTo(0));
     }
 
     @Test
@@ -1323,20 +1332,25 @@ class InventoryApiTest {
     }
 
     @Test
-    void generalOrdersStartAtAshFactionLeaderAndAreReadableByOrganizationMembers() {
+    void generalOrdersStartAtAshAndAreHiddenFromFactionLeaders() {
         factionLeaderRequest()
                 .body(Map.of("name", "Faction tent", "purpose", "Faction leaders only order for their faction"))
                 .post("/api/orders/general")
                 .then().statusCode(403);
 
-        ashRequest()
+        String orderId = ashRequest()
                 .body(Map.of("name", "Sponsor tent", "purpose", "Provide a covered sponsor area"))
                 .post("/api/orders/general")
                 .then().statusCode(200)
                 .body("name", equalTo("Sponsor tent"))
                 .body("purpose", equalTo("Provide a covered sponsor area"))
                 .body("createdBy", notNullValue())
-                .body("expand.createdBy.name", equalTo("Test ASH Faction Leader"));
+                .body("expand.createdBy.name", equalTo("Test ASH Faction Leader"))
+                .extract().path("id");
+
+        factionLeaderRequest().get("/api/orders/general").then().statusCode(403);
+        factionLeaderRequest().get("/api/orders/general/" + orderId).then().statusCode(403);
+        factionLeaderRequest().get("/api/orders/general/" + orderId + "/pickup-groups").then().statusCode(403);
 
         given().contentType(ContentType.JSON)
                 .header("X-Actor-Id", "test-read-only-orders")

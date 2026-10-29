@@ -5,7 +5,7 @@ import { CollapsibleOperationLines, OperationLines } from './OperationLines';
 import { OperationHistory, OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
-import { transferInput, countInput, lotInput } from '../../services/operationsInputs';
+import { transferInput, countInput } from '../../services/operationsInputs';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
@@ -19,8 +19,7 @@ import { LoadMore } from '../shared/LoadMore';
 import { useOperationList } from '../../hooks/useOperations';
 import { operationsApi } from '../../services/operationsService';
 import type { Item } from '../../types';
-import type { Count, Lot, Transfer } from '../../types/operations';
-import { lotFields } from './lotFields';
+import type { Count, Transfer } from '../../types/operations';
 import { Fields, OperationForm } from './OperationForm';
 import type { Field, Values } from '../../types/operationForm';
 import { translate, useT } from '../../utils/naming';
@@ -222,8 +221,8 @@ export function CountsPanel() {
 
 /**
  * Lots of one item (`itemId`) or of every lot-tracked item. A lot is only created by the stock booking that brings
- * its first units in ("Add stock" with a new lot, or a goods receipt); here a lot's number, expiry and hold status
- * can be corrected. `canEdit` gates mutations; viewers still see each lot's stock by location.
+ * its first units in ("Add stock" with a new lot, or a goods receipt).
+ * Each lot shows its status, expiry and stock by location.
  */
 export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit?: boolean } = {}) {
   const t = useT();
@@ -233,15 +232,10 @@ export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit
     const item = items.data?.find(item => item.id === itemId);
     return item ? formatQuantity(item, quantity) : '—';
   };
-  const [edit, setEdit] = useState<Lot | null>(null);
   return <Stack spacing={2}>
     {canEdit && <Alert severity="info">{t('operations.stockOperations.lotsAreCreatedWhenStockIsAdded')}</Alert>}
     <QueryFeedback isLoading={lots.isLoading || items.isLoading} error={lots.error || items.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.stockOperations.noLotsYet')} />
-    {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} actions={canEdit ? [
-        { key: 'stock', label: t('operations.stockOperations.addStock'), title: translate('operations.stockOperations.bookStockForThisLot'), pinned: true,
-          to: `/items/${lot.itemId}?transaction=1&lotId=${lot.id}` },
-        { key: 'edit', label: t('operations.stockOperations.editHold'), title: translate('operations.stockOperations.editLotDetailsOrHoldStatus'), onClick: () => setEdit(lot) },
-      ] : undefined} title={<>
+    {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} title={<>
         {!itemId && <><Link component={RouterLink} to={`/items/${lot.itemId}`} underline="hover">{lot.itemName}</Link>{lot.itemSku ? ` (${lot.itemSku})` : ''}{!lot.itemActive && ` · ${t('operations.stockOperations.retired')}`} · </>}{lot.lotNumber}
         {lot.empty && <Typography component="span" variant="caption" color="text.secondary"> · {t('operations.stockOperations.noStock')}</Typography>}
       </>}>
@@ -251,12 +245,6 @@ export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit
         rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('operations.stockOperations.restrictedLocation'), ...[row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit].map(quantity => quantityLabel(lot.itemId, quantity))] }))} />}
     </OperationListEntry>)}
     <LoadMore list={lots} />
-    {edit && <OperationForm title={`${t('enum.value.lot')} ${edit.lotNumber}`}
-      initial={{ lotNumber: edit.lotNumber, expiryDate: edit.expiryDate ?? '', status: edit.status }}
-      onClose={() => setEdit(null)} fields={lotFields(t)}
-      onSave={(values) => operationsApi.updateLot(edit.id, lotInput(values))}>
-      <Alert severity="info">{t('common.item')}: {edit.itemName}</Alert>
-    </OperationForm>}
   </Stack>;
 }
 

@@ -352,9 +352,14 @@ public class ActorService {
         requireAtLeast(DomainEnums.UserRole.read_only, "Not available for tenant accounts");
     }
 
-    /** Every organization member may read every faction's orders. */
-    public boolean canViewFaction(UserAccount actor) {
-        return seesOrganization(actor);
+    /** Faction leaders read only assigned factions; other organization roles retain their overview. */
+    public boolean canViewFaction(UserAccount actor, org.ash.inventory.operations.internal.model.Faction faction) {
+        return seesOrganization(actor) && (actor.role != DomainEnums.UserRole.faction_leader
+                || faction != null && actor.factions.contains(factionKey(faction.eventType, faction.slug)));
+    }
+
+    public boolean canViewGeneralOrders(UserAccount actor) {
+        return seesOrganization(actor) && actor.role != DomainEnums.UserRole.faction_leader;
     }
 
     /** Faction memberships are {@code EVENT:slug} keys; faction leaders may only write their own factions. */

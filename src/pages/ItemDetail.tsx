@@ -127,13 +127,10 @@ export function ItemDetail() {
     });
 
     const checkoutRequest = `${itemId}:${searchParams.get('transaction')}:${canTransact || canCheckout}`;
-    // "Add stock" from a lot opens the booking form with that lot preselected.
-    const [lotRequest, setLotRequest] = useState<string | undefined>();
     const [handledCheckoutRequest, setHandledCheckoutRequest] = useState('');
     if (handledCheckoutRequest !== checkoutRequest) {
         setHandledCheckoutRequest(checkoutRequest);
         if ((canTransact || canCheckout) && searchParams.get('transaction') === '1') {
-            setLotRequest(searchParams.get('lotId') ?? undefined);
             setCheckoutOpen(true);
         }
     }
@@ -142,7 +139,6 @@ export function ItemDetail() {
         if (searchParams.get('transaction') !== '1') return;
         const next = new URLSearchParams(searchParams);
         next.delete('transaction');
-        next.delete('lotId');
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams, canTransact]);
 
@@ -347,8 +343,8 @@ export function ItemDetail() {
                         </Stack>
                     </Box>
                     <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
-                        (canTransact || canCheckout) && { key: 'checkout', label: canTransact && !item.isConsumable ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut'), icon: <SwapHorizIcon />,
-                            variant: 'contained', pinned: true, onClick: () => { setLotRequest(undefined); setCheckoutOpen(true); } },
+                        (canTransact || canCheckout) && { key: 'checkout', label: t('pages.itemDetail.cra'), icon: <SwapHorizIcon />,
+                            variant: 'contained', pinned: true, onClick: () => setCheckoutOpen(true) },
                         canEdit && { key: 'edit', label: t('common.edit'), icon: <EditIcon />, variant: canTransact ? 'outlined' : 'contained', pinned: !canTransact && !canCheckout, onClick: () => setEditOpen(true) },
                         { key: 'label', label: t('pages.itemDetail.printLabel'), icon: <QrCode2Icon />, onClick: () => setQrOpen(true) },
                     ]} />
@@ -506,17 +502,16 @@ export function ItemDetail() {
             <Dialog
                 open={checkoutOpen}
                 fullScreen={isMobile}
-                onClose={() => { setCheckoutOpen(false); setLotRequest(undefined); }}
+                onClose={() => setCheckoutOpen(false)}
                 keepMounted
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>{canTransact && !item.isConsumable ? t('pages.itemDetail.checkOutReturn') : t('pages.itemDetail.checkOut')}</DialogTitle>
+                <DialogTitle>{t('pages.itemDetail.cra')}</DialogTitle>
                 <DialogContent dividers>
                     <TransactionForm
                         items={[item]}
                         preselectedItemId={item.id}
-                        initialData={lotRequest ? { itemId: item.id, transactionType: 'added', quantityChanged: 1, reason: '', notes: '', lotId: lotRequest } : undefined}
                         onSubmit={handleTransaction}
                         onRestock={(data) => restock.mutate(data, {
                             onSuccess: () => { setCheckoutOpen(false); showSnackbar(t('orders.restockUnused.restocked'), 'success'); },

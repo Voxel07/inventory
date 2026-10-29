@@ -600,9 +600,13 @@ public class OrderService {
         return returnItems(id, new ApiModels.ReturnInput(outcomes, assetOutcomes, idempotencyKey, "Full order return"));
     }
 
-    /** Organization members read both kinds; command permissions remain kind-specific. */
+    /** Faction leaders read only orders of their assigned factions. */
     public void assertCanView(InventoryOrder order) {
         actors.requireReader();
+        var actor = actors.current();
+        boolean visible = order.kind == InventoryOrder.Kind.faction
+                ? actors.canViewFaction(actor, order.faction) : actors.canViewGeneralOrders(actor);
+        if (!visible) throw ApiException.forbidden("You do not have access to this order");
     }
 
     private void requireGeneralOwner(InventoryOrder order) {

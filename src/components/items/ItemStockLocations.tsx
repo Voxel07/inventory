@@ -1,5 +1,5 @@
-import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import { DetailPanel } from './CompactDetail';
+import { useId } from 'react';
+import { Box, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import type { Item } from '../../types';
 import { useCompleteList } from '../../hooks/usePagedList';
@@ -14,6 +14,7 @@ import { formatQuantity } from '../../utils/stock';
 /** Show physical stock grouped by location when the item occupies multiple locations. */
 export function ItemStockLocations({ item }: { item: Item }) {
   const t = useT();
+  const headingId = useId();
   const serialized = item.trackingMode === 'serialized';
   const positions = useCompleteList(['operations', `positions:${item.id}:`], operationsApi.positions({ itemId: item.id }), { enabled: !serialized });
   const assets = useCompleteList(['operations', `assets:${item.id}:`], operationsApi.assets({ itemId: item.id }), { enabled: serialized });
@@ -39,16 +40,17 @@ export function ItemStockLocations({ item }: { item: Item }) {
     const location = locations.data?.find(location => location.id === id);
     return { id, quantity: stock.quantity, name: location ? locationPath(location, locations.data ?? []) : stock.name ?? id };
   }).sort((a, b) => a.name.localeCompare(b.name));
-  return <DetailPanel title={t('items.itemStockLocations.stockByLocation')}>
+  return <Box component="section" aria-labelledby={headingId} sx={{ mt: 1.5, width: 'fit-content', maxWidth: '100%', minWidth: 0 }}>
+    <Typography id={headingId} component="h3" variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.8125rem' }}>{t('items.itemStockLocations.stockByLocation')}</Typography>
     <QueryFeedback error={error} />
     {ready && showLocations && <TableContainer>
-      <Table size="small" aria-label={t('items.itemStockLocations.stockByLocation')} sx={{ '& .MuiTableCell-root': { py: 0.25, fontSize: '0.8125rem' } }}>
+      <Table size="small" aria-label={t('items.itemStockLocations.stockByLocation')} sx={{ width: 'auto', '& .MuiTableCell-root': { px: 1, py: 0.25, fontSize: '0.8125rem' }, '& tr:last-child td': { borderBottom: 0 } }}>
         <TableHead><TableRow><TableCell>{t('common.storageLocation')}</TableCell><TableCell align="right">{t('items.itemStockLocations.onHand')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map(row => <TableRow key={row.id}>
-          <TableCell><Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(row.id)}`}>{row.name}</Link></TableCell>
-          <TableCell align="right">{formatQuantity(item, row.quantity)}</TableCell>
+          <TableCell sx={{ overflowWrap: 'anywhere' }}><Link component={RouterLink} to={`/storage-locations?locationId=${encodeURIComponent(row.id)}`}>{row.name}</Link></TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{formatQuantity(item, row.quantity)}</TableCell>
         </TableRow>)}</TableBody>
       </Table>
     </TableContainer>}
-  </DetailPanel>;
+  </Box>;
 }

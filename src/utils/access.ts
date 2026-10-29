@@ -31,6 +31,14 @@ export function canCreateInventory(user: User | null | undefined): boolean {
   return Boolean(user) && effectiveAccess(user) !== 'read_only';
 }
 
+/** Sharing groups are available to accounts that can create private inventory. */
+export const canAccessSharingGroups = canCreateInventory;
+
+/** Private-inventory tenants and ASH/warehouse staff use operational pages. */
+export function canAccessWarehouseTasks(user: User | null | undefined): boolean {
+  return canCreateInventory(user) && effectiveAccess(user) !== 'faction_leader';
+}
+
 export function canEditCatalog(user: User | null | undefined): boolean {
   return atLeast(user, 'warehouse_crew');
 }
@@ -88,9 +96,15 @@ export function factionKeyOf(faction: { eventType: string; slug: string }): stri
   return `${faction.eventType.trim().toUpperCase()}:${faction.slug.trim().toLowerCase()}`;
 }
 
-/** Every organization member reads every faction's order lists. */
-export function canViewFaction(user: User | null | undefined): boolean {
-  return canViewOrganization(user);
+/** Faction leaders see only assigned factions; other organization roles retain their overview. */
+export function canViewFaction(user: User | null | undefined, factionKey: string): boolean {
+  return canViewOrganization(user)
+    && (effectiveAccess(user) !== 'faction_leader' || Boolean(user?.faction?.includes(factionKey)));
+}
+
+/** General orders are hidden from faction leaders. */
+export function canViewGeneralOrders(user: User | null | undefined): boolean {
+  return canViewOrganization(user) && effectiveAccess(user) !== 'faction_leader';
 }
 
 /** Faction leaders change only their own factions' lists; warehouse workers change every list. */

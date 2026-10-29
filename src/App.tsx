@@ -8,7 +8,7 @@ import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { KeyboardShortcuts } from './components/shared/KeyboardShortcuts';
-import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, ProcurementGuard } from './components/shared/AccessGuard';
+import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, ProcurementGuard, SharingGroupsGuard, WarehouseTasksGuard } from './components/shared/AccessGuard';
 import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useAppLanguage, translate, useT } from './utils/naming';
@@ -155,9 +155,9 @@ function AppContent() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/storage-locations" element={<CatalogAccessGuard><StorageLocations /></CatalogAccessGuard>} />
               <Route path="/storage-locations/:locationId/labels" element={<CatalogAccessGuard><StorageLabels /></CatalogAccessGuard>} />
-              <Route path="/operations" element={<CatalogAccessGuard><Operations /></CatalogAccessGuard>} />
+              <Route path="/operations" element={<WarehouseTasksGuard><Operations /></WarehouseTasksGuard>} />
               <Route path="/users" element={<AdminGuard><UserManagement /></AdminGuard>} />
-              <Route path="/sharing" element={<SharingGroups />} />
+              <Route path="/sharing" element={<SharingGroupsGuard><SharingGroups /></SharingGroupsGuard>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

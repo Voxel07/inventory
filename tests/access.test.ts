@@ -1,20 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { ROLE_LADDER, type User, type UserRole } from '../src/types';
 import {
-  atLeast, canAccessProcurement, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
+  atLeast, canAccessProcurement, canAccessSharingGroups, canAccessWarehouseTasks, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
   canOrder, canPerformCustody, canPerformMaintenance, canTakeOut, canUseGeneralOrders, canViewCatalog, canViewFaction,
-  canViewOrganization, canWriteFaction, canWriteOff,
+  canViewGeneralOrders, canViewOrganization, canWriteFaction, canWriteOff,
 } from '../src/utils/access';
 import { noticeDetails, notificationPath } from '../src/utils/notifications';
 import type { AppNotification } from '../src/services/notificationService';
 
-const user = (role: UserRole, faction: string[] = []): User => ({ id: role, role, roles: [role], name: role, email: `${role}@example.test`, created: '', updated: '', faction });
+const user = (role: UserRole, faction: string[] = []): User => ({ id: role, role, roles: [role], active: true, name: role, email: `${role}@example.test`, created: 0, updated: 0, faction });
 
 /** Expected minimum role per capability; the ladder grants it to every higher role. */
 const MINIMUM: [string, (u: User) => boolean, UserRole][] = [
   ['catalog', canViewCatalog, 'tenant'],
   ['organization data', canViewOrganization, 'read_only'],
-  ['read faction orders', canViewFaction, 'read_only'],
   ['faction orders', canOrder, 'faction_leader'],
   ['general orders', canUseGeneralOrders, 'ash'],
   ['item takeout', canTakeOut, 'ash'],
@@ -58,6 +57,33 @@ describe('role ladder', () => {
     expect(canWriteFaction(user('warehouse_crew'), 'DE:other')).toBe(true);
     expect(canWriteFaction(user('read_only', ['DE:kgg']), 'DE:kgg')).toBe(false);
     expect(canWriteFaction(user('tenant', ['DE:kgg']), 'DE:kgg')).toBe(false);
+  });
+
+  test('page visibility hides sharing for read-only members and warehouse tasks for faction leaders', () => {
+    for (const role of ROLE_LADDER) {
+      expect(canAccessSharingGroups(user(role))).toBe(role !== 'read_only');
+      expect(canAccessWarehouseTasks(user(role))).toBe(!['read_only', 'faction_leader'].includes(role));
+    }
+    expect(canAccessSharingGroups(null)).toBe(false);
+    expect(canAccessWarehouseTasks(null)).toBe(false);
+  });
+
+  test('faction leaders see assigned factions only, including event-specific memberships', () => {
+    const leader = user('faction_leader', ['DE:kgg', 'LS:tera']);
+    expect(canViewFaction(leader, 'DE:kgg')).toBe(true);
+    expect(canViewFaction(leader, 'LS:tera')).toBe(true);
+    expect(canViewFaction(leader, 'LS:kgg')).toBe(false);
+    expect(canViewFaction(leader, 'DE:other')).toBe(false);
+    expect(canViewFaction(user('faction_leader'), 'DE:kgg')).toBe(false);
+    for (const role of ['read_only', 'ash', 'warehouse_crew', 'admin'] as const) {
+      expect(canViewFaction(user(role), 'DE:other')).toBe(true);
+      expect(canViewGeneralOrders(user(role))).toBe(true);
+    }
+    expect(canViewGeneralOrders(leader)).toBe(false);
+    expect(canViewGeneralOrders(user('tenant'))).toBe(false);
+    expect(canViewGeneralOrders(null)).toBe(false);
+    expect(canViewFaction(user('tenant'), 'DE:kgg')).toBe(false);
+    expect(canViewFaction(null, 'DE:kgg')).toBe(false);
   });
 });
 
