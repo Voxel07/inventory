@@ -18,6 +18,7 @@ import type { AssetReturnOutcome, ReturnLineInput } from '../services/factionOrd
 import { usePagedList } from './usePagedList';
 import { useAuth } from './useAuth';
 import { canViewOrganization } from '../utils/access';
+import { closeFactionOrder } from '../services/factionOrderService';
 
 
 export function useFactionOrders(eventType?: EventType, faction?: string, status?: readonly FactionOrderStatus[], eventId?: string) {
@@ -106,4 +107,8 @@ export function useReturnFactionOrderItems() {
 
 export function useCancelFactionOrder() {
   return useMutation({ mutationFn: (id: string) => cancelFactionOrder(id) });
+}
+
+export function useCloseFactionOrder() {
+  return useMutation({ mutationFn: (id: string) => closeFactionOrder(id) });
 }

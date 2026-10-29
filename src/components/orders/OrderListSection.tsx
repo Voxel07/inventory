@@ -1,6 +1,7 @@
 import { Button } from '../shared/ActionButtons';
 import type { ReactNode } from 'react';
-import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { LoadMore } from '../shared/LoadMore';
@@ -27,15 +28,20 @@ interface Props {
   list: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
   loadError?: boolean;
   onRetry?: () => void;
+  collapsible?: boolean;
 }
 
-export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }: Props) {
+export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry, collapsible }: Props) {
   const t = useT();
+  if (collapsible) return <Accordion disableGutters sx={{ mb: 3 }}>
+    <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{title}</Typography></AccordionSummary>
+    <AccordionDetails><OrderListSection {...{ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }} /></AccordionDetails>
+  </Accordion>;
   return <Box sx={{ mb: 3 }}>
     <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>
     <Paper sx={{ overflow: 'hidden' }}>
       {!count && <Typography color="text.secondary" sx={{ p: 2 }}>
-        {isLoading ? t('orders.orderListSection.loading') : emptyMessage}
+        {isLoading ? t('orders.orderListSection.loading') : loadError ? t('orders.orderListSection.ordersCouldNotBeLoaded') : emptyMessage}
       </Typography>}
       {groups.map((group, groupIndex) => <Box key={group.label ?? groupIndex} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
         {group.label && <Stack direction="row" spacing={1} sx={{ px: 2, py: 1, alignItems: 'center', bgcolor: 'action.hover' }}>
@@ -45,7 +51,8 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
         </Stack>}
         {group.entries.map((entry) => <Box key={entry.id} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
           {entry.onOpen ? <Button title={translate('orders.orderListSection.openTheDetailsOfThisOrderList')} color="inherit" onClick={entry.onOpen}
-            sx={{ width: '100%', p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
+            aria-label={`${t('ordering.reviewOrder')}: ${entry.title}`}
+            sx={{ width: '100%', p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left', textTransform: 'none' }}>
             <OrderRow entry={entry} />
           </Button> : <Box sx={{ p: 2 }}><OrderRow entry={entry} /></Box>}
           {entry.actions && <Stack direction="row" spacing={1} useFlexGap sx={{ px: 2, pb: 1.5, flexWrap: 'wrap' }}>{entry.actions}</Stack>}
@@ -59,13 +66,13 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
 }
 
 function OrderRow({ entry }: { entry: OrderListEntry }) {
-  return <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center' }}>
-    <Box sx={{ flex: 1, minWidth: 0 }}>
+  return <Stack direction="row" useFlexGap sx={{ gap: 1.5, width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
+    <Box sx={{ flex: '1 1 180px', minWidth: 0, overflowWrap: 'anywhere' }}>
       <Typography sx={{ fontWeight: 700 }}>{entry.title}</Typography>
       <Typography variant="body2" color="text.secondary">{entry.subtitle}</Typography>
       {entry.details}
     </Box>
-    <Chip size="small" color={entry.statusColor ?? 'default'} label={entry.status} />
+    <Chip size="small" color={entry.statusColor ?? 'default'} label={entry.status} sx={{ maxWidth: '100%', height: 'auto', minHeight: 24, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 } }} />
     {entry.onOpen && <ArrowForwardIcon fontSize="small" />}
   </Stack>;
 }

@@ -6,7 +6,8 @@ import { useEquipmentAvailability } from '../hooks/useEquipment';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { useState, type SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, DialogContent, DialogTitle, LinearProgress, Paper, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, DialogContent, DialogTitle, LinearProgress, Paper, Typography, useMediaQuery, useTheme } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ItemRequestList } from '../components/orders/ItemRequests';
 import { FactionOrderForm } from '../components/forms/FactionOrderForm';
 import { OrderReturnChecklist } from '../components/forms/OrderReturnChecklist';
@@ -25,6 +26,7 @@ import { OrderPickupMapDialog } from '../components/orders/detail/OrderPickupMap
 import { generateOrderPdfSlip } from '../components/orders/detail/OrderPdfSlip';
 import {
   useCancelFactionOrder,
+  useCloseFactionOrder,
   useFactionOrder,
   useMarkFactionOrderReady,
   usePickUpFactionOrder,
@@ -91,6 +93,7 @@ export function FactionOrderDetail() {
   const pickUp = usePickUpFactionOrder();
   const returnOrderItems = useReturnFactionOrderItems();
   const cancelOrder = useCancelFactionOrder();
+  const closeOrder = useCloseFactionOrder();
 
   const preparationKey = JSON.stringify([
     generation, orderId, order?.id, order?.updated, order?.status,
@@ -338,6 +341,11 @@ export function FactionOrderDetail() {
         onOpenReturn={() => setReturnOpen(true)}
         onOpenRestock={restockableItems(lineItems, order.consumedQuantities).length ? () => setRestockOpen(true) : undefined}
         onCancel={() => setConfirmAction('cancel')}
+        onCloseOrder={() => closeOrder.mutate(order.id, {
+          onSuccess: () => success(t('ordering.orderClosed')),
+          onError: handleError,
+        })}
+        isClosing={closeOrder.isPending}
         isSavingPreparation={savePreparation.isPending}
         isSubmitting={submitOrder.isPending}
         isStartingPreparation={startPreparation.isPending}
@@ -349,9 +357,8 @@ export function FactionOrderDetail() {
         <ItemRequestList requests={order.itemRequests} />
       </Paper> : null}
 
-      <OrderPickupGroups kind="faction" orderId={order.id} />
-      {/* From preparation on, staff need the kit breakdown and reserved serial numbers; it is read-only after preparing. */}
-      {!['draft', 'submitted'].includes(order.status) && <OrderPickListTable
+      <Typography variant="h6" sx={{ mb: 1 }}>{t('ordering.contents')}</Typography>
+      <OrderPickListTable
         order={order}
         orderItems={orderItems}
         lineItems={lineItems}
@@ -364,8 +371,15 @@ export function FactionOrderDetail() {
         onSetPrepared={setPrepared}
         onSetPreparedAssemblies={setPreparedAssemblies}
         onSetAssetAssignments={setAssetAssignments}
-      />}
+      />
 
+      <Accordion disableGutters sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{t('orders.orderPickupGroups.responsiblePeoplePickupGroups')}</Typography></AccordionSummary>
+        <AccordionDetails><OrderPickupGroups kind="faction" orderId={order.id} /></AccordionDetails>
+      </Accordion>
+      <Accordion disableGutters>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{t('ordering.historyAndEvidence')}</Typography></AccordionSummary>
+        <AccordionDetails>
       <CustodyEvidence orderId={order.id} kind={order.kind} />
       <OrderTraceability
         key={order.id}
@@ -375,6 +389,8 @@ export function FactionOrderDetail() {
         assemblyMap={assemblyMap}
         onOpenOrder={(id) => navigate(`/orders/faction/${id}`)}
       />
+        </AccordionDetails>
+      </Accordion>
 
       {/* Edit Order Modal */}
       <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth
@@ -453,6 +469,7 @@ export function FactionOrderDetail() {
 
       {/* Action Confirmation Dialog */}
       <ConfirmDialog
+        cancelLabel={confirmAction === 'cancel' ? t('ordering.keepOrder') : undefined}
         open={Boolean(confirmAction)}
         title={confirmAction === 'pickup' ? t('pages.factionOrderDetail.checkOutList') : t('pages.factionOrderDetail.cancelOrder')}
         message={

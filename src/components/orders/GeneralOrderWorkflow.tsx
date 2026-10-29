@@ -79,7 +79,8 @@ export function GeneralOrderWorkflow({ order, action, itemIds, onClose }: { orde
     Object.values(order.assetAssignments).flat().forEach((asset) => { initial[`asset:${asset}`] = true; });
   }
   if (action === 'return') ids.forEach((id) => { initial[`missing:${id}`] = order.missingQuantities[id] ?? 0; });
-  return <OperationForm title={`${order.name} · ${action}`} initial={initial} fields={action === 'history' ? [] : (values) => [...fields(values), { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' && ids.some((id) => outstanding(id) > 0) }]} onClose={onClose} onSave={async (values) => {
+  const actionLabels = { prepare: t('orders.generalOrders.prepare'), pickup: t('orders.generalOrders.pickUp'), return: t('orders.generalOrders.recordReturn'), restock: t('orders.restockUnused.openRestock'), history: t('common.history') };
+  return <OperationForm title={`${order.name} · ${actionLabels[action]}`} submitLabel={action === 'history' ? t('common.close') : undefined} initial={initial} fields={action === 'history' ? [] : (values) => [...fields(values), { key: 'notes', label: t('orders.generalOrderWorkflow.notesReason'), multiline: true, required: action === 'return' && ids.some((id) => outstanding(id) > 0) }]} onClose={onClose} onSave={async (values) => {
     if (action === 'history') return;
     // Percentage inputs already represent the integer steps of one full unit.
     const restock = Object.fromEntries(ids.filter(restockable).map((id) => {

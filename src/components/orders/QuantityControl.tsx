@@ -24,7 +24,7 @@ export function QuantityControl({ label, value, max, onChange, item }: Props) {
   const quantity = Number(value) || 0;
   const step = (delta: number) => onChange(String(Math.max(0, Math.min(max ?? Infinity, quantity + delta))));
   return <Stack direction="row" title={percentage ? t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }) : undefined}
-    sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', '& input': { width: percentage ? 72 : 56 }, '& button': { p: 0.5 } }}>
+    sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', '& input': { width: percentage ? 64 : 48 }, '& button': { p: 0.5, minWidth: 36, minHeight: 36 } }}>
     <IconButton title={translate('orders.quantityControl.decreaseTheQuantityByOne')} size="small" disabled={quantity <= 0} onClick={() => step(-1)} aria-label={`${label}: ${t('orders.quantityControl.decrease')}`}><RemoveIcon fontSize="small" /></IconButton>
     <QuantityInput label={percentage ? `${label} (%)` : item?.unit ? `${label} (${item.unit})` : label} value={value} max={max}
       onChange={(next) => { if (next === '' || Number.isSafeInteger(Number(next)) && Number(next) >= 0) onChange(next); }} />

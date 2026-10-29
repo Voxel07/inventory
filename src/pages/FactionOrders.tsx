@@ -175,7 +175,7 @@ export function FactionOrders() {
 
   return (
     <Box>
-      <PageHeader title={t('pages.factionOrders.factionOrderLists')} description={t('pages.factionOrders.planRequirementsTrackPreparationAndCheckCompleteListsOutAnd')}
+      <PageHeader title={t('pages.factionOrders.factionOrderLists')}
         actions={<ActionBar actions={[{ key: 'new', label: t('pages.factionOrders.newList'), title: translate('pages.factionOrders.createANewFactionOrderList'),
           icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canCreateList, onClick: () => openCreate() }]} />} />
 
@@ -194,7 +194,7 @@ export function FactionOrders() {
           {overviewOrders.isLoading ? <CircularProgress size={20} aria-label={t('pages.factionOrders.loadingOrderStatus')} /> : !overviewOrders.isError && (
             <Stack direction="row" sx={{ flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 1 }}>
               {factionOverview.map(({ faction, state }) => {
-                const label = state === 'finished' ? t('pages.factionOrders.finished')
+                const label = state === 'finished' ? t('enum.value.submitted')
                   : state === 'draft' ? t('enum.value.draft') : t('pages.factionOrders.noOrder');
                 const color = state === 'finished' ? 'success.main'
                   : state === 'draft' ? 'warning.main' : 'error.main';
@@ -226,6 +226,7 @@ export function FactionOrders() {
         onRetry={() => { void active.refetch(); }}
       />
       <OrderListSection
+        collapsible
         title={t('pages.factionOrders.orderHistory')}
         emptyMessage={t('pages.factionOrders.thereIsNoCompletedOrderHistoryForThisEventYet')}
         groups={[{ entries: historyOrders.map((order) => orderEntry(order, true)) }]}

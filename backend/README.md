@@ -4,11 +4,26 @@ Quarkus 3.39 / Java 25 REST backend for the ASH inventory application.
 
 ## Local development
 
-Start PostgreSQL and the API from the repository root:
+For local JVM development, start Docker Desktop or Podman, then run with Java 25 and Maven:
+
+```bash
+cd backend
+mvn quarkus:dev
+```
+
+Quarkus Dev Services starts PostgreSQL 18 automatically on a random host port, supplies the URL and credentials, applies the Flyway baseline and validates the schema. No `DB_*` variables are needed for local dev mode. The database survives live reloads but its container is removed when dev mode stops, even when Testcontainers reuse is enabled globally. Restart dev mode after changing the baseline schema.
+
+Fresh dev databases also load the sample inventory, events, orders and operational history from the dev-only SQL snapshot. No manual CSV import is needed. The seed skips populated databases, so live reloads preserve edits. Production and tests do not load it. See [Development sample database](../docs/DEV_SEED.md) for the SQL and regeneration instructions.
+
+To use an existing development database, explicitly set `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME` and `QUARKUS_DATASOURCE_PASSWORD`; the explicit URL disables automatic database provisioning.
+
+For the Docker Compose stack, run from the repository root:
 
 ```bash
 docker compose up postgres inventory-api
 ```
+
+Compose supplies an explicit connection to its `postgres` service, including when `QUARKUS_PROFILE=dev`. Production continues to require `DB_URL`, `DB_USER` and `DB_PASSWORD`. Tests continue to use `TEST_DB_URL`, `TEST_DB_USER` and `TEST_DB_PASSWORD`; database Dev Services are disabled for tests.
 
 The API exposes:
 
@@ -16,21 +31,17 @@ The API exposes:
 - Swagger UI: `http://localhost:8080/q/swagger-ui`
 - Health: `http://localhost:8080/q/health`
 
-For a local JVM run, use a Java 25 installation and Maven:
-
-```bash
-mvn quarkus:dev
-```
-
 All profiles use PostgreSQL, the single Flyway baseline, and Hibernate validation. Tests clean and recreate the dedicated database configured with `TEST_DB_URL`, `TEST_DB_USER`, and `TEST_DB_PASSWORD` at startup.
 
 Production requires `OIDC_ENABLED=true` and the Authentik issuer/client settings. `DEV_AUTH_ENABLED` must be `false` outside local development.
+
+Development role/faction headers initialize new accounts only. Once an account exists, change its roles and faction memberships through User Management; later requests retain those saved assignments even if a client sends stale headers. To preview faction-leader access, use a separate account without higher roles and choose **Impersonate** from the admin user directory.
 
 Edit `src/main/resources/db/migration/V1.0.0__init.sql` and entity definitions directly. Current data is disposable; recreate an empty database after baseline changes. Do not add incremental scripts or repair old Flyway histories. The production profile runs this creation baseline and validates the resulting schema.
 
 Faction snapshots use a transactional source revision and database epoch in their shared cache key. Reads started after a mutation commits select its revision even when event fan-out fails. Cache outages fall back to PostgreSQL; database loader failures propagate. One snapshot per revision contains all event types; filtering introduces no extra cache keys. Entries expire after five minutes, and the local backend retains at most 64 revisions. Locations and events remain uncached.
 
-Stock catalog, planning and report read boundaries establish PostgreSQL REPEATABLE READ before querying. Commands keep their existing locks and recalculate after writes in their command transaction. Report source triggers advance compact revisions with each source statement; rollback also rolls back the revision. Production installs triggers from the baseline; dev/test Hibernate schemas install the matching `source-revisions.sql` at startup. Revision row locks last until commit and add write contention per source table.
+Stock catalog, planning and report read boundaries establish PostgreSQL REPEATABLE READ before querying. Commands keep their existing locks and recalculate after writes in their command transaction. Report source triggers advance compact revisions with each source statement; rollback also rolls back the revision. Every profile installs these triggers from the canonical Flyway baseline. Revision row locks last until commit and add write contention per source table.
 
 Loan and member-request lists and item-asset GETs accept `page` and `size` (maximum 200); the web client loads further pages explicitly.
 

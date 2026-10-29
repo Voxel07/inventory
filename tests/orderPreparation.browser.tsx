@@ -1,17 +1,38 @@
 /* Local fixture preview of order preparation: faction order detail, general orders and the warehouse queue. */
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
-import { Box, CssBaseline, Stack, ThemeProvider, Typography, createTheme } from '@mui/material';
+import { MemoryRouter, Link, Route, Routes } from 'react-router-dom';
+import { Box, CssBaseline, Stack, ThemeProvider, Typography } from '@mui/material';
+import { buildTheme } from '../src/theme';
 import { Operations } from '../src/pages/Operations';
 import { Orders } from '../src/pages/Orders';
 import { FactionOrderDetail } from '../src/pages/FactionOrderDetail';
 import { setDevelopmentSession } from '../src/services/authManager';
 import { setAppLanguage } from '../src/utils/naming';
-import type { EventReport, Faction, FactionOrder, FactionOrderStatus, GeneralOrder, StorageLocation } from '../src/types';
+import { ROLE_LADDER, type EventReport, type Faction, type FactionOrder, type FactionOrderFormData, type FactionOrderStatus, type GeneralOrder, type GeneralOrderFormData, type StorageLocation } from '../src/types';
+import { canOperateWarehouse, canUseGeneralOrders, canViewFaction, canViewGeneralOrders, canWriteFaction } from '../src/utils/access';
 import type { PickupAssignment, PickupGroup, PickupPlan } from '../src/services/orderPickupService';
 import { FIXTURE_TIME, fixtureAssembly, fixtureItem, fixtureLocation, fixtureStock, fixtureUser } from './fixtures/dto';
 import { byIds, installFixtureApi } from './fixtures/api';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { subscribeToApiChanges } from '../src/services/apiClient';
+import { invalidateForApiChange } from '../src/utils/realtimeInvalidation';
+import { initializeI18n } from '../src/i18n';
+import 'dayjs/locale/en-gb';
+import 'dayjs/locale/de';
+
+const params = new URLSearchParams(location.search);
+const role = ROLE_LADDER.find(value => value === params.get('role')) ?? 'warehouse_crew';
+const previewUser = { ...fixtureUser(role), faction: ['LS:tera'] };
+const initialView = params.get('view') ?? '/orders/faction/order-tera';
+const visibleFaction = (order: FactionOrder) => canViewFaction(previewUser, order.factionKey);
+const matchesOrder = (order: { status: string; eventOccurrenceId?: string; name?: string }, url: URL) => {
+  const statuses = url.searchParams.getAll('status');
+  return (!statuses.length || statuses.includes(order.status))
+    && (!url.searchParams.get('eventId') || order.eventOccurrenceId === url.searchParams.get('eventId'))
+    && (!url.searchParams.get('search') || order.name?.toLowerCase().includes(url.searchParams.get('search')!.toLowerCase()));
+};
 
 const locations = [
   fixtureLocation({ id: 'loc-tech', name: 'Technik-Lager 1' }),
@@ -50,6 +71,8 @@ const factionOrder = (id: string, faction: string, status: FactionOrderStatus, e
 const factionOrders = [
   factionOrder('order-tera', 'TERA', 'preparing', { preparedQuantities: { seal: 2 } }),
   factionOrder('order-ucrf', 'UCRF', 'submitted'),
+  factionOrder('order-draft', 'TERA', 'draft', { orderCode: 'LS27-TERA-02' }),
+  factionOrder('order-returned', 'TERA', 'returned', { orderCode: 'LS27-TERA-03', preparedQuantities: { seal: 2, fence: 6 }, preparedAssemblyQuantities: { power: 1 } }),
   factionOrder('order-tera-2026', 'TERA', 'closed', { orderCode: 'LS26-TERA-01', eventOccurrenceId: 'ls-2026', eventDate: 1781308800000, requestedQuantities: { seal: 1, fence: 4 }, preparedQuantities: { seal: 1, fence: 4 }, handedOverQuantities: { seal: 1, fence: 4 }, consumedQuantities: { seal: 1 }, preparedAssemblyQuantities: { power: 1 } }),
 ];
 const generalOrder = (id: string, name: string, purpose: string, eventOccurrenceId: string, status: GeneralOrder['status'], extra: Partial<GeneralOrder>): GeneralOrder => ({
@@ -60,6 +83,8 @@ const generalOrder = (id: string, name: string, purpose: string, eventOccurrence
 const generalOrders = [
   generalOrder('general-1', 'Technikzelt LightSim 2027', 'Strom und Licht im Technikzelt', 'ls-2027', 'submitted', { requestedQuantities: { table: 2 } }),
   generalOrder('general-2', 'Catering Demo DE 2026', 'Feldküche', 'de-2026', 'closed', { requestedQuantities: { table: 3 }, preparedQuantities: { table: 3 }, handedOverQuantities: { table: 3 }, returnedQuantities: { table: 3 } }),
+  generalOrder('general-draft', 'Catering draft', 'Tables for the catering tent', 'ls-2027', 'draft', { requestedQuantities: { table: 4 } }),
+  generalOrder('general-other', 'Another crew member’s draft', 'Stage tables', 'ls-2027', 'draft', { requestedQuantities: { table: 2 }, createdBy: 'someone-else' }),
 ];
 const factions: Faction[] = [['LS', 'TERA'], ['LS', 'UCRF'], ['DE', 'KGG']].map(([eventType, name]) => ({ id: name, eventType, name, slug: name.toLowerCase(), active: true }));
 const people: Record<string, string> = { alex: 'Alex · Lighting', sam: 'Sam · Event equipment' };
@@ -88,15 +113,41 @@ function pickupPlan(order: PlannedOrder): PickupPlan {
     group.items.push({ itemId: id, name: line.name, ordered: quantity, prepared: prepared[id] ?? 0 });
     groups.set(key, group);
   }
-  return { orderName: order.orderCode || order.name || order.id, status: order.status, canEdit: !['closed', 'cancelled'].includes(order.status),
+  const faction = factionOrders.find(value => value.id === order.id);
+  const general = generalOrders.find(value => value.id === order.id);
+  return { orderName: order.orderCode || order.name || order.id, status: order.status,
+    canEdit: ['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && (canOperateWarehouse(previewUser)
+      || (faction?.createdBy === previewUser.id && canWriteFaction(previewUser, faction.factionKey))
+      || (general?.createdBy === previewUser.id && canUseGeneralOrders(previewUser))),
     pickupPointsComplete: Boolean(pickupAssignments[order.id]),
     groups: [...groups.values()].sort((a, b) => (a.responsiblePersonName ?? '').localeCompare(b.responsiblePersonName ?? '')) };
 }
 
 installFixtureApi(({ path, url, method, body }) => {
-  const pickup = /^\/api\/(orders|general-orders)\/([^/]+)\/pickup-groups$/.exec(path);
+  if (path === '/api/orders/general' && method === 'POST') {
+    const input = body as GeneralOrderFormData;
+    const order = generalOrder(crypto.randomUUID(), input.name, input.purpose, input.eventOccurrenceId ?? '', 'draft',
+      { requestedQuantities: input.requestedQuantities, itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), status: 'open' })) });
+    generalOrders.push(order);
+    return order;
+  }
+  if (path === '/api/orders/faction' && method === 'POST') {
+    const input = body as FactionOrderFormData;
+    const order = factionOrder(crypto.randomUUID(), input.faction, 'draft', { ...input, eventOccurrenceId: input.eventOccurrenceId,
+      itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), status: 'open' })) });
+    factionOrders.push(order);
+    return order;
+  }
+  const transition = /^\/api\/orders\/(faction|general)\/([^/]+)\/transitions\/([^/]+)$/.exec(path);
+  if (transition && method === 'POST') {
+    const order = (transition[1] === 'faction' ? factionOrders : generalOrders).find(order => order.id === transition[2]);
+    if (!order) return Response.json({ message: 'Unknown fixture order' }, { status: 404 });
+    order.status = transition[3] as FactionOrderStatus;
+    return order;
+  }
+  const pickup = /^\/api\/orders\/(faction|general)\/([^/]+)\/pickup-groups$/.exec(path);
   if (pickup) {
-    const order: PlannedOrder | undefined = pickup[1] === 'general-orders'
+    const order: PlannedOrder | undefined = pickup[1] === 'general'
       ? generalOrders.find((entry) => entry.id === pickup[2]) : factionOrders.find((entry) => entry.id === pickup[2]);
     if (!order) return Response.json({ message: 'Unknown order' }, { status: 404 });
     if (method === 'PATCH') pickupAssignments[order.id] = (body as { assignments: Record<string, PickupAssignment> }).assignments;
@@ -104,30 +155,41 @@ installFixtureApi(({ path, url, method, body }) => {
   }
   if (path.endsWith('/pickup-groups/notify')) return 2;
   if (path === '/api/users/assignable') return Object.entries(people).map(([id, name]) => ({ id, name }));
-  if (path === '/api/items') return byIds(items, url);
+  if (path === '/api/items') return byIds(items, url).filter(item =>
+    (!url.searchParams.get('search') || item.name.toLowerCase().includes(url.searchParams.get('search')!.toLowerCase()))
+    && (!url.searchParams.get('category') || item.category === url.searchParams.get('category')));
+  if (path === '/api/item-categories') return [...new Set(items.map(item => item.category))];
   if (path.startsWith('/api/items/') && path.endsWith('/assets')) return [];
   if (path === '/api/assemblies') return byIds(assemblies, url);
   if (path === '/api/storage-locations') return locations;
   if (path === '/api/events') return events;
   if (path === '/api/event-types') return ['LS', 'DE'];
   if (path === '/api/factions') return factions;
-  if (path === '/api/orders/faction') return factionOrders;
-  if (path === '/api/orders/general') return generalOrders;
-  if (/^\/api\/orders\/faction\/[^/]+$/.test(path)) return factionOrders.find((order) => order.id === path.split('/')[4]);
+  if (path === '/api/orders/faction') return factionOrders.filter(order => visibleFaction(order) && matchesOrder(order, url));
+  if (path === '/api/orders/faction/previous') return null;
+  if (path === '/api/orders/general') return canViewGeneralOrders(previewUser) ? generalOrders.filter(order => matchesOrder(order, url)) : [];
+  if (/^\/api\/orders\/faction\/[^/]+$/.test(path)) return factionOrders.find((order) => visibleFaction(order) && order.id === path.split('/')[4])
+    ?? Response.json({ message: 'Order not visible to this role' }, { status: 403 });
+  if (/^\/api\/orders\/general\/[^/]+$/.test(path)) return canViewGeneralOrders(previewUser) ? generalOrders.find(order => order.id === path.split('/')[4]) : Response.json({ message: 'Forbidden' }, { status: 403 });
   if (path === '/api/equipment-availability') return {};
   return [];
 });
-setAppLanguage(new URLSearchParams(location.search).get('lang') === 'de' ? 'de' : 'en');
-setDevelopmentSession('dev:preview', fixtureUser('warehouse_crew'));
+await initializeI18n();
+setAppLanguage(params.get('lang') === 'de' ? 'de' : 'en');
+setDevelopmentSession('dev:preview', previewUser);
 const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false } } });
-createRoot(document.getElementById('root')!).render(<ThemeProvider theme={createTheme({ palette: { mode: 'dark' } })}><CssBaseline /><QueryClientProvider client={client}><BrowserRouter>
+subscribeToApiChanges(change => invalidateForApiChange(client, change));
+createRoot(document.getElementById('root')!).render(<ThemeProvider theme={buildTheme('dark')}><CssBaseline /><LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={params.get('lang') === 'de' ? 'de' : 'en-gb'}><QueryClientProvider client={client}><MemoryRouter initialEntries={[initialView]}>
   <Box sx={{ p: 2, maxWidth: 1200 }}>
     <Typography variant="caption" color="text.secondary">Order preparation fixture</Typography>
-    <Stack direction="row" spacing={2} sx={{ mb: 2 }}><Link to="/orders/faction/order-tera">Preparing order</Link><Link to="/orders?tab=general">General orders</Link><Link to="/operations">Warehouse tasks</Link></Stack>
+    <Box component="label" sx={{ display: 'block', mb: 1 }}>Preview role: <select defaultValue={role} onChange={event => {
+      const next = new URL(location.href); next.searchParams.set('role', event.target.value); location.assign(next.href);
+    }}>{ROLE_LADDER.map(role => <option key={role} value={role}>{role}</option>)}</select></Box>
+    <Stack direction="row" useFlexGap sx={{ mb: 2, gap: 2, flexWrap: 'wrap' }}><Link to="/orders/faction/order-tera">Preparing order</Link><Link to="/orders/faction/order-draft">Draft order</Link><Link to="/orders?tab=faction">Faction orders</Link><Link to="/orders?tab=general">General orders</Link><Link to="/operations">Warehouse tasks</Link></Stack>
     <Routes>
       <Route path="/orders/faction/:orderId" element={<FactionOrderDetail />} />
       <Route path="/orders" element={<Orders />} />
       <Route path="*" element={<Operations />} />
     </Routes>
   </Box>
-</BrowserRouter></QueryClientProvider></ThemeProvider>);
+</MemoryRouter></QueryClientProvider></LocalizationProvider></ThemeProvider>);

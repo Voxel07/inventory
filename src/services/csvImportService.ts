@@ -302,11 +302,12 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
       }
     }
 
-    // A leading stock-history sequence establishes balances before orders and
-    // standalone custody rows use them. Keep repairs interleaved with movements.
+    // Opening adjustments may be undated (e.g. initial lots). They belong with
+    // the dated history before orders/custody consume stock. Keep repairs interleaved.
     const operations = parsedOperations.filter((entry) => entry.status === 'valid');
     const historyTypes = new Set(['stock', 'damage', 'repair', 'repair_transition']);
-    const firstWorkflow = operations.findIndex((row) => !historyTypes.has(row.operation) || !row.data.occurredAt);
+    const firstWorkflow = operations.findIndex((row) => !historyTypes.has(row.operation)
+      || (!row.data.occurredAt && !(row.operation === 'stock' && row.data.transactionType === 'adjusted')));
     const historyEnd = firstWorkflow < 0 ? operations.length : firstWorkflow;
     const importOperation = createCsvOperationImporter([...new Map([...createdItemsMap.values()].map(item => [item.id, item])).values()], locCache, existingEvents);
     async function applyOperation(row: ParsedOperationRow) {

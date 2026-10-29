@@ -29,6 +29,7 @@ import { StorageLocationMap } from '../../maps/StorageLocationMap';
 import type { FactionOrder, FactionOrderStatus, StorageLocation } from '../../../types';
 import { translate, useT } from '../../../utils/naming';
 import { apiFileUrl } from '../../../services/apiClient';
+import { OrderStatusGuide } from '../OrderStatusGuide';
 
 interface OrderDetailHeaderProps {
   order: FactionOrder;
@@ -58,6 +59,8 @@ interface OrderDetailHeaderProps {
   /** Unused consumables back to stock; offered while some are still booked as consumed, also on completed orders. */
   onOpenRestock?: () => void;
   onCancel: () => void;
+  onCloseOrder: () => void;
+  isClosing: boolean;
   isSavingPreparation: boolean;
   isSubmitting: boolean;
   isStartingPreparation: boolean;
@@ -105,6 +108,8 @@ export function OrderDetailHeader({
   onOpenReturn,
   onOpenRestock,
   onCancel,
+  onCloseOrder,
+  isClosing,
   isSavingPreparation,
   isSubmitting,
   isStartingPreparation,
@@ -153,14 +158,18 @@ export function OrderDetailHeader({
         icon: <CheckCircleIcon />, variant: 'contained', color: 'success', disabled: !preparationComplete, onClick: onMarkReady },
     ] satisfies Action[] : []),
     ...(takeout && order.status === 'ready' ? [
-      { key: 'reopen', label: t('orders.detail.orderDetailHeader.backToPreparation'), title: translate('orders.detail.orderDetailHeader.reopenThisListForPreparation'),
-        icon: <ReplayIcon />, disabled: isReopeningPreparation || !warehouse, onClick: onReopenPreparation },
+      ...(warehouse ? [{ key: 'reopen', label: t('orders.detail.orderDetailHeader.backToPreparation'), title: translate('orders.detail.orderDetailHeader.reopenThisListForPreparation'),
+        icon: <ReplayIcon />, disabled: isReopeningPreparation, onClick: onReopenPreparation }] : []),
       { key: 'pickup', label: t('orders.detail.orderDetailHeader.pickUpCompleteList'), title: translate('orders.detail.orderDetailHeader.recordPickupOfTheCompleteList'),
         icon: <LocalShippingIcon />, variant: 'contained', color: 'success', pinned: true, onClick: onPickUp },
     ] satisfies Action[] : []),
     custody && ['picked_up', 'partially_returned'].includes(order.status) && {
       key: 'return', label: t('orders.detail.orderDetailHeader.reconcileComponentReturn'), title: translate('orders.detail.orderDetailHeader.reviewReturnsForEachComponent'),
       icon: <ReplayIcon />, variant: 'contained', pinned: true, onClick: onOpenReturn,
+    },
+    custody && order.status === 'returned' && {
+      key: 'close', label: t('ordering.closeOrder'), title: t('ordering.closeOrder'),
+      icon: <CheckCircleIcon />, variant: 'contained', pinned: true, disabled: isClosing, onClick: onCloseOrder,
     },
     warehouse && !!onOpenRestock && ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) && {
       key: 'restock', label: t('orders.restockUnused.openRestock'), title: translate('orders.restockUnused.openRestockTitle'),
@@ -180,7 +189,7 @@ export function OrderDetailHeader({
 
       {/* On phones the document actions collapse next to the title instead of taking a row of their own. */}
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box sx={{ flex: '1 1 0', minWidth: { xs: '55%', md: 200 } }}>
+        <Box sx={{ flex: '1 1 0', minWidth: 0 }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
             <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
@@ -192,13 +201,14 @@ export function OrderDetailHeader({
             {order.status !== 'ready' && (order.pickupLocation || order.pickupLatitude != null) && <> · {t('common.pickupLocation')}: {pickupLocationLabel}</>}
           </Typography>
         </Box>
-        <ActionBar size="small" align="end" actions={[
+        <ActionBar size="small" align="end" sx={{ flex: { xs: '0 0 40px', md: '0 1 auto' } }} actions={[
           { key: 'qr', label: t('orders.detail.orderDetailHeader.qR'), title: translate('orders.detail.orderDetailHeader.displayTheQRCodeForThisOrderList'), icon: <QrCode2Icon />, onClick: onOpenQr },
           { key: 'slip', label: t('orders.detail.orderDetailHeader.packingSlip'), title: translate('orders.detail.orderDetailHeader.downloadThePackingSlipAsPDF'), icon: <PrintIcon />, onClick: onPrintSlip },
           canEditOrderContents && { key: 'edit', label: t('common.edit'), title: translate('orders.detail.orderDetailHeader.editTheItemsAndQuantitiesInThisOrderList'), icon: <EditIcon />, onClick: onEdit },
         ]} />
       </Stack>
 
+      <OrderStatusGuide status={order.status} canEdit={canEditOrder} />
       {/* Progress and the next workflow steps share one panel. */}
       <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={{ xs: 1, md: 2 }} sx={{ alignItems: { md: 'center' } }}>

@@ -27,6 +27,9 @@ import { formatQuantity } from '../../../utils/stock';
 import { useItemAssets } from '../../../hooks/useItems';
 import { useEquipmentAvailability } from '../../../hooks/useEquipment';
 import { translate, useT } from '../../../utils/naming';
+import { useAuth } from '../../../hooks/useAuth';
+import { canOperateWarehouse } from '../../../utils/access';
+import { OrderContentSelector, type OrderContentView } from '../OrderContentSelector';
 
 interface OrderPickListTableProps {
   order: FactionOrder;
@@ -215,9 +218,11 @@ export function OrderPickListTable({
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [sortByLocation, setSortByLocation] = useState(false);
+  const [contentView, setContentView] = useState<OrderContentView>('all');
   const [expandedAssemblies, setExpandedAssemblies] = useState<Record<string, boolean>>({});
   const [assemblyChecked, setAssemblyChecked] = useState<Record<string, Record<string, boolean>>>({});
-  const editing = order.status === 'preparing';
+  const { user } = useAuth();
+  const editing = order.status === 'preparing' && canOperateWarehouse(user);
   const storedLabel = ['picked_up', 'partially_returned', 'returned', 'closed'].includes(order.status) ? t('common.used') : t('orders.detail.orderPickListTable.prepared');
 
   // Serialized components of assemblies need concrete assets as well.
@@ -242,20 +247,23 @@ export function OrderPickListTable({
 
   return (
     <Box sx={{ mb: 2 }}>
+      {orderAssemblies.length > 0 && orderItems.length > 0 && <Box sx={{ mb: 1.5 }}>
+        <OrderContentSelector value={contentView} onChange={setContentView} />
+      </Box>}
       {(orderAssemblies.length > 0 || orderItems.length > 0) && (
         <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
           <CatalogSearchField label={t('orders.detail.orderPickListTable.searchItemsOrAssemblies')} value={itemSearch} onChange={setItemSearch}
             sx={{ flex: '1 1 260px' }} />
-          {orderItems.length > 0 && orderItemCategories.length > 1 && (
+          {contentView !== 'assemblies' && orderItems.length > 0 && orderItemCategories.length > 1 && (
             <FormControl size="small" sx={{ flex: '1 1 160px', maxWidth: { sm: 240 } }}>
-              <InputLabel>{t('common.category')}</InputLabel>
-              <Select label={t('common.category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
+              <InputLabel id="pick-category-label">{t('common.category')}</InputLabel>
+              <Select labelId="pick-category-label" label={t('common.category')} value={itemCategory} onChange={(event) => setItemCategory(event.target.value)}>
                 <MenuItem value="">{t('common.allCategories')}</MenuItem>
                 {orderItemCategories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
               </Select>
             </FormControl>
           )}
-          {orderItems.length > 0 && (
+          {orderItems.length > 0 && (contentView !== 'assemblies' || !orderAssemblies.length) && (
             <Button
               size="small"
               variant={sortByLocation ? 'contained' : 'outlined'}
@@ -290,7 +298,7 @@ export function OrderPickListTable({
         </Paper>
       </>}
 
-      {orderAssemblies.length > 0 && <>
+      {orderAssemblies.length > 0 && (contentView !== 'items' || !orderItems.length) && <>
         <SectionTitle count={orderAssemblies.length}>{t('nav.assemblies')}</SectionTitle>
         <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {visibleOrderAssemblies.map((assembly) => {
@@ -311,7 +319,7 @@ export function OrderPickListTable({
                 caption={<>
                   <CategoryIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
                   {componentEntries.length} {t('orders.detail.orderPickListTable.components')}
-                  {componentEntries.length > 0 && <> · <Box component="span" sx={{ color: allChecked ? 'success.main' : undefined }}>{checkedCount}/{componentEntries.length} {t('orders.detail.orderPickListTable.checked')}</Box></>}
+                  {editing && componentEntries.length > 0 && <> · <Box component="span" sx={{ color: allChecked ? 'success.main' : undefined }}>{checkedCount}/{componentEntries.length} {t('orders.detail.orderPickListTable.checked')}</Box></>}
                 </>}
                 requested={requested}
                 stored={order.preparedAssemblyQuantities?.[assembly.id] ?? 0}
@@ -331,8 +339,8 @@ export function OrderPickListTable({
                       const isChecked = Boolean(checked[itemId]);
                       return (
                         <Stack key={itemId} component="li" direction="row" spacing={1} sx={{ alignItems: 'center', pr: 1 }}>
-                          <Checkbox size="small" checked={isChecked} onChange={() => toggleItemCheck(assembly.id, itemId)}
-                            slotProps={{ input: { 'aria-label': `${component?.name ?? itemId}: ${t('orders.detail.orderPickListTable.checked')}` } }} sx={{ p: 0.5 }} />
+                          {editing && <Checkbox size="small" checked={isChecked} onChange={() => toggleItemCheck(assembly.id, itemId)}
+                            slotProps={{ input: { 'aria-label': `${component?.name ?? itemId}: ${t('orders.detail.orderPickListTable.checked')}` } }} sx={{ p: 0.5 }} />}
                           <Typography variant="body2" sx={{ flex: 1, minWidth: 0, textDecoration: isChecked ? 'line-through' : 'none' }} noWrap>
                             {component?.name ?? itemId}
                             <Typography component="span" variant="caption" color="text.secondary">
@@ -354,7 +362,7 @@ export function OrderPickListTable({
         </Paper>
       </>}
 
-      {orderItems.length > 0 && <>
+      {orderItems.length > 0 && (contentView !== 'assemblies' || !orderAssemblies.length) && <>
         <SectionTitle count={orderItems.length}>{t('orders.detail.orderPickListTable.individualItems')}</SectionTitle>
         <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {visibleOrderItems.map((item) => {

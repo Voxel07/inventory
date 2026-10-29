@@ -7,6 +7,8 @@ import { Alert, Box, Chip, Divider, Paper, Stack, Typography } from '@mui/materi
 import type { Assembly, FactionOrder, FactionOrderHistoryAction, FactionOrderHistoryEntry, Item } from '../../../types';
 import { translate, useT } from '../../../utils/naming';
 import { factionOrderAssemblyBaseline, factionOrderItemBaseline } from '../../../utils/factionOrderHistory';
+import { useAuth } from '../../../hooks/useAuth';
+import { canWriteFaction } from '../../../utils/access';
 
 interface OrderTraceabilityProps {
   order: FactionOrder;
@@ -23,6 +25,7 @@ function relationName(value: { name?: string; email?: string } | undefined, fall
 
 export function OrderTraceability({ order, previousOrder, itemMap, assemblyMap, onOpenOrder }: OrderTraceabilityProps) {
   const t = useT();
+  const { user } = useAuth();
   const [comparePrevious, setComparePrevious] = useState(false);
 
   const comparison = (() => {
@@ -105,7 +108,7 @@ export function OrderTraceability({ order, previousOrder, itemMap, assemblyMap, 
 
   return (
     <Box sx={{ mt: 3 }}>
-      <CopyOrderDraft orderId={order.id} eventType={order.eventType} />
+      {canWriteFaction(user, order.factionKey) && <CopyOrderDraft orderId={order.id} eventType={order.eventType} />}
       <HandoverEvidencePanel orderId={order.id} />
       <Typography variant="h6" sx={{ mb: 1 }}>{t('orders.detail.orderTraceability.traceability')}</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>

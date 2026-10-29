@@ -1,6 +1,6 @@
 import { formatDate } from '../../utils/dateFormat';
 import { ToggleButton } from '../shared/ActionButtons';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, ToggleButtonGroup } from '@mui/material';
 import type { EventReport, EventType } from '../../types';
 import { translate, useT } from '../../utils/naming';
@@ -20,10 +20,12 @@ interface Props {
 /** Event type toggle plus yearly occurrence, shared by faction and general orders. */
 export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eventOptions, selectedEventId, onEventChange, children }: Props) {
   const t = useT();
+  const labelId = useId();
   return <>
     {eventTypes.length > 1 && <ToggleButtonGroup
       exclusive
       value={eventType}
+      aria-label={t('nav.event')}
       onChange={(_event, value: EventType | null) => { if (value) onEventTypeChange(value); }}
       sx={{ mb: 2, flexWrap: 'wrap' }}
     >
@@ -31,8 +33,8 @@ export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eve
     </ToggleButtonGroup>}
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
       <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
-        <InputLabel>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
-        <Select value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
+        <InputLabel id={labelId}>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
+        <Select labelId={labelId} value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
           <MenuItem value="">{t('orders.orderEventFilter.allYears')}</MenuItem>
           {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
         </Select>

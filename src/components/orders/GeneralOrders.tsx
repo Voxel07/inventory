@@ -7,10 +7,18 @@ import { GeneralOrderWorkflow } from './GeneralOrderWorkflow';
 import { useAuth } from '../../hooks/useAuth';
 import { canOperateWarehouse, canPerformCustody, canTakeOut, canUseGeneralOrders } from '../../utils/access';
 import { Dialog } from '../shared/ClosableDialog';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { OrderStatusGuide } from './OrderStatusGuide';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { generalOrderApi } from '../../services/orderService';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
+  Chip,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -22,7 +30,10 @@ import {
   Stack,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
@@ -57,6 +68,8 @@ const statusLabels = {
 
 export function GeneralOrders() {
   const t = useT();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { eventTypes } = useFactionCatalog();
   const feedback = useMutationFeedback();
   const { data: events = [] } = useEventReports();
@@ -76,8 +89,13 @@ export function GeneralOrders() {
   // ASH crew change their own general orders; warehouse workers change every order.
   const canChange = (order: GeneralOrderSummary) => (order.createdBy === user?.id && canUseGeneralOrders(user)) || canOperateWarehouse(user);
   const [workflow, setWorkflow] = useState<{order: GeneralOrderSummary; action: 'prepare' | 'pickup' | 'return' | 'restock' | 'history'} | null>(null);
-  const [pickupOrder, setPickupOrder] = useState<string | null>(null);
   const [editing, setEditing] = useState<GeneralOrderSummary | null | 'new'>(null);
+  const [viewingSnapshot, setViewing] = useState<GeneralOrderSummary | null>(null);
+  const detail = useQuery({ queryKey: ['general-orders', 'detail', viewingSnapshot?.id],
+    queryFn: () => generalOrderApi.getById(viewingSnapshot!.id), enabled: Boolean(viewingSnapshot) });
+  const viewing = viewingSnapshot ? detail.data ?? viewingSnapshot : null;
+  const [cancelling, setCancelling] = useState<GeneralOrderSummary | null>(null);
+  const viewedItems = useItemsByIds(Object.keys(viewing?.requestedQuantities ?? {}));
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [eventId, setEventId] = useState('');
@@ -100,6 +118,7 @@ export function GeneralOrders() {
     return event ? `${event.name || event.eventType} · ${formatDate(event.eventDate)}` : t('orders.generalOrders.noEvent');
   }
   function startEditing(order?: GeneralOrderSummary) {
+    setViewing(null);
     setEditing(order ?? 'new');
     setName(order?.name ?? '');
     setPurpose(order?.purpose ?? '');
@@ -118,7 +137,11 @@ export function GeneralOrders() {
     else if (editing) updateOrder.mutate({ id: editing.id, data }, callbacks);
   }
   function advance(order: GeneralOrderSummary, action: 'submit' | 'ready' | 'pickup' | 'close' | 'cancel') {
-    transitionOrder.mutate({ id: order.id, action }, feedback.callbacks(t('orders.generalOrders.orderUpdated')));
+    if (transitionOrder.isPending) return;
+    transitionOrder.mutate({ id: order.id, action }, feedback.callbacks(t('orders.generalOrders.orderUpdated'), () => {
+      setViewing(null);
+      setCancelling(null);
+    }));
   }
   const editItem = (item: Item) => (
     <Paper key={item.id} variant="outlined" sx={{ p: 1, borderColor: Number(quantities[item.id]) > 0 ? 'primary.main' : 'divider' }}>
@@ -134,7 +157,7 @@ export function GeneralOrders() {
   );
 
   function orderEntry(order: GeneralOrderSummary): OrderListEntry {
-    const itemCount = Object.values(order.requestedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0);
+    const itemCount = Object.keys(order.requestedQuantities ?? {}).length;
     const statusColor: OrderListEntry['statusColor'] = order.status === 'ready' || order.status === 'closed'
       ? 'success' : order.status === 'submitted' ? 'info'
         : order.status === 'picked_up' ? 'secondary'
@@ -145,33 +168,36 @@ export function GeneralOrders() {
       subtitle: <>{order.purpose} · {eventName(order.eventOccurrenceId)}</>,
       details: <>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          {t('enum.value.ordered')}: {itemCount} · {t('common.prepared')}: {Object.values(order.preparedQuantities ?? {}).reduce((sum, quantity) => sum + quantity, 0)}
+          {t('ordering.selectedLines', { count: itemCount })}
         </Typography>
         <ItemRequestBadge requests={order.itemRequests} />
-        {order.itemRequests?.length ? <Box sx={{ mt: 1 }}><ItemRequestList requests={order.itemRequests} /></Box> : null}
       </>,
       status: t(statusLabels[order.status ?? 'draft']),
       statusColor,
-      actions: <>
-        <Button title={t('orders.generalOrders.showResponsiblePeopleAndPickupGroups')} onClick={() => setPickupOrder(order.id)}>{t('orders.generalOrders.itemsPickupGroups')}</Button>
+      onOpen: () => setViewing(order),
+    };
+  }
+
+  function orderActions(order: GeneralOrderSummary) {
+    return <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button title={translate('orders.generalOrders.displayTheHistoryOfThisOrder')} onClick={() => setWorkflow({ order, action: 'history' })}>{t('common.history')}</Button>
-        {order.status === 'draft' && canChange(order) && <><Button title={translate('orders.generalOrders.editThisOrderSItemsAndQuantities')} size="small" onClick={() => startEditing(order)}>{t('common.edit')}</Button><Button title={translate('orders.generalOrders.submitThisOrderForProcessing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('orders.generalOrders.submit')}</Button></>}
-        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.enterPreparedQuantitiesAndAssetAssignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('orders.generalOrders.prepare')}</Button>}
-        {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.markThisOrderReadyForPickup')} onClick={() => advance(order, 'ready')}>{t('orders.generalOrders.markReady')}</Button>}
+        {order.status === 'draft' && canChange(order) && <><Button title={translate('orders.generalOrders.editThisOrderSItemsAndQuantities')} size="small" onClick={() => startEditing(order)}>{t('common.edit')}</Button><Button disabled={transitionOrder.isPending} title={translate('orders.generalOrders.submitThisOrderForProcessing')} size="small" variant="contained" onClick={() => advance(order, 'submit')}>{t('orders.generalOrders.submit')}</Button></>}
+        {['submitted', 'preparing'].includes(order.status) && canOperateWarehouse(user) && <Button variant="contained" title={translate('orders.generalOrders.enterPreparedQuantitiesAndAssetAssignments')} onClick={() => setWorkflow({ order, action: 'prepare' })}>{t('orders.generalOrders.prepare')}</Button>}
+        {order.status === 'preparing' && canOperateWarehouse(user) && <Button title={translate('orders.generalOrders.markThisOrderReadyForPickup')} disabled={transitionOrder.isPending} onClick={() => advance(order, 'ready')}>{t('orders.generalOrders.markReady')}</Button>}
         {order.status === 'ready' && canTakeOut(user) && <Button title={translate('orders.generalOrders.recordPickupAndTheResponsiblePerson')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'pickup' })}>{t('orders.generalOrders.pickUp')}</Button>}
         {['picked_up', 'partially_returned'].includes(order.status) && canPerformCustody(user) && <Button title={translate('orders.generalOrders.enterReturnQuantitiesAndCondition')} size="small" variant="contained" onClick={() => setWorkflow({ order, action: 'return' })}>{t('orders.generalOrders.recordReturn')}</Button>}
         {['returned', 'closed'].includes(order.status) && canOperateWarehouse(user) && Object.values(order.consumedQuantities ?? {}).some((quantity) => quantity > 0)
           && <Button title={translate('orders.restockUnused.openRestockTitle')} size="small" onClick={() => setWorkflow({ order, action: 'restock' })}>{t('orders.restockUnused.openRestock')}</Button>}
-        {order.status === 'returned' && canPerformCustody(user) && <Button title={translate('orders.generalOrders.closeThisOrder')} size="small" onClick={() => advance(order, 'close')}>{t('orders.generalOrders.close')}</Button>}
-        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('orders.generalOrders.cancelThisOrder')} size="small" color="error" onClick={() => advance(order, 'cancel')}>{t('orders.generalOrders.cancel')}</Button>}
-      </>,
-    };
+        {order.status === 'returned' && canPerformCustody(user) && <Button disabled={transitionOrder.isPending} title={translate('orders.generalOrders.closeThisOrder')} size="small" onClick={() => advance(order, 'close')}>{t('orders.generalOrders.close')}</Button>}
+        {['draft', 'submitted', 'preparing', 'ready'].includes(order.status) && canChange(order) && <Button title={translate('orders.generalOrders.cancelThisOrder')} size="small" color="error" onClick={() => setCancelling(order)}>{t('orders.generalOrders.cancel')}</Button>}
+      </Stack>;
   }
 
   return <Box>
     <PageHeader title={t('common.generalOrders')} description={t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')}
       actions={<ActionBar actions={[{ key: 'new', label: t('orders.generalOrders.newOrder'), title: translate('orders.generalOrders.createANewGeneralOrder'),
         icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canUseGeneralOrders(user), onClick: () => startEditing() }]} />} />
+    {!canUseGeneralOrders(user) && <Alert severity="info" sx={{ mb: 2 }}>{t('ordering.readOnly')}</Alert>}
     <OrderEventFilter
       eventTypes={eventTypes}
       eventType={eventType}
@@ -195,6 +221,7 @@ export function GeneralOrders() {
       onRetry={() => { void active.refetch(); }}
     />
     <OrderListSection
+      collapsible
       title={t('orders.generalOrders.orderHistory')}
       emptyMessage={t('orders.generalOrders.noCompletedOrderHistoryYet')}
       groups={[{ entries: (history.data ?? []).map(orderEntry) }]}
@@ -205,11 +232,13 @@ export function GeneralOrders() {
       onRetry={() => { void history.refetch(); }}
     />
 
-    <Dialog open={editing !== null} onClose={() => setEditing(null)} fullWidth maxWidth="lg">
-      <Box component="form" onSubmit={submit}><DialogTitle>{editing === 'new' ? t('orders.generalOrders.newOrder') : t('orders.generalOrders.editOrder')}</DialogTitle>
+    <Dialog open={editing !== null} onClose={() => { if (!createOrder.isPending && !updateOrder.isPending) setEditing(null); }} fullScreen={isMobile} fullWidth maxWidth="lg">
+      <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%', height: isMobile ? '100%' : undefined }}><DialogTitle sx={{ pr: 7 }}>{editing === 'new' ? t('orders.generalOrders.newOrder') : t('orders.generalOrders.editOrder')}</DialogTitle>
         <DialogContent dividers><Stack spacing={2}>
-          <TextField autoFocus required label={t('profile.name')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
-          <TextField required multiline minRows={2} label={t('orders.generalOrders.purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
+          <Alert severity="info">{t('ordering.draftHelp')}</Alert>
+          <Typography variant="h6">{t('ordering.detailsStep')}</Typography>
+          <TextField autoFocus required label={t('profile.name')} helperText={t('ordering.nameHelp')} value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} />
+          <TextField required multiline minRows={2} helperText={t('ordering.purposeHelp')} label={t('orders.generalOrders.purpose')} value={purpose} onChange={(event) => setPurpose(event.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
           <TextField select label={t('nav.currentEvent')} value={eventId} onChange={(event) => setEventId(event.target.value)}>
             <MenuItem value="">{t('orders.generalOrders.withoutEvent')}</MenuItem>
             {eventTypes.flatMap((type) => {
@@ -221,17 +250,17 @@ export function GeneralOrders() {
             })}
           </TextField>
           <Divider />
-          <Typography variant="h6">{t('orders.generalOrders.requestedItems')}</Typography>
+          <Typography variant="h6">{t('ordering.itemsStep')}</Typography>
           <CatalogSearchField label={t('common.searchItems')} value={itemSearch} onChange={setItemSearch} />
           {catalog.isError && <Alert severity="error">{t('orders.generalOrders.itemSearchFailed')}</Alert>}
-          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}><Stack spacing={0.5}>{(catalog.data ?? []).map(editItem)}</Stack><LoadMore list={catalog} /></Box>
+          <Box sx={{ maxHeight: { xs: 'none', sm: 360 }, overflowY: { xs: 'visible', sm: 'auto' } }}><Stack spacing={0.5}>{(catalog.data ?? []).map(editItem)}</Stack><LoadMore list={catalog} /></Box>
           {chosenIds.length > 0 && <Box>
             <Divider sx={{ mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 1 }}>{t('orders.generalOrders.currentOrder')}</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>{t('ordering.reviewStep')}</Typography>
             <Stack spacing={0.5}>
               {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Typography sx={{ flex: 1, fontWeight: 700 }}>{item.name}</Typography>
+                <Stack direction="row" useFlexGap sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography sx={{ flex: '1 1 160px', fontWeight: 700 }}>{item.name}</Typography>
                   <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
                     onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
                   <Button title={translate('orders.generalOrders.removeThisItemFromTheOrder')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('common.remove')}</Button>
@@ -240,18 +269,60 @@ export function GeneralOrders() {
             </Stack>
           </Box>}
           <Divider />
-          <ItemRequestEditor value={itemRequests} onChange={setItemRequests} />
-        </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
+          <Accordion key={editing === 'new' ? 'new' : editing?.id} defaultExpanded={itemRequests.length > 0} disableGutters>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{t('itemRequests.title')}</Typography></AccordionSummary>
+            <AccordionDetails><ItemRequestEditor value={itemRequests} onChange={setItemRequests} /></AccordionDetails>
+          </Accordion>
+          {!chosenIds.length && !itemRequests.length && <Alert severity="info">{t('ordering.noSelection')}</Alert>}
+        </Stack></DialogContent><DialogActions sx={{ flexWrap: 'wrap', gap: 1, bgcolor: 'background.paper' }}>
+          <Typography variant="body2" sx={{ flex: '1 1 140px' }} role="status">{t('ordering.selectedLines', { count: chosenIds.length + itemRequests.length })}</Typography>
+          <Button disabled={createOrder.isPending || updateOrder.isPending} title={translate('common.discardChangesAndClose')} onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
           <Button title={editing === 'new'
             ? translate('orders.generalOrders.createThisOrderWithTheEnteredQuantities')
             : translate('orders.generalOrders.updateThisOrderWithTheChangedQuantities')}
             type="submit" variant="contained" disabled={createOrder.isPending || updateOrder.isPending || !name.trim() || !purpose.trim() || (!Object.values(quantities).some((value) => Number(value) > 0) && itemRequests.length === 0)}>
-            {editing === 'new' ? t('orders.generalOrders.createOrder') : t('orders.generalOrders.updateOrder')}
+            {editing === 'new' ? t('ordering.saveDraft') : t('orders.generalOrders.updateOrder')}
           </Button></DialogActions>
       </Box>
     </Dialog>
 
-    {pickupOrder && <Dialog open onClose={() => setPickupOrder(null)} fullWidth maxWidth="lg"><DialogTitle>{t('orders.generalOrders.itemsPickupGroups')}</DialogTitle><DialogContent><OrderPickupGroups kind="general" orderId={pickupOrder} /></DialogContent></Dialog>}
-    {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} onClose={() => setWorkflow(null)} />}
+    <Dialog open={Boolean(viewing)} onClose={() => setViewing(null)} fullScreen={isMobile} fullWidth maxWidth="md">
+      {viewing && <>
+        <DialogTitle sx={{ pr: 7 }}>{viewing.name}</DialogTitle>
+        <DialogContent dividers>
+          <Chip label={t(statusLabels[viewing.status])} sx={{ mb: 1.5 }} />
+          {detail.isError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => { void detail.refetch(); }}>{t('common.retry')}</Button>}>{t('orders.orderListSection.ordersCouldNotBeLoaded')}</Alert>}
+          <OrderStatusGuide status={viewing.status} canEdit={canChange(viewing)} />
+          <Typography sx={{ mb: 1 }}>{viewing.purpose}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{eventName(viewing.eventOccurrenceId)}</Typography>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('ordering.contents')}</Typography>
+          {viewedItems.isLoading && <Typography>{t('orders.orderListSection.loading')}</Typography>}
+          {viewedItems.isError && <Alert severity="error">{t('orders.generalOrders.itemSearchFailed')}</Alert>}
+          <Stack spacing={1} sx={{ mb: 2 }}>
+            {Object.entries(viewing.requestedQuantities).map(([id, quantity]) => {
+              const item = viewedItems.data?.find(item => item.id === id);
+              return <Paper variant="outlined" key={id} sx={{ p: 1.5 }}>
+                <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item?.name ?? viewing.itemNames?.[id] ?? id}</Typography>
+                <Typography variant="body2">{t('enum.value.ordered')}: {formatQuantity(item, quantity)} · {t('common.prepared')}: {formatQuantity(item, viewing.preparedQuantities[id] ?? 0)}</Typography>
+              </Paper>;
+            })}
+          </Stack>
+          <ItemRequestList requests={viewing.itemRequests ?? []} />
+          <Box sx={{ mt: 2 }}>{orderActions(viewing)}</Box>
+          <Accordion disableGutters sx={{ mt: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{t('orders.generalOrders.itemsPickupGroups')}</Typography></AccordionSummary>
+            <AccordionDetails><OrderPickupGroups kind="general" orderId={viewing.id} /></AccordionDetails>
+          </Accordion>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setViewing(null)}>{t('common.close')}</Button></DialogActions>
+      </>}
+    </Dialog>
+    <ConfirmDialog open={Boolean(cancelling)} title={t('ordering.cancelTitle')}
+      message={t('ordering.cancelHelp', { name: cancelling?.name ?? '' })} actionLabel={t('pages.factionOrderDetail.cancelOrder')}
+      cancelLabel={t('ordering.keepOrder')}
+      actionColor="error" pending={transitionOrder.isPending} onClose={() => { if (!transitionOrder.isPending) setCancelling(null); }}
+      onConfirm={() => { if (cancelling) advance(cancelling, 'cancel'); }} />
+
+    {workflow && <GeneralOrderWorkflow order={workflow.order} action={workflow.action} onClose={() => { setWorkflow(null); if (viewingSnapshot) void detail.refetch(); }} />}
   </Box>;
 }

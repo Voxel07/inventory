@@ -14,6 +14,7 @@ interface ConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   pending?: boolean;
+  cancelLabel?: string;
 }
 
 export function ConfirmDialog({
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   onClose,
   onConfirm,
   pending = false,
+  cancelLabel,
 }: ConfirmDialogProps) {
   const t = useT();
   return (
@@ -35,7 +37,7 @@ export function ConfirmDialog({
         <DialogContentText>{message}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button title={translate('shared.confirmDialog.cancelAndReturnToThePreviousScreen')} onClick={onClose} disabled={pending}>{t('common.cancel')}</Button>
+        <Button title={translate('shared.confirmDialog.cancelAndReturnToThePreviousScreen')} onClick={onClose} disabled={pending}>{cancelLabel ?? t('common.cancel')}</Button>
 
         <Button title={actionTooltip ?? actionLabel} onClick={onConfirm} color={actionColor} variant="contained" disabled={pending}>
           {actionLabel}

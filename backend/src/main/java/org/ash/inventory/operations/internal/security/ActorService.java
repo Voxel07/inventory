@@ -22,7 +22,6 @@ import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -92,7 +91,8 @@ public class ActorService {
         String subject;
         String name;
         String email;
-        // Only development headers set role/factions; real accounts keep the ones managed in the app.
+        // Development headers seed new identities only. Existing accounts keep
+        // the roles and faction memberships managed through the audited access editor.
         Set<DomainEnums.UserRole> headerRoles = null;
         Set<String> headerFactions = null;
 
@@ -113,7 +113,7 @@ public class ActorService {
             subject = header("X-Actor-Id", "dev-admin");
             name = header("X-Actor-Name", "Development Admin");
             email = subject.contains("@") ? subject : "dev@localhost";
-            // Development headers simulate the role stored for the account.
+            // Initial grants for a newly provisioned development identity.
             try { headerRoles = parseRoles(Arrays.asList(header("X-Actor-Role", "admin").split(","))); }
             catch (ApiException invalid) { throw ApiException.forbidden("Unknown inventory role"); }
             String factionHeader = header("X-Actor-Factions", null);
@@ -134,8 +134,6 @@ public class ActorService {
         } else {
             if (!Objects.equals(cached.name, name)) cached.name = name;
             if (email != null && !Objects.equals(cached.email, email)) cached.email = email;
-            if (headerRoles != null && !new TreeSet<>(cached.roles).equals(headerRoles)) cached.setRoles(headerRoles);
-            if (headerFactions != null && !new TreeSet<>(cached.factions).equals(headerFactions)) cached.factions = new ArrayList<>(headerFactions);
             // Recovery: a listed bootstrap admin regains admin only while no admin exists.
             if (bootstrap && cached.role != DomainEnums.UserRole.admin && !users.adminExists()) {
                 var restored = new TreeSet<>(cached.roles); restored.add(DomainEnums.UserRole.admin); cached.setRoles(restored);

@@ -11,10 +11,14 @@ import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Chip,
   Divider,
   FormControl,
+  FormHelperText,
   InputLabel,
   MenuItem,
   Paper,
@@ -34,6 +38,7 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Dialog } from '../shared/ClosableDialog';
 import { DialogContent, DialogTitle } from '@mui/material';
 import type { Assembly, EventType, FactionOrder, FactionOrderSummary, FactionOrderFormData, StorageLocation } from '../../types';
@@ -58,6 +63,7 @@ import { CatalogSearchField } from '../orders/CatalogSearchField';
 import { ItemRequestEditor } from '../orders/ItemRequests';
 import { toItemRequestDrafts, toItemRequestInputs, type ItemRequestDraft } from '../../utils/itemRequests';
 import { catalogPage, filterCatalogAssemblies } from '../../utils/orderCatalog';
+import { OrderContentSelector, type OrderContentView } from '../orders/OrderContentSelector';
 
 type ResourceViewMode = 'list' | 'tiles';
 
@@ -124,6 +130,7 @@ export function FactionOrderForm({
   const [category, setCategory] = useState('');
   const [itemPage, setItemPage] = useState(1);
   const [assemblyPage, setAssemblyPage] = useState(1);
+  const [contentView, setContentView] = useState<OrderContentView>(assemblies.length ? 'assemblies' : 'items');
   const [viewMode, setViewMode] = useState<ResourceViewMode>(() => {
     const saved = window.localStorage.getItem('faction-order-resource-view');
     return saved === 'tiles' ? 'tiles' : 'list';
@@ -175,7 +182,8 @@ export function FactionOrderForm({
   const selectedItems = items
     .filter((item) => Number(quantities[item.id]) > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
-  const selectedEntryCount = selectedAssemblies.length + selectedItems.length;
+  const selectedEntryCount = Object.values(assemblyQuantities).filter(value => Number(value) > 0).length
+    + Object.values(quantities).filter(value => Number(value) > 0).length;
 
   const currentQuantities = toPositiveIntegerQuantities(quantities);
   const currentAssemblyQuantities = toPositiveIntegerQuantities(assemblyQuantities);
@@ -273,10 +281,13 @@ export function FactionOrderForm({
   return (
     <Box component="form" onSubmit={submit}>
       <Stack spacing={2.5}>
+        <Alert severity="info">{t(initialData?.status === 'submitted' ? 'ordering.submittedHelp' : 'ordering.draftHelp')}</Alert>
+        <Typography variant="h6">{t('ordering.detailsStep')}</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
           <FormControl fullWidth>
-            <InputLabel>{t('nav.event')}</InputLabel>
+            <InputLabel id="order-event-type-label">{t('nav.event')}</InputLabel>
             <Select
+              labelId="order-event-type-label"
               label={t('nav.event')}
               value={eventType}
               onChange={(event) => {
@@ -291,19 +302,18 @@ export function FactionOrderForm({
             </Select>
           </FormControl>
           <FormControl fullWidth>
-            <InputLabel>{t('common.faction')}</InputLabel>
-            <Select label={t('common.faction')} value={faction} onChange={(event) => setFaction(event.target.value)}>
+            <InputLabel id="order-faction-label">{t('common.faction')}</InputLabel>
+            <Select labelId="order-faction-label" label={t('common.faction')} value={faction} onChange={(event) => setFaction(event.target.value)}>
               {allowedFactions(eventType).map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl fullWidth required>
-            <InputLabel>{t('forms.factionOrderForm.yearlyEvent')}</InputLabel>
-            <Select label={t('forms.factionOrderForm.yearlyEvent')} value={selectedEvent?.id ?? ''} onChange={(event) => setEventOccurrenceId(event.target.value)}>
+            <InputLabel id="order-event-label">{t('forms.factionOrderForm.yearlyEvent')}</InputLabel>
+            <Select labelId="order-event-label" label={t('forms.factionOrderForm.yearlyEvent')} value={selectedEvent?.id ?? ''} onChange={(event) => setEventOccurrenceId(event.target.value)}>
               {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)} {entry.endDate !== entry.startDate ? `– ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
             </Select>
           </FormControl>
           {!eventOptions.length && <Alert severity="info" action={<Button title={translate('forms.factionOrderForm.openTheEventOverview')} component={RouterLink} to="/events">{t('forms.factionOrderForm.openEvents')}</Button>}>{t('forms.factionOrderForm.createAnEventForThisEventTypeFirst')}</Alert>}
-          <TextField fullWidth label={t('forms.factionOrderForm.eventDates')} value={selectedEvent ? `${formatDate(selectedEvent.startDate)} – ${formatDate(selectedEvent.endDate)}` : ''} slotProps={{ input: { readOnly: true } }} />
           <TextField
             fullWidth
             type="date"
@@ -360,20 +370,22 @@ export function FactionOrderForm({
 
         <Divider />
         <Box>
-          <Typography variant="h6">{t('forms.factionOrderForm.assembliesAndItems')}</Typography>
+          <Typography variant="h6">{t('ordering.itemsStep')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {t('forms.factionOrderForm.entriesTaggedForThisEventAreShownDirectlyOnlyEntries')}
+            {t('ordering.catalogHelp')}
           </Typography>
+          <Box sx={{ mb: 1.5 }}><OrderContentSelector value={contentView} onChange={setContentView} /></Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
             <CatalogSearchField label={t('forms.factionOrderForm.searchAssembliesOrItems')}
               value={search} onChange={(value) => { setSearch(value); setItemPage(1); setAssemblyPage(1); }} />
-            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-              <InputLabel>{t('common.category')}</InputLabel>
-              <Select label={t('common.category')} value={category} onChange={(event) => { setCategory(event.target.value); setItemPage(1); }}>
+            {contentView !== 'assemblies' && <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+              <InputLabel id="order-category-label">{t('common.category')}</InputLabel>
+              <Select labelId="order-category-label" label={t('common.category')} value={category} onChange={(event) => { setCategory(event.target.value); setItemPage(1); }}>
                 <MenuItem value="">{t('common.allCategories')}</MenuItem>
                 {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
               </Select>
-            </FormControl>
+              {contentView === 'all' && <FormHelperText>{t('ordering.categoryHelp')}</FormHelperText>}
+            </FormControl>}
             <ToggleButtonGroup
               exclusive
               size="small"
@@ -392,7 +404,7 @@ export function FactionOrderForm({
           </Stack>
         </Box>
 
-        <Box>
+        {contentView !== 'items' && <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
             <CategoryIcon color="primary" />
             <Typography variant="h6">
@@ -400,7 +412,7 @@ export function FactionOrderForm({
             </Typography>
           </Stack>
           {viewMode === 'tiles' ? (
-            <Box key={currentAssemblyPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '42vh', sm: 330 }, overflowY: 'auto', pr: 0.5 }}>
+            <Box key={currentAssemblyPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: 'none', sm: 330 }, overflowY: { xs: 'visible', sm: 'auto' }, pr: 0.5 }}>
               {pageAssemblies.map((assembly) => {
                 const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
@@ -428,7 +440,7 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack key={currentAssemblyPage} spacing={0.5} sx={{ maxHeight: { xs: '36vh', sm: 280 }, overflowY: 'auto', pr: 0.5 }}>
+            <Stack key={currentAssemblyPage} spacing={0.5} sx={{ maxHeight: { xs: 'none', sm: 280 }, overflowY: { xs: 'visible', sm: 'auto' }, pr: 0.5 }}>
               {pageAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
                 const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
@@ -437,7 +449,7 @@ export function FactionOrderForm({
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                        {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} /> : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700 }} noWrap>{assembly.name}</Typography>
+                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{assembly.name}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('forms.factionOrderForm.components')} · {t('enum.itemStatus.available')}: {available}</Typography>
                       </Box>
                     <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
@@ -461,14 +473,14 @@ export function FactionOrderForm({
           )}
           {!visibleAssemblies.length && <Typography color="text.secondary">{t('common.noMatchingAssemblies')}</Typography>}
           <OrderCatalogPager count={visibleAssemblies.length} page={currentAssemblyPage} onPageChange={setAssemblyPage} />
-        </Box>
+        </Box>}
 
-        <Box>
+        {contentView !== 'assemblies' && <Box>
           <Typography variant="h6">
             {isMobile ? t('forms.factionOrderForm.chooseItems') : t('forms.factionOrderForm.requestedItems')}
           </Typography>
           {viewMode === 'tiles' ? (
-            <Box key={currentItemPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: '52vh', sm: 440 }, overflowY: 'auto', pr: 0.5 }}>
+            <Box key={currentItemPage} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1, maxHeight: { xs: 'none', sm: 440 }, overflowY: { xs: 'visible', sm: 'auto' }, pr: 0.5 }}>
               {pageItems.map((item) => {
                 const isSelected = Number(quantities[item.id]) > 0;
                 const image = itemImageUrl(item, undefined, '240x160');
@@ -500,7 +512,7 @@ export function FactionOrderForm({
               })}
             </Box>
           ) : (
-            <Stack key={currentItemPage} spacing={0.5} sx={{ maxHeight: { xs: '45vh', sm: 360 }, overflowY: 'auto', pr: 0.5 }}>
+            <Stack key={currentItemPage} spacing={0.5} sx={{ maxHeight: { xs: 'none', sm: 360 }, overflowY: { xs: 'visible', sm: 'auto' }, pr: 0.5 }}>
               {pageItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
                 const image = itemImageUrl(item, undefined, '96x96');
@@ -513,7 +525,7 @@ export function FactionOrderForm({
                         ? <MediaImage src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'contain', borderRadius: 0.75 }} />
                         : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
+                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item.name}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                           {item.category} · {t('enum.itemStatus.available')}: {available}
                           {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
@@ -547,13 +559,13 @@ export function FactionOrderForm({
             <Button disabled={itemPage <= 1 || orderable.isFetching} onClick={() => setItemPage(page => page - 1)}>{t('orders.orderCatalogPager.previous')}</Button>
             <Button disabled={!orderable.data?.more || orderable.isFetching} onClick={() => setItemPage(page => page + 1)}>{t('common.next')}</Button>
           </Stack>
-        </Box>
+        </Box>}
 
         {selectedEntryCount > 0 && (
           <Box>
             <Divider sx={{ mb: 2 }} />
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="h6">{t('forms.factionOrderForm.currentOrder')}</Typography>
+              <Typography variant="h6">{t('ordering.reviewStep')}</Typography>
               <Chip
                 size="small"
                 color="primary"
@@ -600,7 +612,10 @@ export function FactionOrderForm({
           </Box>
         )}
 
-        <ItemRequestEditor value={itemRequests} onChange={setItemRequests} />
+        <Accordion defaultExpanded={itemRequests.length > 0} disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{t('itemRequests.title')}</Typography></AccordionSummary>
+          <AccordionDetails><ItemRequestEditor value={itemRequests} onChange={setItemRequests} /></AccordionDetails>
+        </Accordion>
 
         <TextField
           label={t('common.notes')}
@@ -609,7 +624,10 @@ export function FactionOrderForm({
           multiline
           minRows={2}
         />
-        <Button title={initialData
+        {!selectedEntryCount && !itemRequests.length && <Alert severity="info">{t('ordering.noSelection')}</Alert>}
+        <Box sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', py: 1.5, zIndex: 1, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="body2" sx={{ mb: 1 }} role="status">{t('ordering.selectedLines', { count: selectedEntryCount + itemRequests.length })}</Typography>
+        <Button fullWidth title={initialData
           ? translate('forms.factionOrderForm.updateTheOrderListWithTheChangedQuantities')
           : translate('forms.factionOrderForm.createTheOrderListWithTheseQuantities')}
           type="submit"
@@ -618,8 +636,9 @@ export function FactionOrderForm({
           startIcon={<SaveIcon />}
           disabled={isLoading || !selectedEvent || (Object.keys(currentQuantities).length === 0 && Object.keys(currentAssemblyQuantities).length === 0 && itemRequests.length === 0)}
         >
-          {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('forms.factionOrderForm.createOrderList'))}
+          {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('ordering.saveDraft'))}
         </Button>
+        </Box>
       </Stack>
       <Dialog open={Boolean(infoAssembly)} onClose={() => setInfoAssembly(null)} fullWidth maxWidth="sm">
         <DialogTitle>{infoAssembly?.name}</DialogTitle>

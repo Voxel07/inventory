@@ -92,7 +92,7 @@ class InventoryMcpTest {
             owner.issuer = "dev";
             owner.externalSubject = "mcp-owner-" + UUID.randomUUID();
             owner.name = "MCP private owner";
-            owner.role = DomainEnums.UserRole.faction_leader;
+            owner.setRoles(List.of(DomainEnums.UserRole.faction_leader));
             owner.factions = List.of("mcp-group-" + UUID.randomUUID());
             em.persist(owner);
             // Stock comes only from the ledger: seed the bulk opening balance as an `added` movement.
@@ -406,14 +406,31 @@ class InventoryMcpTest {
     @Test
     void managerAndPlannerPermissionsAreCheckedOnEachHttpCall() throws Exception {
         String actorId = "mcp-role-check-" + UUID.randomUUID();
+        String accessAdmin = "mcp-access-admin-" + UUID.randomUUID();
         String session = session(actorId, "admin");
-        assertTrue(call(session, actorId, "read_only", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
-        assertTrue(call(session, actorId, "warehouse_crew", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
-        assertTrue(call(session, actorId, "ash", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "read_only");
+        assertTrue(call(session, actorId, "admin", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "warehouse_crew");
+        assertTrue(call(session, actorId, "admin", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "ash");
+        assertTrue(call(session, actorId, "admin", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
         // Tenants manage their private inventory in the app; MCP serves organization data only.
-        assertTrue(call(session, actorId, "tenant", "get_item_details", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
-        assertFalse(call(session, actorId, "warehouse_crew", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "tenant");
+        assertTrue(call(session, actorId, "admin", "get_item_details", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "warehouse_crew");
+        assertFalse(call(session, actorId, "admin", "delete_item", Map.of("itemId", bulk.id.toString())).path("result").path("isError").asBoolean());
+        assignRole(accessAdmin, actorId, "admin");
         assertFalse(call(session, actorId, "admin", "delete_event", Map.of("eventId", event.id.toString())).path("result").path("isError").asBoolean());
+    }
+
+    private void assignRole(String admin, String actorId, String role) {
+        var account = given().header("X-Actor-Id", actorId).header("X-Actor-Role", "admin")
+                .get("/api/auth/me").then().statusCode(200).extract().jsonPath();
+        // Keep the same MCP session and stale admin header while changing the stored grants.
+        given().contentType(ContentType.JSON).header("X-Actor-Id", admin).header("X-Actor-Role", "admin")
+                .body(Map.of("roles", List.of(role), "factions", account.getList("faction"),
+                        "revision", account.getLong("revision"), "reason", "MCP permission regression"))
+                .patch("/api/users/" + account.getString("id")).then().statusCode(200);
     }
 
     @Test
