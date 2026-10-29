@@ -351,10 +351,10 @@ export function ItemDetail() {
                 </Box>
                 {item.hint && <Alert severity="info" icon={false} sx={{ mt: 1, py: 0, px: 1.5, '& .MuiAlert-message': { py: 0.5 } }}>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>
-                        <Box component="span" sx={{ fontWeight: 600 }}></Box>{item.hint}
+                        {item.hint}
                     </Typography>
                 </Alert>}
-                {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0 }}>{t('pages.itemDetail.thePrivateStorageLocationIsNotSharedWithYouAsk')}</Alert>}
+                {item.locationRestricted && <Alert severity="info" sx={{ mt: 1, py: 0, alignItems: 'flex-start', '& .MuiAlert-icon': { py: 1, fontSize: '1.5em' } }}>{t('pages.itemDetail.thePrivateStorageLocationIsNotSharedWithYouAsk')}</Alert>}
             </Paper>
 
             <Stack spacing={1.5}>

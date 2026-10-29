@@ -223,7 +223,7 @@ export function AssemblyDetail() {
                         {assembly.description && <Typography variant="body1">{assembly.description}</Typography>}
 
                         {assembly.hint && (
-                            <Alert severity="info" sx={{ py: 0.75 }}>
+                            <Alert severity="info" sx={{ py: 0.75, alignItems: 'flex-start', '& .MuiAlert-icon': { py: 1, fontSize: '1.5em' } }}>
                                 <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('pages.assemblyDetail.assemblyInstruction')}</Typography>
                                 <Typography variant="body2">{assembly.hint}</Typography>
                             </Alert>
