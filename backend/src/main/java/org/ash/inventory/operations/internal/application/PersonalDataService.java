@@ -91,7 +91,7 @@ public class PersonalDataService {
         lifecycle.status(id,new AccountLifecycleService.StatusInput(false,input.revision(),input.reason()));
         var user=em.find(UserAccount.class,id,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         String alias="Former member "+id.toString().substring(0,8);
-        user.name=alias;user.email="";user.ntfyTopic=null;user.webhookUrl=null;user.factions.clear();user.setRoles(List.of(DomainEnums.UserRole.tenant));
+        user.name=alias;user.email="";user.ntfyTopic=null;user.webhookUrl=null;user.mobileNavigation=null;user.factions.clear();user.setRoles(List.of(DomainEnums.UserRole.tenant));
         em.createNativeQuery("update event_people set name=:alias, updated_at=(extract(epoch from now()) * 1000)::bigint where user_id=:id").setParameter("alias",alias).setParameter("id",id).executeUpdate();
         em.createNativeQuery("update event_attendees set notes=null where person_id in (select id from event_people where user_id=:id)").setParameter("id",id).executeUpdate();
         em.createNativeQuery("delete from inventory_access_grants where user_id=:id").setParameter("id",id).executeUpdate();

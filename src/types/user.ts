@@ -1,6 +1,11 @@
 /** Display attribution; account details and permissions are never embedded in operational responses. */
 export type ActorSummary = Pick<User, 'id' | 'name'>;
 
+/** Where a phone destination appears; destinations without a placement stay in the "More" menu. */
+export type MobileNavPlacement = 'bottom' | 'top';
+/** Destination key (`tasks` or a route path) to its placement. */
+export type MobileNavLayout = Partial<Record<string, MobileNavPlacement>>;
+
 export interface User {
   active: boolean;
   id: string;
@@ -15,6 +20,8 @@ export interface User {
   revision?: number;
   created: number;
   updated: number;
+  /** Only on the signed-in user; absent while the default layout applies. */
+  mobileNavigation?: MobileNavLayout;
 }
 
 /**

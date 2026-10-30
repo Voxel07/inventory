@@ -14,6 +14,8 @@ create table app_users (
     ntfy_topic varchar(64) check (ntfy_topic ~ '^[A-Za-z0-9_-]{1,64}$'),
     -- Personal webhook URL; host reachability is validated by the application.
     webhook_url varchar(2048) check (webhook_url like 'https://%'),
+    -- Phone navigation layout: destination key -> 'bottom' | 'top'; null means the app's default layout.
+    mobile_navigation jsonb check (mobile_navigation is null or jsonb_typeof(mobile_navigation) = 'object'),
     issuer varchar(255) not null,
     external_subject varchar(255) not null,
     name varchar(255) not null,

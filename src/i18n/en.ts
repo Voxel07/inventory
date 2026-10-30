@@ -271,6 +271,18 @@ export default {
     assignedFactions: 'Assigned factions',
     noAssignedFactions: 'No factions assigned',
     unknownUser: 'Unknown user',
+    mobileNavigation: {
+      title: 'Phone navigation',
+      description: 'Choose what phones show in the bottom bar and next to the profile in the top bar. Everything else stays under "More". Saved to your account.',
+      limits: 'Up to {{bottom}} in the bottom bar and {{top}} in the top bar.',
+      placement: 'Placement of {{label}}',
+      bottom: 'Bottom',
+      top: 'Top',
+      menu: 'Menu',
+      tasksRequired: 'Tasks has no menu entry, so it stays in one of the bars.',
+      reset: 'Reset to default',
+      saveFailed: 'The navigation layout could not be saved.',
+    },
     notifications: {
       title: 'Notification delivery',
       saved: 'Notification settings saved.',

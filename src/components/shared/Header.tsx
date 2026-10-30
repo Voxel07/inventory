@@ -1,4 +1,4 @@
-import { Chip, IconButton, Button } from './ActionButtons';
+import { IconButton, Button } from './ActionButtons';
 import { CameraScanner } from './CameraScanner';
 import { useInboxCount } from '../../hooks/useInbox';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
@@ -10,7 +10,6 @@ import InventoryIcon from '@mui/icons-material/Inventory2';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
-import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
@@ -27,6 +26,7 @@ import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
 import { discardSyncFailure, getSyncFailures, type SyncFailure } from '../../services/offlineQueue';
 import { resolveScannedCode } from '../../utils/codeResolver';
 import { getSnapshotStatus, restoreSnapshotStatus, subscribeSnapshot } from '../../services/offlineSnapshot';
+import { useMobileNavigation } from './navDestinations';
 
 export function Header() {
     const { openActionInbox } = useActionInboxDialog();
@@ -39,8 +39,8 @@ export function Header() {
     const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
     const [queuedActionsOpen, setQueuedActionsOpen] = useState(false);
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isCompact = useMediaQuery(theme.breakpoints.down('md'));
+    const { top } = useMobileNavigation();
     const { online, queued, syncIssues, sync } = useOfflineStatus();
     const { generation } = useAuth();
     const snapshot = useSyncExternalStore(subscribeSnapshot, getSnapshotStatus);
@@ -131,8 +131,11 @@ export function Header() {
                 >
                     <QrCodeScannerIcon />
                 </IconButton>
-                {/* On phones the inbox lives in the bottom navigation as "Tasks". */}
-                {!isCompact && <Button color="inherit" aria-haspopup="dialog" onClick={openActionInbox}
+                {/* On phones the inbox is a placeable destination ("Tasks"), like the user's other top-bar picks. */}
+                {isCompact ? top.map((destination) => <IconButton key={destination.key} title={destination.label} color="inherit"
+                    aria-haspopup={destination.path ? undefined : 'dialog'} onClick={destination.open} sx={{ mr: 0.5 }}>
+                    {destination.icon}
+                </IconButton>) : <Button color="inherit" aria-haspopup="dialog" onClick={openActionInbox}
                     aria-label={translate('shared.header.openInboxInboxCountOpen', { inboxCount: inboxCount })}
                     startIcon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>}
                     sx={{ mr: 0.5, px: 1.5 }}>
@@ -156,37 +159,14 @@ export function Header() {
                     <AccountCircleIcon />
                 </IconButton>
 
-                {syncIssues > 0 && (
-                    isMobile ? (
-
-                        <IconButton title={translate('shared.header.reviewSynchronizationConflicts')}
-                            color="error"
-                            onClick={openSyncIssues}
-                            sx={{ mr: 0.5 }}
-                        >
-                            <Badge badgeContent={syncIssues} color="error">
-                                <ErrorOutlineIcon />
-                            </Badge>
-                        </IconButton>
-
-                    ) : (
-                        <Chip title={translate('shared.header.reviewSynchronizationConflicts')}
-                            size="small"
-                            color="error"
-                            icon={<ErrorOutlineIcon />}
-                            label={t('header.syncIssues', { count: syncIssues })}
-                            onClick={openSyncIssues}
-                            sx={{ mr: 1 }}
-                        />
-                    )
-                )}
                 <IconButton title={syncLabel}
                     onClick={openQueuedActions}
                     aria-label={`${syncLabel}. ${t('header.viewQueuedActions')}`}
                     aria-haspopup="dialog"
                     sx={{ ml: 0.5, color: syncColor }}
                 >
-                    <Badge badgeContent={queued} max={99} sx={{
+                    {/* Sync issues outrank queued actions; the dialog links to their review. */}
+                    <Badge badgeContent={syncIssues || queued} max={99} sx={{
                         '& .MuiBadge-badge': { bgcolor: syncColor, color: theme.palette.getContrastText(syncColor) },
                     }}>
                         {!online ? <CloudOffIcon /> : syncPending ? <CloudUploadIcon /> : <CloudDoneOutlinedIcon />}
@@ -235,6 +215,8 @@ export function Header() {
         <QueuedActionsDialog
             open={queuedActionsOpen}
             onClose={() => setQueuedActionsOpen(false)}
+            syncIssues={syncIssues}
+            onReviewSyncIssues={() => { setQueuedActionsOpen(false); openSyncIssues(); }}
         />
         </>
     );

@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Badge, Box, ButtonBase, Checkbox, Stack, TextField, Typography } from '@mui/material';
+import { Badge, Box, ButtonBase, Checkbox, Stack, TextField, ToggleButtonGroup, Typography } from '@mui/material';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { Link as RouterLink } from 'react-router-dom';
-import { Button, IconButton } from '../shared/ActionButtons';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { Button, IconButton, ToggleButton } from '../shared/ActionButtons';
 import { useT } from '../../utils/naming';
 
 export type RowAction = { label: string; icon: ReactNode; onClick: () => void; destructive?: boolean };
@@ -47,8 +48,25 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
   </Box>;
 }
 
-/** Search stays visible; secondary filters move into a sheet with an active-filter count. */
-export function CatalogSearchBar({ search, onSearch, label, activeFilters = 0, onOpenFilters, onClearFilters, selecting, onToggleSelecting }: {
+/** The page's all/mine scope, kept in `?scope=mine`. */
+export function CatalogScopeToggle({ allLabel, mineLabel }: { allLabel: string; mineLabel: string }) {
+  const t = useT();
+  const [params, setParams] = useSearchParams();
+  const mine = params.get('scope') === 'mine';
+  return <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} aria-label={t('common.scope')}
+    sx={{ minWidth: 0, overflowX: 'auto', '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
+    onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
+    <ToggleButton value="all">{allLabel}</ToggleButton>
+    <ToggleButton value="mine">{mineLabel}</ToggleButton>
+  </ToggleButtonGroup>;
+}
+
+/**
+ * Scope and bulk selection share the top row; search stays visible below it, and secondary filters move into a
+ * sheet with an active-filter count.
+ */
+export function CatalogSearchBar({ scope, search, onSearch, label, activeFilters = 0, onOpenFilters, onClearFilters, selecting, onToggleSelecting }: {
+  scope?: ReactNode;
   search: string;
   onSearch: (value: string) => void;
   label: string;
@@ -61,6 +79,14 @@ export function CatalogSearchBar({ search, onSearch, label, activeFilters = 0, o
 }) {
   const t = useT();
   return <Stack spacing={1} sx={{ mb: 1.5 }}>
+    {(scope || selecting !== undefined) && <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex' }}>{scope}</Box>
+      {selecting !== undefined && <IconButton title={selecting ? t('lists.catalogParts.doneSelecting') : t('lists.catalogParts.select')}
+        aria-pressed={selecting} color={selecting ? 'primary' : 'default'} onClick={onToggleSelecting}
+        sx={{ flexShrink: 0, border: 1, borderColor: selecting ? 'primary.main' : 'divider' }}>
+        <ChecklistIcon />
+      </IconButton>}
+    </Stack>}
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <TextField type="search" label={label} value={search} onChange={(event) => onSearch(event.target.value)} fullWidth size="small"
         sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
@@ -70,16 +96,9 @@ export function CatalogSearchBar({ search, onSearch, label, activeFilters = 0, o
         {t('common.filters')}
       </Button>}
     </Stack>
-    {(activeFilters > 0 || selecting !== undefined) && <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
-      {activeFilters > 0
-        ? <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">{t('lists.catalogParts.activeFilters', { count: activeFilters })}</Typography>
-          <Button size="small" onClick={onClearFilters}>{t('lists.catalogParts.clear')}</Button>
-        </Stack>
-        : <span />}
-      {selecting !== undefined && <Button size="small" onClick={onToggleSelecting}>
-        {selecting ? t('lists.catalogParts.doneSelecting') : t('lists.catalogParts.select')}
-      </Button>}
+    {activeFilters > 0 && <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, minHeight: 44 }}>
+      <Typography variant="body2" color="text.secondary">{t('lists.catalogParts.activeFilters', { count: activeFilters })}</Typography>
+      <Button size="small" onClick={onClearFilters}>{t('lists.catalogParts.clear')}</Button>
     </Stack>}
   </Stack>;
 }

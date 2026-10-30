@@ -42,7 +42,12 @@ public class UserResource {
     }
 
     @GET @Path("/auth/me")
-    public ApiResponses.UserResponse me() { return mapper.user(actors.current()); }
+    public ApiResponses.UserResponse me() { return mapper.currentUser(actors.current()); }
+
+    @jakarta.ws.rs.PUT @Path("/auth/me/mobile-navigation")
+    public ApiResponses.UserResponse updateMobileNavigation(@jakarta.validation.constraints.NotNull @Valid ApiModels.MobileNavigationInput input) {
+        return mapper.currentUser(users.updateMobileNavigation(input));
+    }
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
     @POST @Path("/auth/logout") public void logout() { sessions.logout(actors.authenticated().id); }
 
@@ -50,7 +55,7 @@ public class UserResource {
     public ApiResponses.DevLoginResponse devLogin(@Valid ApiModels.DevLoginInput input) {
         if (!devAuthEnabled) throw ApiException.notFound("Development login is disabled");
         var user = users.devLogin(input);
-        return new ApiResponses.DevLoginResponse("dev:" + user.externalSubject, mapper.user(user));
+        return new ApiResponses.DevLoginResponse("dev:" + user.externalSubject, mapper.currentUser(user));
     }
 
     @Paged @GET @Path("/users")

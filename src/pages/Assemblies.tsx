@@ -1,15 +1,16 @@
 import { FormDialog } from '../components/shared/FormDialog';
 import { PageHeader } from '../components/shared/PageHeader';
-import { ToggleButton } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
 import { useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { Box, ToggleButtonGroup } from '@mui/material';
+import { useCompactCatalog } from '../hooks/useCompactCatalog';
+import { Box } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { AssemblyForm } from '../components/forms/AssemblyForm';
 import { AssembliesList } from '../components/lists/AssembliesList';
+import { CatalogScopeToggle } from '../components/lists/CatalogParts';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { usePagedAssemblies, useCreateAssembly, useUpdateAssembly, useDeleteAssembly, useDeleteAssemblies } from '../hooks/useAssemblies';
@@ -24,7 +25,8 @@ export function Assemblies() {
     const catalogManager = canEditCatalog(user);
     const canCreate = canCreateInventory(user);
     const t = useT();
-    const [params, setParams] = useSearchParams();
+    const compact = useCompactCatalog();
+    const [params] = useSearchParams();
     const mine = params.get('scope') === 'mine';
     const [search, setSearch] = useState('');
     const assemblies = usePagedAssemblies({ search: useDebouncedValue(search.trim()) || undefined, mine: mine || undefined });
@@ -45,19 +47,15 @@ export function Assemblies() {
         <Box>
             <PageHeader
                 title={t('nav.assemblies')}
-                actions={<ActionBar actions={[
+                inlineActions={compact}
+                actions={<ActionBar iconOnly={compact} actions={[
                     catalogManager && { key: 'import', label: t('pages.assemblies.importCSV'), icon: <FileUploadIcon />, onClick: () => setImportOpen(true) },
                     canCreate && { key: 'create', label: t('pages.assemblies.addAssembly'), icon: <AddIcon />, variant: 'contained', pinned: true, onClick: crud.openCreate },
                 ]} />}
             />
-            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
-                onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
-                <ToggleButton value="all">{t('pages.assemblies.allAssemblies')}</ToggleButton>
-                <ToggleButton value="mine">{t('pages.assemblies.myAssemblies')}</ToggleButton>
-            </ToggleButtonGroup>
-
             <AssembliesList
                 assemblies={assemblies.data}
+                scope={<CatalogScopeToggle allLabel={t('pages.assemblies.allAssemblies')} mineLabel={t('pages.assemblies.myAssemblies')} />}
                 search={search}
                 onSearch={setSearch}
                 list={assemblies}

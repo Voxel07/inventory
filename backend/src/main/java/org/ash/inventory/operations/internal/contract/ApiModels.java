@@ -155,6 +155,10 @@ public final class ApiModels {
     /** The current user's delivery channels: ntfy topic (ntfy topic syntax) and HTTPS webhook URL; null or blank clears one. */
     public record NotificationSettingsInput(@jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{1,64}|") String ntfyTopic,
             @jakarta.validation.constraints.Size(max = 2048) String webhookUrl) {}
+    /** The current user's phone navigation: destination key (`tasks` or a route) to `bottom` or `top`; null restores the default. */
+    public record MobileNavigationInput(@jakarta.validation.constraints.Size(max = 50) java.util.Map<
+            @jakarta.validation.constraints.Pattern(regexp = "tasks|/[a-z0-9/-]{0,63}") String,
+            @NotNull @jakarta.validation.constraints.Pattern(regexp = "bottom|top") String> placements) {}
     /** Role and faction memberships (`EVENT:slug`) set by the inventory admin. */
     public record UserAccessInput(@NotNull @jakarta.validation.constraints.Size(min = 1, max = 6) List<@NotBlank String> roles,
             @NotNull @jakarta.validation.constraints.Size(max = 100) List<String> factions,

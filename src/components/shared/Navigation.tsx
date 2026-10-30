@@ -1,6 +1,5 @@
 import { ListItemButton, BottomNavigationAction } from './ActionButtons';
 import {
-    Badge,
     Drawer,
     List,
     ListItemIcon,
@@ -15,95 +14,17 @@ import {
     Paper,
     Typography,
 } from '@mui/material';
-import type { ReactNode } from 'react';
-import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
-import RoomOutlinedIcon from '@mui/icons-material/RoomOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
-import OutputIcon from '@mui/icons-material/Output';
-import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
-import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
-import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
-import PeopleOutlineIcon from '@mui/icons-material/PeopleOutlined';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
-import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
-import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
-import HistoryIcon from '@mui/icons-material/History';
-import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
-import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
 import { AuthPersistenceError } from '../../services/authManager';
-import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
-import { useInboxCount } from '../../hooks/useInbox';
 import { LanguageSelector } from './LanguageSelector';
 import { useT } from '../../utils/naming';
-import { canCreateInventory, canAccessProcurement, canAccessSharingGroups, canAccessWarehouseTasks, canManageInventory, canManageUsers, canViewCatalog, canViewOrganization } from '../../utils/access';
-import type { User } from '../../types';
+import { isActivePath, useMobileNavigation, useNavGroups } from './navDestinations';
 
 const DRAWER_WIDTH = 256;
-
-type NavItem = { label: string; path: string; icon: ReactNode };
-type NavGroup = { label: string; items: NavItem[] };
-
-/** Destinations grouped by user task; each group appears only with at least one permitted entry. */
-function useNavGroups(user: User | null | undefined): NavGroup[] {
-    const t = useT();
-    const { canPreviewRoles } = useAuth();
-    const manager = canManageInventory(user);
-    const catalog = manager || canViewCatalog(user);
-    const operations = canAccessWarehouseTasks(user);
-    const organization = canViewOrganization(user);
-    const groups: NavGroup[] = [
-        { label: t('common.overview'), items: [
-            { label: t('nav.home'), path: '/', icon: <HomeOutlinedIcon /> },
-        ] },
-        { label: t('header.inventory'), items: catalog ? [
-            { label: t('nav.items'), path: '/items', icon: <Inventory2OutlinedIcon /> },
-            { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryOutlinedIcon /> },
-            { label: t('shared.navigation.locations'), path: '/storage-locations', icon: <RoomOutlinedIcon /> },
-            ...(manager ? [{ label: t('shared.navigation.labelsQRCodes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
-            ...(canAccessSharingGroups(user) ? [{ label: t('common.sharingGroups'), path: '/sharing', icon: <GroupsOutlinedIcon /> }] : []),
-        ] : [] },
-        { label: t('shared.navigation.ordersReturns'), items: catalog ? [
-            ...(organization ? [{ label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> }] : []),
-            ...(canCreateInventory(user) ? [
-                { label: t('shared.navigation.checkedOut'), path: '/checked-out', icon: <OutputIcon /> },
-                { label: t('shared.navigation.reviewReturns'), path: '/returns', icon: <AssignmentReturnOutlinedIcon /> },
-            ] : []),
-        ] : [] },
-        { label: t('nav.events'), items: organization ? [
-            { label: t('common.eventPlanning'), path: '/events', icon: <EventOutlinedIcon /> },
-            { label: t('common.eventAttendees'), path: '/events/attendees', icon: <PeopleOutlineIcon /> },
-            { label: t('common.eventTimeline'), path: '/events/timeline', icon: <TimelineIcon /> },
-        ] : [] },
-        { label: t('shared.navigation.operations'), items: [
-            ...(operations ? [{ label: t('shared.navigation.warehouseTasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),
-            ...(canAccessProcurement(user) ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartOutlinedIcon /> }] : []),
-            ...(manager ? [{ label: t('nav.maintenance'), path: '/maintenance', icon: <BuildOutlinedIcon /> }] : []),
-            ...(manager ? [{ label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemOutlinedIcon /> }] : []),
-        ] },
-        { label: t('shared.navigation.reports'), items: manager ? [
-            { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
-        ] : [] },
-        { label: t('shared.navigation.administration'), items: canManageUsers(user) || canPreviewRoles ? [
-            { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsOutlinedIcon /> },
-        ] : [] },
-    ];
-    return groups.filter((group) => group.items.length > 0);
-}
-
-function isActivePath(pathname: string, path: string) {
-    if (path === '/events' && (pathname === '/events/attendees' || pathname === '/events/timeline')) return false;
-    return path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`);
-}
 
 export function Navigation() {
     const t = useT();
@@ -115,10 +36,8 @@ export function Navigation() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { logout, user } = useAuth();
-    const { openActionInbox } = useActionInboxDialog();
-    const inboxCount = useInboxCount();
     const groups = useNavGroups(user);
-    const catalog = canManageInventory(user) || canViewCatalog(user);
+    const { bottom } = useMobileNavigation();
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -173,10 +92,7 @@ export function Navigation() {
     );
 
     if (isMobile) {
-        const bottomValue = isActivePath(location.pathname, '/') ? '/'
-            : ['/items', '/assemblies', '/storage-locations'].some((path) => isActivePath(location.pathname, path)) ? '/items'
-            : isActivePath(location.pathname, '/orders') ? '/orders'
-            : false;
+        const bottomValue = bottom.find((destination) => destination.path && isActivePath(location.pathname, destination.path))?.key ?? false;
         return (
             <>
                 <Drawer
@@ -208,20 +124,15 @@ export function Navigation() {
                     <BottomNavigation
                         showLabels
                         value={bottomValue}
-                        onChange={(_, value) => {
+                        onChange={(_, value: string) => {
                             if (value === 'more') setSidebarOpen(true);
-                            else if (value === 'tasks') openActionInbox();
-                            else navigate(value);
+                            else bottom.find((destination) => destination.key === value)?.open();
                         }}
-                        sx={{ height: 64 }}
+                        sx={{ height: 64, '& .MuiBottomNavigationAction-root': { minWidth: 0, px: 0.5 },
+                            '& .MuiBottomNavigationAction-label': { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}
                     >
-                        <BottomNavigationAction label={t('nav.home')} value="/" icon={<HomeOutlinedIcon />} />
-                        {catalog && <BottomNavigationAction label={t('header.inventory')} value="/items" icon={<Inventory2OutlinedIcon />} />}
-                        {canViewOrganization(user)
-                            ? <BottomNavigationAction label={t('nav.orders')} value="/orders" icon={<ReceiptLongOutlinedIcon />} />
-                            : <BottomNavigationAction label={t('shared.navigation.locations')} value="/storage-locations" icon={<RoomOutlinedIcon />} />}
-                        <BottomNavigationAction label={t('common.tasks')} value="tasks" aria-haspopup="dialog"
-                            icon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>} />
+                        {bottom.map((destination) => <BottomNavigationAction key={destination.key} label={destination.label} value={destination.key}
+                            icon={destination.icon} aria-haspopup={destination.path ? undefined : 'dialog'} />)}
                         <BottomNavigationAction label={t('nav.more')} value="more" aria-haspopup="dialog" icon={<MenuIcon />} />
                     </BottomNavigation>
                 </Paper>

@@ -1,5 +1,5 @@
 import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
-import type { User, UserRole } from '../types';
+import type { MobileNavLayout, User, UserRole } from '../types';
 import { API_URL, AUTH_CONFIGURATION_ERROR, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, getOfflineQueueCount, type OfflineCommand } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
@@ -125,6 +125,27 @@ export async function refreshCurrentUser(): Promise<User | null> {
  * Development only: an administrator acts as {@code target} (null switches back). Switching needs the server and an
  * empty offline queue, so queued commands never replay as another account.
  */
+/**
+ * Saves the signed-in user's phone navigation (null restores the default). The session shows it at once and
+ * falls back to the previous layout when saving fails.
+ */
+export async function saveMobileNavigation(layout: MobileNavLayout | null): Promise<void> {
+  const context = captureAuthSession();
+  const withLayout = (value: MobileNavLayout | undefined) => {
+    const user = getAuthSnapshot().user;
+    if (user && context.generation === getAuthSnapshot().generation) updateAuthUser({ ...user, mobileNavigation: value });
+  };
+  const previous = getAuthSnapshot().user?.mobileNavigation;
+  withLayout(layout ?? undefined);
+  try {
+    const saved = await apiRequest<User>('/api/auth/me/mobile-navigation', { method: 'PUT', body: { placements: layout }, session: context });
+    withLayout(saved.mobileNavigation);
+  } catch (error) {
+    withLayout(previous);
+    throw error;
+  }
+}
+
 export async function switchImpersonation(target: User | null): Promise<void> {
   await switchActingSession(() => setImpersonation(target), () => setImpersonation(null));
 }

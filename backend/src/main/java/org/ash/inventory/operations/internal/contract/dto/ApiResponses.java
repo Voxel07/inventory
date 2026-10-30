@@ -43,7 +43,9 @@ public final class ApiResponses {
             String role,
             List<String> roles,
             List<String> faction,
-            long revision, boolean active
+            long revision, boolean active,
+            /** Only for the signed-in user; omitted in listings and while the default layout applies. */
+            @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> mobileNavigation
     ) {}
 
     /** Attribution outside account administration never discloses contact details or access assignments. */

@@ -11,6 +11,7 @@ import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import java.util.Map;
 /**
  * Accounts are provisioned from the identity provider (access group membership); their role and
  * faction memberships are managed here by the inventory admin.
@@ -69,6 +70,22 @@ public class UserService {
         var user = users.findLocked(actors.current().id);
         user.ntfyTopic = topic;
         user.webhookUrl = webhook;
+        return user;
+    }
+
+    /** Destinations that fit beside "More" in the phone's bottom bar, and beside the profile in its top bar. */
+    private static final Map<String, Integer> MOBILE_NAVIGATION_LIMITS = Map.of("bottom", 4, "top", 2);
+
+    /** The current user places phone destinations in the bottom or top bar; null restores the default layout. */
+    @Transactional
+    public UserAccount updateMobileNavigation(ApiModels.MobileNavigationInput input) {
+        var placements = input.placements();
+        if (placements != null) MOBILE_NAVIGATION_LIMITS.forEach((bar, limit) -> {
+            if (placements.values().stream().filter(bar::equals).count() > limit)
+                throw ApiException.badRequest("At most " + limit + " destinations fit in the " + bar + " bar");
+        });
+        var user = users.findLocked(actors.current().id);
+        user.mobileNavigation = placements == null ? null : new java.util.TreeMap<>(placements);
         return user;
     }
 

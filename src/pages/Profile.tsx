@@ -8,6 +8,7 @@ import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { factionKeyOf } from '../utils/access';
 import { NotificationSettingsCard } from '../components/shared/NotificationSettingsCard';
 import { InstallAppCard } from '../components/shared/InstallAppCard';
+import { MobileNavigationCard } from '../components/shared/MobileNavigationCard';
 
 const ROLE_KEYS: Record<string, TranslationKey> = {
   admin: 'profile.roles.admin',
@@ -102,6 +103,7 @@ export function Profile() {
       <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: 1 }}>
         <InstallAppCard compact />
       </Box>
+      <MobileNavigationCard />
       <NotificationSettingsCard />
     </Box>
   );

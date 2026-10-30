@@ -58,6 +58,15 @@ public class ApiMapper {
     private boolean canViewLocation(StorageLocation value) { return value != null && accessPolicies.projectionAllows(value.accessPolicy); }
 
     public ApiResponses.UserResponse user(UserAccount value) {
+        return user(value, null);
+    }
+
+    /** The signed-in user, including their own preferences. */
+    public ApiResponses.UserResponse currentUser(UserAccount value) {
+        return user(value, value.mobileNavigation);
+    }
+
+    private ApiResponses.UserResponse user(UserAccount value, Map<String, String> mobileNavigation) {
         return new ApiResponses.UserResponse(
                 value.id,
                 value.createdAt,
@@ -67,7 +76,8 @@ public class ApiMapper {
                 value.role.name(),
                 value.roles.stream().map(Enum::name).toList(),
                 value.factions == null ? List.of() : value.factions,
-                value.accessRevision, value.active
+                value.accessRevision, value.active,
+                mobileNavigation
         );
     }
 

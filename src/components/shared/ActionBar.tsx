@@ -56,10 +56,12 @@ export function ActionMenu({ actions, size = 'small' }: { actions: Action[]; siz
 type Alignment = 'start' | 'end';
 const margin = { start: 0, end: 'auto' } as const;
 
-export function ActionBar({ actions: candidates, collapsed: forced, size = 'medium', align = { xs: 'start', sm: 'end' }, sx, buttonSx }: {
+export function ActionBar({ actions: candidates, collapsed: forced, iconOnly, size = 'medium', align = { xs: 'start', sm: 'end' }, sx, buttonSx }: {
     /** Falsy entries are skipped, so permission checks can stay inline. */
     actions: (Action | false | null | undefined)[];
     collapsed?: boolean;
+    /** Every action as an icon button labelled by its tooltip, for tight rows such as a phone's page header. */
+    iconOnly?: boolean;
     size?: ButtonProps['size'];
     /** Per breakpoint; by default left on phones, where a bar usually gets its own row, and right from `sm` up. */
     align?: Alignment | Partial<Record<Breakpoint, Alignment>>;
@@ -73,6 +75,15 @@ export function ActionBar({ actions: candidates, collapsed: forced, size = 'medi
     const inline = collapsed ? actions.filter((action) => action.pinned) : actions;
     const ml: (typeof margin)[Alignment] | Partial<Record<Breakpoint, (typeof margin)[Alignment]>> = typeof align === 'string' ? margin[align]
         : Object.fromEntries(Object.entries(align).map(([breakpoint, value]) => [breakpoint, margin[value]]));
+    if (iconOnly) return <Box sx={[{ display: 'inline-flex', alignItems: 'center', gap: 1, ml }, ...(Array.isArray(sx) ? sx : [sx])]}>
+        {actions.map((action) => <IconButton key={action.key} title={action.label} color={action.color ?? 'primary'} disabled={action.disabled}
+            onClick={action.onClick} {...(action.to ? { component: RouterLink, to: action.to } : {})}
+            sx={action.variant === 'contained'
+                ? { bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }
+                : { border: 1, borderColor: 'divider' }}>
+            {action.icon}
+        </IconButton>)}
+    </Box>;
     const track = <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexShrink: collapsed ? 1 : 0, minWidth: 0, ml }}>
         {inline.map((action) => <Button key={action.key} title={action.title} size={size} variant={action.variant ?? 'outlined'}
             color={action.color} startIcon={action.icon} disabled={action.disabled} onClick={action.onClick}

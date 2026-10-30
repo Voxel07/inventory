@@ -2,7 +2,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Box, Checkbox, Drawer, FormControl, InputLabel, ListItemIcon, ListItemText, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -40,6 +40,8 @@ interface Props {
     locationStock?: ReadonlyMap<string, StockCalculation>;
     /** Explains an empty list in the context it is shown in. */
     emptyHint?: string;
+    /** The page's scope switch, shown above the search beside bulk selection. */
+    scope?: ReactNode;
     /**
      * Catalog mode: `items` are server pages already filtered by `query`; filter controls edit the query and
      * the remaining pages of `list` load in the background once the first page is shown. Without it, `items`
@@ -65,7 +67,7 @@ type ItemRow = {
 
 const PAGE_STEP = 30;
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint, server }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint, scope, server }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -275,7 +277,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
     return <Box>
         {compact ? <>
-            <CatalogSearchBar search={search} onSearch={setSearch} label={t('common.searchItems')}
+            <CatalogSearchBar scope={scope} search={search} onSearch={setSearch} label={t('common.searchItems')}
                 activeFilters={activeFilters} onOpenFilters={() => setFiltersOpen(true)} onClearFilters={clearFilters}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
             <Drawer anchor="bottom" open={filtersOpen} onClose={() => setFiltersOpen(false)}
@@ -286,8 +288,11 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
                     <FilterSheetActions resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters} onDone={() => setFiltersOpen(false)} />
                 </Stack>
             </Drawer>
-        </> : <TextField type="search" label={t('lists.itemsList.searchByName')} value={search}
-            onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
+        </> : <>
+            {scope && <Box sx={{ mb: 2 }}>{scope}</Box>}
+            <TextField type="search" label={t('lists.itemsList.searchByName')} value={search}
+                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />
+        </>}
         {filterError && <Alert severity="error" sx={{ mb: 1 }} action={<Button size="small" onClick={() => { void locations.refetch(); }}>{t('common.retry')}</Button>}>
             {t('lists.itemsList.couldNotLoadAllLocationFilterData')}
         </Alert>}

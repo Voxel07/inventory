@@ -273,6 +273,18 @@ export default {
     assignedFactions: 'Zugewiesene Fraktionen',
     noAssignedFactions: 'Keine Fraktionen zugewiesen',
     unknownUser: 'Unbekannter Benutzer',
+    mobileNavigation: {
+      title: 'Navigation auf dem Handy',
+      description: 'Lege fest, was Handys in der unteren Leiste und oben neben dem Profil zeigen. Alles andere bleibt unter „Mehr“. Wird in deinem Konto gespeichert.',
+      limits: 'Bis zu {{bottom}} in der unteren und {{top}} in der oberen Leiste.',
+      placement: 'Platzierung von {{label}}',
+      bottom: 'Unten',
+      top: 'Oben',
+      menu: 'Menü',
+      tasksRequired: 'Aufgaben haben keinen Menüeintrag und bleiben daher in einer der Leisten.',
+      reset: 'Auf Standard zurücksetzen',
+      saveFailed: 'Die Navigation konnte nicht gespeichert werden.',
+    },
     notifications: {
       title: 'Benachrichtigungszustellung',
       saved: 'Benachrichtigungseinstellungen gespeichert.',

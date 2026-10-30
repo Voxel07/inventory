@@ -13,7 +13,7 @@ export type {
   DamageReportUpdateData,
   DamageStatusHistoryEntry,
 } from './damageReport';
-export type { User, UserRole, AccessRole, ActorSummary } from './user';
+export type { User, UserRole, AccessRole, ActorSummary, MobileNavLayout, MobileNavPlacement } from './user';
 export { ROLE_LADDER } from './user';
 export type { GeneralOrder, GeneralOrderSummary, GeneralOrderFormData, ItemRequestStatus, OrderItemRequest, OrderItemRequestInput } from './order';
 export type { EventType, EventReportStatus, EventReport, EventReportFormData } from './event';

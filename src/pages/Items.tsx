@@ -1,19 +1,20 @@
 import { FormDialog } from '../components/shared/FormDialog';
 import { useState } from 'react';
-import { Box, ToggleButtonGroup } from '@mui/material';
+import { Box } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { ItemForm } from '../components/forms/ItemForm';
 import { ItemsList } from '../components/lists/ItemsList';
+import { CatalogScopeToggle } from '../components/lists/CatalogParts';
 import { QrLabelDialog } from '../components/qr/QrLabelDialog';
 import { CsvImportDialog } from '../components/dialogs/CsvImportDialog';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { PageHeader } from '../components/shared/PageHeader';
-import { ToggleButton } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
 import { usePagedItems, useItemCategories, useCreateItem, useUpdateItem, useDeleteItem, useDeleteItems, type ItemQuery } from '../hooks/useItems';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useCrudManager } from '../hooks/useCrudManager';
 import type { Item, ItemFormData } from '../types';
@@ -26,7 +27,8 @@ export function Items() {
     const catalogManager = canEditCatalog(user);
     const canCreate = canCreateInventory(user);
     const t = useT();
-    const [params, setParams] = useSearchParams();
+    const compact = useCompactCatalog();
+    const [params] = useSearchParams();
     const mine = params.get('scope') === 'mine';
     // Search, filters and the "mine" scope run on the server; further pages load on demand.
     const [query, setQuery] = useState<ItemQuery>({});
@@ -53,19 +55,15 @@ export function Items() {
         <Box>
             <PageHeader
                 title={t('nav.items')}
-                actions={<ActionBar actions={[
+                inlineActions={compact}
+                actions={<ActionBar iconOnly={compact} actions={[
                     catalogManager && { key: 'import', label: t('pages.items.importCSV'), icon: <FileUploadIcon />, onClick: () => setImportOpen(true) },
                     canCreate && { key: 'create', label: t('common.addItem'), icon: <AddIcon />, variant: 'contained', pinned: true, onClick: crud.openCreate },
                 ]} />}
             />
-            <ToggleButtonGroup exclusive size="small" value={mine ? 'mine' : 'all'} sx={{ mb: 2 }} aria-label={t('common.scope')}
-                onChange={(_, value: string | null) => { if (value) setParams((current) => { if (value === 'mine') current.set('scope', 'mine'); else current.delete('scope'); return current; }, { replace: true }); }}>
-                <ToggleButton value="all">{t('pages.items.allItems')}</ToggleButton>
-                <ToggleButton value="mine">{t('pages.items.myItems')}</ToggleButton>
-            </ToggleButtonGroup>
-
             <ItemsList
                 items={catalog.data}
+                scope={<CatalogScopeToggle allLabel={t('pages.items.allItems')} mineLabel={t('pages.items.myItems')} />}
                 server={{ query, onQueryChange: setQuery, list: catalog }}
                 isLoading={catalog.isLoading}
                 loadError={catalog.isError}

@@ -3,7 +3,7 @@ import { LoadMore } from '../shared/LoadMore';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Box, Link, ListItemIcon, ListItemText, Menu, Paper, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -37,6 +37,8 @@ interface Props {
     onDeleteMany?: (ids: string[]) => void;
     /** Explains an empty list in the context it is shown in. */
     emptyHint?: string;
+    /** The page's scope switch, shown above the search beside bulk selection. */
+    scope?: ReactNode;
 }
 
 type AssemblyRow = {
@@ -53,7 +55,7 @@ type AssemblyRow = {
 
 const PAGE_STEP = 30;
 
-export function AssembliesList({ assemblies, search, onSearch: setSearch, list, isLoading, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, emptyHint }: Props) {
+export function AssembliesList({ assemblies, search, onSearch: setSearch, list, isLoading, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, emptyHint, scope }: Props) {
     const { user } = useAuth();
     const canEditAssembly = (assembly: Assembly) => assembly.access?.privateResource ? assembly.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -175,10 +177,13 @@ export function AssembliesList({ assemblies, search, onSearch: setSearch, list, 
 
     return <Box>
         {compact
-            ? <CatalogSearchBar search={search} onSearch={setSearch} label={t('lists.assembliesList.searchAssemblies')}
+            ? <CatalogSearchBar scope={scope} search={search} onSearch={setSearch} label={t('lists.assembliesList.searchAssemblies')}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
-            : <TextField type="search" label={t('lists.assembliesList.searchByName')} value={search}
-                onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />}
+            : <>
+                {scope && <Box sx={{ mb: 2 }}>{scope}</Box>}
+                <TextField type="search" label={t('lists.assembliesList.searchByName')} value={search}
+                    onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />
+            </>}
         {loadError && !initialError && <Alert severity="warning" sx={{ mb: 1.5 }} action={onRetry && <Button size="small" onClick={onRetry}>{t('common.retry')}</Button>}>
             {t('lists.assembliesList.onlyAssemblieCountAssembliesCouldBeLoadedTheListIsIncomplete', { assemblieCount: String(assemblies?.length ?? 0) })}
         </Alert>}

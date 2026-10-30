@@ -13,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "app_users", uniqueConstraints = @UniqueConstraint(name = "uq_app_users_identity", columnNames = {"issuer", "external_subject"}))
@@ -30,6 +31,10 @@ public class UserAccount extends BaseEntity {
     @Column(name = "ntfy_topic", length = 64) public String ntfyTopic;
     /** Personal webhook for delivery; may embed a secret, so only its owner ever sees it. */
     @Column(name = "webhook_url", length = 2048) public String webhookUrl;
+    /** Phone navigation layout chosen by the user: destination key to {@code bottom} or {@code top}; null is the default layout. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "mobile_navigation", columnDefinition = "jsonb")
+    public Map<String, String> mobileNavigation;
     @Column(nullable = false) public boolean active = true;
     @Column(name = "deactivated_at") public java.time.Instant deactivatedAt;
     @Column(name = "offboarding_reason", length = 1000) public String offboardingReason;
