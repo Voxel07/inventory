@@ -191,7 +191,7 @@ export function OrderDetailHeader({
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box sx={{ flex: '1 1 0', minWidth: 0 }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{order.eventType === 'LS' ? 'LightSim' : order.eventType} · {order.faction}</Typography>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{order.eventType} · {order.faction}</Typography>
             <Chip size="small" color={statusColor(order.status)} label={statusLabel(order.status)} />
           </Stack>
           <Typography variant="body2" color="text.secondary">

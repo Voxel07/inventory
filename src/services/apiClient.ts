@@ -1,5 +1,5 @@
 import { markPrivateInventoryResponse, referencesPrivateInventory, clearPrivateResourceIds } from './privateInventoryCache';
-import type { User } from '../types';
+import type { User, UserRole } from '../types';
 import { API_URL, AUTH_CONFIGURATION_ERROR, OIDC_CONFIG } from '../config/runtimeConfig';
 import { enqueueOfflineAction, flushOfflineQueue, getOfflineQueueCount, type OfflineCommand } from './offlineQueue';
 import { beginOidcLogin, completeOidcLogin, oidcLogoutUrl, revokeOidcToken } from './oidcClient';
@@ -25,7 +25,9 @@ import {
   getValidAccessToken,
   restorePersistedSession,
   setAuthError,
+  setUserSwitching,
   setDevelopmentSession,
+  setDevelopmentRolePreview,
   setImpersonation,
   setOidcSession,
   subscribeAuth,
@@ -124,17 +126,36 @@ export async function refreshCurrentUser(): Promise<User | null> {
  * empty offline queue, so queued commands never replay as another account.
  */
 export async function switchImpersonation(target: User | null): Promise<void> {
-  if (!navigator.onLine) throw new Error(translate('services.apiClient.impersonationNeedsConnection'));
-  if (await getOfflineQueueCount()) throw new Error(translate('services.apiClient.impersonationNeedsEmptyQueue'));
-  setImpersonation(target);
-  const context = captureAuthSession();
+  await switchActingSession(() => setImpersonation(target), () => setImpersonation(null));
+}
+
+/** Preview a role on the admin's own development account; account access is never written. */
+export async function switchDevelopmentRole(role: UserRole, factions: readonly string[] = []): Promise<void> {
+  const previous = getAuthSnapshot();
+  await switchActingSession(() => setDevelopmentRolePreview(role, factions), () =>
+    setDevelopmentRolePreview(previous.impersonator ? previous.user?.role ?? null : null, previous.user?.faction ?? []));
+}
+
+async function switchActingSession(change: () => void, rollback: () => void): Promise<void> {
+  if (getAuthSnapshot().isSwitchingUser) throw new Error(translate('services.apiClient.accountSwitchInProgress'));
+  setUserSwitching(true);
   try {
-    const user = await apiRequest<User>('/api/auth/me', { session: context });
-    assertAuthSession(context);
-    updateAuthUser(user);
-  } catch (error) {
-    if (target && context.generation === getAuthSnapshot().generation) setImpersonation(null);
-    throw error;
+    const before = captureAuthSession();
+    if (!navigator.onLine) throw new Error(translate('services.apiClient.impersonationNeedsConnection'));
+    if (await getOfflineQueueCount()) throw new Error(translate('services.apiClient.impersonationNeedsEmptyQueue'));
+    assertAuthSession(before);
+    change();
+    const context = captureAuthSession();
+    try {
+      const user = await apiRequest<User>('/api/auth/me', { session: context });
+      assertAuthSession(context);
+      updateAuthUser(user);
+    } catch (error) {
+      if (context.generation === getAuthSnapshot().generation) rollback();
+      throw error;
+    }
+  } finally {
+    setUserSwitching(false);
   }
 }
 

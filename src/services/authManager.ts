@@ -1,4 +1,5 @@
-import type { User } from '../types';
+import type { User, UserRole } from '../types';
+import { DEV_LOGIN_AVAILABLE } from '../config/runtimeConfig';
 import { isOidcSessionRejected, refreshOidcTokens, type OidcTokenSet } from './oidcClient';
 import { clearStoredAuthSession, loadStoredAuthSession, saveStoredAuthSession, signedOutRevision } from './authStorage';
 import { decodeAuthSession, emptyAuthSession, type PersistedAuthSession } from './authSession';
@@ -17,8 +18,9 @@ type AuthSnapshot = {
   generation: number;
   token: string;
   user: User | null;
-  /** Pre-launch only: the signed-in administrator while {@code user} is impersonated. */
+  /** The signed-in administrator during account impersonation or a same-account development role preview. */
   impersonator: User | null;
+  isSwitchingUser: boolean;
   error: string | null;
 };
 
@@ -62,13 +64,14 @@ function loadSession(): PersistedAuthSession {
 
 let session = loadSession();
 let generation = 0;
-let snapshot: AuthSnapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, error: null };
+let isSwitchingUser = false;
+let snapshot: AuthSnapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, isSwitchingUser, error: null };
 let refreshPromise: Promise<string> | null = null;
 let persistence: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function publish(error: string | null = null): void {
-  snapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, error };
+  snapshot = { generation, token: session.accessToken, user: session.user, impersonator: session.impersonator, isSwitchingUser, error };
   listeners.forEach((listener) => listener());
 }
 
@@ -225,8 +228,29 @@ export function setImpersonation(target: User | null): void {
   publish();
 }
 
+/** Same-account development role preview, using the signed-in admin as the restore point. */
+export function setDevelopmentRolePreview(role: UserRole | null, factions: readonly string[] = []): void {
+  const admin = session.impersonator ?? session.user;
+  if (!DEV_LOGIN_AVAILABLE || !session.accessToken.startsWith('dev:') || admin?.role !== 'admin') {
+    throw new Error('Role preview requires a development administrator session.');
+  }
+  if (session.impersonator && session.user?.id !== admin.id) throw new Error('End account impersonation before previewing roles.');
+  advanceSession();
+  session = role && role !== 'admin'
+    ? { ...session, user: { ...admin, role, roles: [role], faction: [...factions] }, impersonator: admin }
+    : { ...session, user: admin, impersonator: null };
+  void persist();
+  publish();
+}
+
 export function setAuthError(error: string | null): void {
   publish(error);
+}
+
+/** Survives the query-provider remount when an account/role switch advances the session generation. */
+export function setUserSwitching(value: boolean): void {
+  isSwitchingUser = value;
+  publish(snapshot.error);
 }
 
 /**
@@ -347,6 +371,11 @@ export async function getAuthorizationHeaders(signal?: AbortSignal): Promise<Rec
     headers['X-Actor-Name'] = account?.name || 'Development Admin';
     headers['X-Actor-Role'] = String(account?.role || 'admin').trim().toLowerCase();
   }
-  if (session.impersonator && session.user) headers['X-Impersonate-User'] = session.user.id;
+  if (session.impersonator && session.user) {
+    if (session.user.id === session.impersonator.id) {
+      headers['X-Preview-Role'] = session.user.role;
+      headers['X-Preview-Factions'] = (session.user.faction ?? []).join(',');
+    } else headers['X-Impersonate-User'] = session.user.id;
+  }
   return headers;
 }

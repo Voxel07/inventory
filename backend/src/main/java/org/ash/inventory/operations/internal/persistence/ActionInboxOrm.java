@@ -18,6 +18,11 @@ import java.util.stream.Stream;
 /** Persistence queries for the ActionInbox use cases. Business rules remain in the service. */
 @ApplicationScoped
 public class ActionInboxOrm extends EntityOrm {
+    /** Lock the stored identity row, including when the caller carries a development role projection. */
+    public void lockUser(java.util.UUID id) {
+        entityManager.find(UserAccount.class, id, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+    }
+
     public List<ActionReminder> reminders(UserAccount user) {
         return entityManager.createQuery("from ActionReminder where user = :u", ActionReminder.class).setParameter("u", user).getResultList();
     }

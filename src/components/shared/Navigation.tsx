@@ -56,6 +56,7 @@ type NavGroup = { label: string; items: NavItem[] };
 /** Destinations grouped by user task; each group appears only with at least one permitted entry. */
 function useNavGroups(user: User | null | undefined): NavGroup[] {
     const t = useT();
+    const { canPreviewRoles } = useAuth();
     const manager = canManageInventory(user);
     const catalog = manager || canViewCatalog(user);
     const operations = canAccessWarehouseTasks(user);
@@ -92,7 +93,7 @@ function useNavGroups(user: User | null | undefined): NavGroup[] {
         { label: t('shared.navigation.reports'), items: manager ? [
             { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         ] : [] },
-        { label: t('shared.navigation.administration'), items: canManageUsers(user) ? [
+        { label: t('shared.navigation.administration'), items: canManageUsers(user) || canPreviewRoles ? [
             { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsOutlinedIcon /> },
         ] : [] },
     ];

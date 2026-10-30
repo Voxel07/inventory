@@ -244,7 +244,7 @@ export function GeneralOrders() {
             {eventTypes.flatMap((type) => {
               const occurrences = activeEvents.filter((event) => event.eventType === type);
               return occurrences.length ? [
-                <ListSubheader key={`${type}-heading`}>{type === 'LS' ? 'LightSim' : type}</ListSubheader>,
+                <ListSubheader key={`${type}-heading`}>{type}</ListSubheader>,
                 ...occurrences.map((event) => <MenuItem key={event.id} value={event.id}>{event.name} · {formatDate(event.startDate)}{event.endDate !== event.startDate ? ` – ${formatDate(event.endDate)}` : ''}</MenuItem>),
               ] : [];
             })}

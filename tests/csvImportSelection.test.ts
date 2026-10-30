@@ -7,9 +7,11 @@ import type { EventType, Faction } from '../src/types';
 
 const sample = await Bun.file('sample_imports/sample_stock.csv').text();
 const { rows } = parseCsv(sample);
-const factions: [EventType, string][] = [['DE', 'KGG'], ['DE', 'GOF'], ['DE', 'Enklave'], ['DE', 'Miliz'], ['LS', 'UCRF'], ['LS', 'TERA']];
+const factions: [EventType, string][] = [['ASD', 'Delta'], ['ASD', 'Ghost'], ['DE', 'KGG'], ['DE', 'GOF'], ['DE', 'Enklave'], ['DE', 'Miliz'],
+  ['LA', 'Angreifer'], ['LA', 'Verteidiger'], ['LS', 'UCRF'], ['LS', 'TERA'], ['M24', 'Hondra'], ['M24', 'Militär'], ['M24', 'Kartell'],
+  ['PBG', 'Rot'], ['PBG', 'Blau'], ['TNO', 'Militär'], ['TNO', 'Freiheit'], ['TNO', 'Stalker'], ['TNO', 'Banditen'], ['TNO', 'Wissenschaftler']];
 const reference: CsvReference = {
-  eventTypes: ['ASD', 'DE', 'LS', 'M24', 'TNO'],
+  eventTypes: ['ASD', 'DE', 'LA', 'LS', 'M24', 'PBG', 'TNO'],
   factions: factions.map(([eventType, name]) => ({ id: name, eventType, name, slug: name.toLowerCase() } as Faction)),
 };
 const plan = (csvContent: string, tabType: CsvImportType) => buildCsvImportPlan({
@@ -48,13 +50,15 @@ test('combined import validates orders against items created by the same file', 
   expect(result.parsedGeneralOrders.find((row) => row.data.name === 'Sanitätszelt LightSim 2025')?.status).toBe('valid');
 });
 
-test('sample orders are closed except those for 2027', () => {
+test('sample orders of past seasons are closed, the latest and upcoming events keep open orders', () => {
   const result = plan(sample, 'combined');
   const orders = [
     ...result.parsedOrders.map((row) => ({ name: row.data.faction, date: row.data.eventDate, status: row.targetStatus })),
     ...result.parsedGeneralOrders.map((row) => ({ name: row.data.name, date: row.eventDate, status: row.targetStatus })),
   ];
-  expect(orders.filter((order) => new Date(order.date).getUTCFullYear() !== 2027 && order.status !== 'closed')).toEqual([]);
+  const cutoff = Date.UTC(2026, 9, 1);
+  expect(orders.filter((order) => order.date < cutoff && order.status !== 'closed')).toEqual([]);
+  expect(orders.some((order) => order.date >= cutoff && order.date < Date.UTC(2027, 0, 1) && order.status !== 'closed')).toBe(true);
   expect(orders.filter((order) => new Date(order.date).getUTCFullYear() === 2027 && order.status === 'closed')).toEqual([]);
 });
 
@@ -62,9 +66,9 @@ test('admin combined import bootstraps the sample from an empty reference catalo
   const result = buildCsvImportPlan({ csvContent: sample, tabType: 'combined', items: [], assemblies: [],
     storageLocations: [], updateExistingItems: false, reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
   expect(result.totalErrorsCount).toBe(0);
-  expect(result.validEventsCount).toBe(27);
-  expect(result.validOrdersCount).toBe(22);
-  expect(result.validGeneralOrdersCount).toBe(11);
+  expect(result.validEventsCount).toBe(31);
+  expect(result.validOrdersCount).toBe(77);
+  expect(result.validGeneralOrdersCount).toBe(86);
   expect(result.validCheckoutsCount).toBe(countType('Ausleihe'));
   expect(result.validCheckoutsCount).toBeGreaterThan(0);
   expect(result.newFactions.map((faction) => `${faction.eventType}:${faction.name}`).sort()).toEqual(

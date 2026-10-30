@@ -239,9 +239,7 @@ export function FactionOrders() {
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullScreen={isMobile} fullWidth maxWidth="lg"
         slotProps={{ transition: { onEntered: () => setDialogReady(true), onExit: () => setDialogReady(false) } }}>
-        <DialogTitle sx={{ pr: 7 }}>
-          {t('pages.factionOrders.newFactionOrderList')}
-        </DialogTitle>
+        <DialogTitle sx={{ pr: 7 }}>{t('pages.factionOrders.newFactionOrderList')}</DialogTitle>
         <DialogContent dividers>
           {dialogReady && <FactionOrderForm
             assemblies={assemblies}

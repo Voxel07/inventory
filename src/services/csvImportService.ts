@@ -436,8 +436,8 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
           eventOccurrenceId: event.id, requestedQuantities });
         existingGeneralOrders.push(order);
         if (row.targetStatus !== 'draft') order = await transitionOrder(order.id, 'submit');
+        const assetAssignments: Record<string, string[]> = {};
         if (['ready', 'picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) {
-          const assetAssignments: Record<string, string[]> = {};
           for (const [id, quantity] of Object.entries(requestedQuantities)) {
             const item = items.find((candidate) => candidate.id === id) ?? [...new Map([...createdItemsMap.values()].map(item => [item.id, item])).values()].find((candidate) => candidate.id === id);
             if (item?.trackingMode === 'serialized') {
@@ -453,7 +453,9 @@ async function runCsvImportBatch({ newFactions, parsedItems, parsedAssemblies, p
         if (['picked_up', 'partially_returned', 'returned', 'closed'].includes(row.targetStatus)) order = await transitionOrder(order.id, 'pickup');
         // An order of consumables only is complete at pickup.
         if (['partially_returned', 'returned', 'closed'].includes(row.targetStatus) && row.returnedItems.length && order.status === 'picked_up') {
-          order = await returnOrder(order.id, resolve(row.returnedItems));
+          const returned = resolve(row.returnedItems);
+          order = await returnOrder(order.id, returned,
+            Object.entries(returned).flatMap(([itemId, quantity]) => (assetAssignments[itemId] ?? []).slice(0, quantity)));
         }
         if (row.targetStatus === 'closed') await transitionOrder(order.id, 'close');
         successGeneralOrders++;

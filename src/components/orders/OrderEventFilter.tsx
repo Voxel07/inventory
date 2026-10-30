@@ -1,4 +1,3 @@
-import { formatDate } from '../../utils/dateFormat';
 import { ToggleButton } from '../shared/ActionButtons';
 import { useId, type ReactNode } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, ToggleButtonGroup } from '@mui/material';
@@ -29,14 +28,14 @@ export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eve
       onChange={(_event, value: EventType | null) => { if (value) onEventTypeChange(value); }}
       sx={{ mb: 2, flexWrap: 'wrap' }}
     >
-      {eventTypes.map((type) => <ToggleButton title={translate('orders.orderEventFilter.filterOrdersByThisEventType')} key={type} value={type}>{type === 'LS' ? 'LightSim' : type}</ToggleButton>)}
+      {eventTypes.map((type) => <ToggleButton title={translate('orders.orderEventFilter.filterOrdersByThisEventType')} key={type} value={type}>{type}</ToggleButton>)}
     </ToggleButtonGroup>}
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
       <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
         <InputLabel id={labelId}>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
         <Select labelId={labelId} value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
           <MenuItem value="">{t('orders.orderEventFilter.allYears')}</MenuItem>
-          {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name} · {formatDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatDate(entry.endDate)}` : ''}</MenuItem>)}
+          {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name}</MenuItem>)}
         </Select>
       </FormControl>
       {children}

@@ -36,6 +36,13 @@
       "autoPort": false
     },
     {
+      "name": "vite-dev-login-3333",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "3333", "--strictPort"],
+      "env": { "VITE_API_URL": "http://localhost:8080", "VITE_OIDC_AUTHORITY": "", "VITE_OIDC_CLIENT_ID": "", "VITE_APP_URL": "http://localhost:3333" },
+      "port": 3333
+    },
+    {
       "name": "vite-dev-api-8090",
       "runtimeExecutable": "node",
       "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173", "--strictPort"],

@@ -9,15 +9,16 @@ interface Props {
   loading: boolean;
   onPageChange: (page: number) => void;
   onSizeChange: (size: number) => void;
+  pageSizeOptions?: number[];
 }
 
 /** Zero-based pagination for APIs that return a continuation rather than a total count. */
-export function ServerListPagination({ page, size, rowCount, more, loading, onPageChange, onSizeChange }: Props) {
+export function ServerListPagination({ page, size, rowCount, more, loading, onPageChange, onSizeChange, pageSizeOptions = [20, 50, 100] }: Props) {
   const t = useT();
   const from = rowCount ? page * size + 1 : 0;
   const to = rowCount ? page * size + rowCount : 0;
   return <TablePagination component="div" count={-1}
-    page={page} rowsPerPage={size} rowsPerPageOptions={[20, 50, 100]}
+    page={page} rowsPerPage={size} rowsPerPageOptions={pageSizeOptions}
     onPageChange={(_, value) => onPageChange(value)}
     onRowsPerPageChange={event => onSizeChange(Number(event.target.value))}
     labelRowsPerPage={t('shared.listPagination.rowsPerPage')}

@@ -42,6 +42,9 @@ public class ActorService {
     public static final String DEV_ISSUER = "dev";
     /** Pre-launch only: an administrator acts as the account with this ID for the request; events record both. */
     public static final String IMPERSONATE_HEADER = "X-Impersonate-User";
+    /** Development admins can preview a role without provisioning or changing an account. */
+    public static final String PREVIEW_ROLE_HEADER = "X-Preview-Role";
+    public static final String PREVIEW_FACTIONS_HEADER = "X-Preview-Factions";
 
     @jakarta.inject.Inject InventoryAccess privateAccess;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
@@ -58,6 +61,7 @@ public class ActorService {
 
     private UserAccount cached;
     private UserAccount authenticated;
+    private boolean previewingRole;
     private int privateMutationDepth;
     private int usageDepth;
 
@@ -77,6 +81,21 @@ public class ActorService {
     public UserAccount current() {
         if (cached != null) {
             if (!cached.active) throw ApiException.forbidden("This inventory account is deactivated");
+            if (previewingRole) {
+                if (users.isManaged(authenticated)) {
+                    if (!authenticated.active || authenticated.role != DomainEnums.UserRole.admin) {
+                        cached = null;
+                        throw ApiException.forbidden("Only active administrators may preview roles");
+                    }
+                    return cached;
+                }
+                // A projection must never be rebound to the stored admin role by a later transaction.
+                var admin = users.find(authenticated.id);
+                cached = null;
+                authenticated = admin;
+                cached = previewRole(admin, header(PREVIEW_ROLE_HEADER, null));
+                return cached;
+            }
             // Sync replay and response filters can open another transaction in the
             // same request. Reuse only an entity managed by the current context.
             if (users.isManaged(cached)) return cached;
@@ -141,6 +160,13 @@ public class ActorService {
         }
         authenticated = cached;
         String target = header(IMPERSONATE_HEADER, null);
+        String preview = header(PREVIEW_ROLE_HEADER, null);
+        if (preview != null) {
+            cached = null;
+            if (target != null) throw ApiException.badRequest("Choose account impersonation or role preview");
+            cached = previewRole(authenticated, preview);
+            previewingRole = true;
+        }
         if (target != null) {
             // A rejected impersonation must not leave the administrator cached for later calls in this request.
             cached = null;
@@ -153,6 +179,44 @@ public class ActorService {
     public UserAccount authenticated() {
         current();
         return authenticated;
+    }
+
+    /** An unmanaged authorization projection; the real admin remains unchanged in the persistence context. */
+    private UserAccount previewRole(UserAccount admin, String value) {
+        if (!devAuthEnabled || admin == null || !DEV_ISSUER.equals(admin.issuer))
+            throw ApiException.forbidden("Role preview requires development authentication");
+        if (!admin.active || admin.role != DomainEnums.UserRole.admin)
+            throw ApiException.forbidden("Only active administrators may preview roles");
+        var role = parseRole(value);
+        if (role == null) throw ApiException.badRequest("Unknown preview role");
+        var factions = new TreeSet<String>();
+        String requestedFactions = header(PREVIEW_FACTIONS_HEADER, "");
+        if (!requestedFactions.isBlank()) {
+            for (String key : requestedFactions.split(",", -1)) {
+                int separator = key.indexOf(':');
+                if (separator <= 0 || separator == key.length() - 1)
+                    throw ApiException.badRequest("Preview factions must be EVENT:slug keys");
+                String eventType = key.substring(0, separator).trim().toUpperCase(Locale.ROOT);
+                String slug = key.substring(separator + 1).trim().toLowerCase(Locale.ROOT);
+                if (!users.factionExists(eventType, slug)) throw ApiException.badRequest("Unknown preview faction");
+                factions.add(factionKey(eventType, slug));
+            }
+        }
+        var preview = new UserAccount();
+        preview.id = admin.id;
+        preview.issuer = admin.issuer;
+        preview.externalSubject = admin.externalSubject;
+        preview.name = admin.name;
+        preview.email = admin.email;
+        preview.active = admin.active;
+        preview.createdAt = admin.createdAt;
+        preview.updatedAt = admin.updatedAt;
+        preview.accessRevision = admin.accessRevision;
+        preview.ntfyTopic = admin.ntfyTopic;
+        preview.webhookUrl = admin.webhookUrl;
+        preview.setRoles(Set.of(role));
+        preview.factions = new java.util.ArrayList<>(factions);
+        return preview;
     }
 
     /** The impersonated account is the actor; domain events also record the administrator (impersonator_id). */

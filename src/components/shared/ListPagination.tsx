@@ -8,18 +8,19 @@ interface Props {
   onChange: (page: number) => void;
   pageSize: number;
   onPageSizeChange: (size: number) => void;
+  pageSizeOptions?: number[];
   loadingMore?: boolean;
   loadError?: boolean;
   onRetry?: () => void;
 }
 
-export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, loadingMore, loadError, onRetry }: Props) {
+export function ListPagination({ count, page, onChange, pageSize, onPageSizeChange, pageSizeOptions = [20, 50, 100], loadingMore, loadError, onRetry }: Props) {
   const t = useT();
   const pages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(count / pageSize));
   return (
     <Stack spacing={1} sx={{ width: '100%', minWidth: 0 }}>
       <TablePagination component="div" count={count} page={Math.max(0, Math.min(page, pages) - 1)}
-        rowsPerPage={pageSize} rowsPerPageOptions={[20, 50, 100]}
+        rowsPerPage={pageSize} rowsPerPageOptions={pageSizeOptions}
         onPageChange={(_, value) => onChange(value + 1)}
         onRowsPerPageChange={(event) => onPageSizeChange(Number(event.target.value))}
         labelRowsPerPage={t('shared.listPagination.rowsPerPage')}

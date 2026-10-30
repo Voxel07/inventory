@@ -28,6 +28,7 @@ import { UserRoleChips } from '../components/users/UserRoleChips';
 import { UserAccessHistory } from '../components/users/UserAccessHistory';
 import { useRoleLabels } from '../hooks/useRoleLabels';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { DevelopmentRolePreview } from '../components/users/DevelopmentRolePreview';
 
 function useRoleDescriptions(): Record<AccessRole, string> {
   const t = useT();
@@ -146,8 +147,14 @@ function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; f
 }
 
 export function UserManagement() {
-  const { user } = useAuth();
-  return canManageUsers(user) ? <AdminUserManagement /> : null;
+  const t = useT();
+  const { user, canPreviewRoles } = useAuth();
+  if (!canManageUsers(user) && !canPreviewRoles) return null;
+  return <Box>
+    <Typography variant="h4" sx={{ mb: 2, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('nav.userManagement')}</Typography>
+    {canPreviewRoles && <DevelopmentRolePreview />}
+    {canManageUsers(user) && <AdminUserManagement />}
+  </Box>;
 }
 
 function AdminUserManagement() {
@@ -160,7 +167,6 @@ function AdminUserManagement() {
   const [editing, setEditing] = useState<User | null>(null);
   const [history, setHistory] = useState<User | null>(null);
   return <Box>
-    <Typography variant="h4" sx={{ mb: 0.5, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{t('nav.userManagement')}</Typography>
     <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 3 } }}>
       {t('pages.userManagement.theAuthentikGroupInventoryGrantsAccessToTheInventorySet')}
     </Typography>

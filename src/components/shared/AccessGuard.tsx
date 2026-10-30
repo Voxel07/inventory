@@ -36,8 +36,8 @@ export function CatalogAccessGuard({ children }: { children: ReactNode }) {
 }
 
 export function AdminGuard({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  return canManageUsers(user) ? children : <Navigate to="/" replace />;
+  const { user, canPreviewRoles } = useAuth();
+  return canManageUsers(user) || canPreviewRoles ? children : <Navigate to="/" replace />;
 }
 
 export function SharingGroupsGuard({ children }: { children: ReactNode }) {

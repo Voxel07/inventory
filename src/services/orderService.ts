@@ -21,10 +21,11 @@ export function transitionOrder(id: string, action: 'submit' | 'ready' | 'pickup
   const statuses = { submit: 'submitted', ready: 'ready', pickup: 'picked_up', close: 'closed', cancel: 'cancelled' } as const;
   return changeOrderStatus<GeneralOrder>('general', id, statuses[action]);
 }
-export function returnOrder(id: string, returnedQuantities: Record<string, number>) {
+/** Serialized lines also need the returned asset IDs: the backend reconciles them one asset at a time. */
+export function returnOrder(id: string, returnedQuantities: Record<string, number>, returnedAssetIds: string[] = []) {
   return reconcileOrder<GeneralOrder>('general', id, { lines: Object.fromEntries(Object.entries(returnedQuantities).map(([itemId, returned]) => [itemId, {
     returned, damaged: 0, missing: 0, writtenOff: 0,
-  }])) });
+  }])), assets: Object.fromEntries(returnedAssetIds.map((assetId) => [assetId, { outcome: 'returned_good' as const }])) });
 }
 
 export function generalOrderCommand(id: string, action: 'prepare', data: GeneralOrderCommands['prepare']): Promise<GeneralOrder>;

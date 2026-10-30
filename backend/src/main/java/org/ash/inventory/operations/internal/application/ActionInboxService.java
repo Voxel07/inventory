@@ -36,7 +36,7 @@ public class ActionInboxService {
     }
     @Transactional
     public void remind(ReminderInput input) {
-        var user = actors.current(); orm.lock(user);
+        var user = actors.current(); orm.lockUser(user.id);
         if (live().stream().noneMatch(a -> a.key.equals(input.key()))) throw ApiException.notFound("Action is no longer available");
         if (input.remindAt() != null && (input.remindAt().isBefore(Instant.now()) || input.remindAt().isAfter(Instant.now().plus(Duration.ofDays(30))))) throw ApiException.badRequest("Choose a reminder within the next 30 days");
         var r = orm.reminder(user, input.key()).findFirst().orElse(null);

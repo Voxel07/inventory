@@ -54,7 +54,7 @@ export function OrderPreparationPanel() {
           title={<Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}><span>{entry.order.orderCode}</span>{statusChip(entry.order.status)}</Stack>}
           actions={[{ key: 'prepare', label: entry.order.status === 'preparing' ? t('operations.orderPreparationPanel.continue') : t('operations.orderPreparationPanel.prepare'),
             title: translate('operations.orderPreparationPanel.openTheOrderListToPrepareIt'), variant: 'contained', pinned: true, to: `/orders/faction/${entry.order.id}` }]}>
-          <Typography>{t('common.faction')} {entry.order.faction} · {entry.order.eventType === 'LS' ? 'LightSim' : entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
+          <Typography>{t('common.faction')} {entry.order.faction} · {entry.order.eventType} · {formatDate(entry.order.eventDate)}</Typography>
           <OperationDetail label={t('common.requestedPickup')}>{entry.order.requestedPickupDate != null ? formatDate(entry.order.requestedPickupDate) : undefined}</OperationDetail>
           <OperationDetail label={t('operations.orderPreparationPanel.progress')}>
             {`${sum(entry.order.preparedQuantities) + sum(entry.order.preparedAssemblyQuantities)}/${sum(entry.order.requestedQuantities) + sum(entry.order.requestedAssemblyQuantities)} ${t('operations.orderPreparationPanel.listUnits')}`}

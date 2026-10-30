@@ -396,7 +396,7 @@ export function FactionOrderDetail() {
       <Dialog open={editOpen} fullScreen={isMobile} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth
         slotProps={{ transition: { onEntered: () => setEditReady(true), onExit: () => setEditReady(false) } }}>
         <DialogTitle>{t('pages.factionOrderDetail.editFactionOrder')}</DialogTitle>
-        <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
+        <DialogContent dividers>
           {editReady && <FactionOrderForm
             initialData={order}
             assemblies={assemblies}
