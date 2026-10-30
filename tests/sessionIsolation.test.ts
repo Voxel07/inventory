@@ -107,9 +107,9 @@ const signIn = (id: string) => auth.setDevelopmentSession(`dev:${id}`, user(id))
 
 function logisticsRow() {
   return parseEventReportsFromCsv([{
-    Typ: 'Event', Eventtyp: 'DE', Eventdatum: '17-10-2026',
+    Typ: 'Event', Eventtyp: 'DE', Eventdatum: '17.10.2026',
     Teilnehmer: JSON.stringify(['alex', 'Mara'].map((personName) => ({ personName, roles: [{ role: 'event_crew' }] }))),
-    Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '17-10-2026 09:00' }]),
+    Zeitplan: JSON.stringify([{ category: 'in_game', title: 'Briefing', startsAt: '17.10.2026 09:00' }]),
   }], [], { eventTypes: ['DE'], factions: [] })[0];
 }
 
@@ -137,7 +137,7 @@ test('CSV imports create missing factions once and save attendee roles with data
   expect([...(await importCsvFactions(planned))]).toEqual([...ids]);
   expect(writes.filter((write) => write.path === '/api/factions')).toHaveLength(1);
   const row = parseEventReportsFromCsv([{
-    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '17-10-2026',
+    Typ: 'Event', Eventtyp: 'LS', Eventdatum: '17.10.2026',
     Teilnehmer: JSON.stringify([{ personName: 'Alex', roles: [{ role: 'faction_leader', faction: 'TERA' }] }]),
   }], [], { eventTypes: ['LS'], factions: planned })[0];
   expect(row.status).toBe('valid');

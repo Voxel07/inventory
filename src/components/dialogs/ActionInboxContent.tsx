@@ -13,7 +13,7 @@ import { useOperationCommand } from '../../hooks/useOperations';
 import { translate, useT } from '../../utils/naming';
 import { OperationForm } from '../operations/OperationForm';
 import { StateMessage } from '../common/StateMessage';
-import { formatDateTime } from '../../utils/dateFormat';
+import { formatDate, formatDateTime } from '../../utils/dateFormat';
 
 type Category = 'all' | 'notices' | 'tasks' | 'later';
 
@@ -42,12 +42,12 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
 
   const taskRow = (a: InboxAction) => <ListItem key={a.key} disableGutters sx={rowSx}>
     <Box sx={{ minWidth: 0 }}>
-      <Stack direction="row" useFlexGap sx={{ gap: 0.75, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>{a.title}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{a.title}</Typography>
+      <Stack direction="row" useFlexGap sx={{ gap: 0.75, alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}>
         <Chip size="small" variant="outlined" color={a.kind === 'overdue_return' ? 'error' : 'default'} label={labels[a.kind] ?? a.kind} />
-        {a.due && <Typography variant="caption" color="text.secondary">{t('common.due')}: {a.due}</Typography>}
+        {a.due != null && <Typography variant="caption" color={a.kind === 'overdue_return' ? 'error' : 'text.secondary'}>{t('common.due')}: {formatDate(a.due)}</Typography>}
+        {a.detail && <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>· {a.detail}</Typography>}
       </Stack>
-      {a.detail && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.25 }}>{a.detail}</Typography>}
       {a.remindAt != null && <Typography variant="caption" color="text.secondary">{t('dialogs.actionInboxContent.reminder')}: {formatDateTime(a.remindAt)}</Typography>}
     </Box>
     <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25 }}>

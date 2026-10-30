@@ -1035,7 +1035,6 @@ export default {
       actionFailed: 'The action failed',
     },
     equipmentOwnership: {
-      editKeeper: 'Edit keeper',
       externalProvider: 'External provider',
       generallyAvailable: 'Generally available',
       ownershipKeeperCommitments: 'Ownership, keeper & commitments',
@@ -1051,7 +1050,6 @@ export default {
       aboutCommitmentPolicy: 'About commitment policy',
       onlyMatchingCommitmentsCountTowardEventPlanningAndCheckoutStorage: 'Only matching commitments count toward event planning and checkout. Storage movements do not change ownership or commitments. Coordinate return to the owner using the agreed instructions.',
       editTheOwnerKeeperAndAvailability: 'Edit the owner, keeper and availability',
-      editOwnership: 'Edit ownership',
       recordAnAvailabilityCommitmentForAnEvent: 'Record an availability commitment for an event',
       recordCommitment: 'Record commitment',
       noCommitmentsRecorded: 'No commitments recorded.',

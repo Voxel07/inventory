@@ -1,4 +1,4 @@
-import { parseDateInput } from '../../utils/dateFormat';
+import { DATE_TIME_FORMAT, parseDateInput } from '../../utils/dateFormat';
 import { ATTENDEE_ROLES, FACTION_ROLES, type AttendeeRoleKind, type EventAttendeeInput, type EventTimelineInput } from '../../types/eventLogistics';
 import type { CsvReference } from './reference';
 
@@ -31,9 +31,9 @@ export function isCsvDate(value: string): boolean { return Number.isFinite(csvDa
 
 function time(value: unknown, required = false): number | null {
   if ((value == null || value === '') && !required) return null;
-  if (typeof value !== 'string') throw new Error('Zeit muss im Format DD-MM-YYYY HH:mm angegeben werden');
+  if (typeof value !== 'string') throw new Error(`Zeit muss im Format ${DATE_TIME_FORMAT} angegeben werden`);
   const parsed = parseDateInput(value, true);
-  if (typeof parsed !== 'number') throw new Error('Zeit muss im Format DD-MM-YYYY HH:mm angegeben werden');
+  if (typeof parsed !== 'number') throw new Error(`Zeit muss im Format ${DATE_TIME_FORMAT} angegeben werden`);
   return parsed;
 }
 

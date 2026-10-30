@@ -31,13 +31,13 @@ function PrivateOwnership({ item, canEdit, embedded = false, showSummary = true 
   return <Box component={embedded ? 'div' : Paper} sx={embedded ? {} : { p: { xs: 2, sm: 3 }, my: 2 }}>
     <Stack spacing={1}>
       {!embedded && <Typography variant="h6">{t('items.equipmentOwnership.ownershipKeeper')}</Typography>}
-      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit} />
+      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit}
+        actions={profile.data && <Button onClick={() => setEditing(profile.data!)}>{t('common.edit')}</Button>} />
       {profile.error && <Alert severity="error">{profile.error.message}</Alert>}
       {showSummary && <>
         <Typography variant="body2">{t('items.inventorySharing.owner')}: {item.access?.ownerName}</Typography>
         <Typography variant="body2">{t('items.equipmentOwnership.keeperContact')}: {[profile.data?.keeperName, profile.data?.keeperContact].filter(Boolean).join(' · ') || '—'}</Typography>
       </>}
-      {canEdit && profile.data && <Button sx={{ alignSelf: 'flex-start' }} onClick={() => setEditing(profile.data!)}>{t('items.equipmentOwnership.editKeeper')}</Button>}
     </Stack>
     {editing && <OperationForm title={t('items.equipmentOwnership.ownershipKeeper')} onClose={() => setEditing(null)}
       initial={{ keeperName: editing.keeperName ?? '', keeperContact: editing.keeperContact ?? '' }} fields={[
@@ -67,7 +67,10 @@ function EquipmentLending({ item, canEdit, embedded = false, showSummary = true,
         <Typography variant="h6">{t('items.equipmentOwnership.ownershipKeeperCommitments')}</Typography>
         <Typography variant="body2" color="text.secondary">{t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem')}</Typography>
       </>}
-      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit} />
+      <ItemResponsiblePerson itemId={item.id} canEdit={canEdit} actions={data && <>
+        <Button title={translate('items.equipmentOwnership.editTheOwnerKeeperAndAvailability')} onClick={() => setEditing(data)}>{t('common.edit')}</Button>
+        <Button title={translate('items.equipmentOwnership.recordAnAvailabilityCommitmentForAnEvent')} variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('items.equipmentOwnership.recordCommitment')}</Button>
+      </>} />
       {profile.isLoading && <Typography>{t('items.equipmentOwnership.loading')}</Typography>}
       {profile.error && <Alert severity="error" action={<Button title={translate('common.retryLoadingTheData')} onClick={() => void profile.refetch()}>{t('common.retry')}</Button>}>{profile.error.message}</Alert>}
       {data && <>
@@ -80,10 +83,6 @@ function EquipmentLending({ item, canEdit, embedded = false, showSummary = true,
           <Typography variant="body2">{t('items.equipmentOwnership.physicalInventory')}: {formatQuantity(item, (item.stock?.onHand ?? 0) + (item.stock?.checkedOut ?? 0) + (item.stock?.inTransit ?? 0))} · {item.access?.privateResource ? t('items.equipmentOwnership.privatelyOwned') : t('items.equipmentOwnership.organizationOwned')}: {formatQuantity(item, item.stock?.totalOwned ?? 0)}</Typography>
         </>}
         {data.availabilityPolicy !== 'available' && (embedded ? <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Typography variant="caption" color="text.secondary">{t('items.equipmentOwnership.commitmentPolicy')}</Typography><Tooltip arrow enterTouchDelay={0} title={t('items.equipmentOwnership.onlyMatchingCommitmentsCountTowardPlanningAndCheckoutStorageMovements')}><IconButton size="small" aria-label={t('items.equipmentOwnership.aboutCommitmentPolicy')}><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip></Stack> : <Alert severity="info">{t('items.equipmentOwnership.onlyMatchingCommitmentsCountTowardEventPlanningAndCheckoutStorage')}</Alert>)}
-        {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Button title={translate('items.equipmentOwnership.editTheOwnerKeeperAndAvailability')} onClick={() => setEditing(data)}>{t('items.equipmentOwnership.editOwnership')}</Button>
-          <Button title={translate('items.equipmentOwnership.recordAnAvailabilityCommitmentForAnEvent')} variant="outlined" disabled={data.availabilityPolicy !== 'commitment_required' || assetsLoading || assetsError} onClick={() => setOffering(data)}>{t('items.equipmentOwnership.recordCommitment')}</Button>
-        </Stack>}
         {data.availabilityPolicy === 'commitment_required' && data.commitments.length === 0 && <Typography variant="body2" color="text.secondary">{t('items.equipmentOwnership.noCommitmentsRecorded')}</Typography>}
         {data.commitments.map(c => <Card key={c.id} variant="outlined" sx={highlightAssetId && c.assetIds.includes(highlightAssetId) ? { borderColor: 'primary.main', borderWidth: 2 } : undefined}><CardContent><Stack spacing={1}>
           <Typography sx={{ fontWeight: 700 }}>{c.eventName || t('items.equipmentOwnership.dateRangeWithoutEventRestriction')} · {c.quantity} · {statuses[c.status]}</Typography>

@@ -257,7 +257,8 @@ export function AssetDetail() {
             <AssetMaintenance item={item} asset={asset} canEdit={canPerformMaintenance(user)} />
 
             <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}
-                actions={<InfoTip>{t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem')}</InfoTip>}>
+                actions={<InfoTip>{[t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem'),
+                    canEditAsset && t('items.itemResponsiblePerson.choosePersonOrEnterName')].filter(Boolean).join('\n\n')}</InfoTip>}>
                 <EquipmentOwnership item={item} canEdit={canEditAsset} embedded highlightAssetId={asset.id} />
             </DetailPanel>
             </Stack>

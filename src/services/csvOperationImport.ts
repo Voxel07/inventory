@@ -1,7 +1,7 @@
 import { createItemLookup } from '../utils/csv/reference';
 import { csvDate } from '../utils/csv/eventLogistics';
 import { optionalNumber } from '../utils/inputValues';
-import { calendarDate } from '../utils/dateFormat';
+import { DATE_FORMAT, calendarDate, matchesDateFormat } from '../utils/dateFormat';
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { normalizeLocationRef } from '../utils/csv/locations';
 import { apiRequest } from './apiClient';
@@ -33,9 +33,9 @@ export function createCsvOperationImporter(items: Item[], locations: Map<string,
   function resolve(value: unknown, field?: string): unknown {
     if (Array.isArray(value)) return value.map(entry => resolve(entry));
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolve(entry, key)]));
-    if (field && /(?:Date$|availableFrom$|availableUntil$|returnDue$)/.test(field) && typeof value === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(value)) {
+    if (field && /(?:Date$|availableFrom$|availableUntil$|returnDue$)/.test(field) && typeof value === 'string' && matchesDateFormat(value, false)) {
       const parsed = csvDate(value);
-      if (!Number.isFinite(parsed)) throw new Error('Invalid DD-MM-YYYY date');
+      if (!Number.isFinite(parsed)) throw new Error(`Invalid ${DATE_FORMAT} date`);
       return parsed;
     }
     if (typeof value !== 'string' || !value.startsWith('@')) return value;

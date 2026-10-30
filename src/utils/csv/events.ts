@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '../../utils/dateFormat';
 import { createItemLookup } from './reference';
 import { type Item, type EventReportStatus } from '../../types';
 import { csvDate, isCsvDate, parseEventAttendees, parseEventTimeline } from './eventLogistics';
@@ -59,7 +60,7 @@ export function parseEventReportsFromCsv(
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
     } else if (!isCsvDate(startDate) || !isCsvDate(endDate) || csvDate(endDate) < csvDate(startDate)) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum/Startdatum und Enddatum müssen gültige Daten (TT-MM-JJJJ) sein; Enddatum darf nicht vor dem Startdatum liegen';
+      statusMessage = `Eventdatum/Startdatum und Enddatum müssen gültige Daten (${DATE_FORMAT}) sein; Enddatum darf nicht vor dem Startdatum liegen`;
     } else if (unmatched.length > 0) {
       validationStatus = 'error';
       statusMessage = `Unbekannte Artikel: ${[...new Set(unmatched.map((component) => component.itemName))].join(', ')}`;

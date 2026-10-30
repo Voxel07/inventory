@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '../../utils/dateFormat';
 import { createItemLookup } from './reference';
 import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item, type StorageLocation } from '../../types';
@@ -62,7 +63,7 @@ export function parseReturnsFromCsv(
 
     if (date && !isCsvDate(date)) {
       validationStatus = 'error';
-      statusMessage = 'Datum muss im Format TT-MM-JJJJ angegeben werden';
+      statusMessage = `Datum muss im Format ${DATE_FORMAT} angegeben werden`;
     } else if (!itemName) {
       validationStatus = 'error';
       statusMessage = 'Fehlender Artikelname für Rückgabe';

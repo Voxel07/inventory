@@ -1037,7 +1037,6 @@ export default {
       actionFailed: 'Die Aktion ist fehlgeschlagen',
     },
     equipmentOwnership: {
-      editKeeper: 'Verwahrperson bearbeiten',
       externalProvider: 'Extern',
       generallyAvailable: 'Allgemein verfügbar',
       ownershipKeeperCommitments: 'Eigentum, Verwahrung & Zusagen',
@@ -1053,7 +1052,6 @@ export default {
       aboutCommitmentPolicy: 'Information zur Zusagen-Richtlinie',
       onlyMatchingCommitmentsCountTowardEventPlanningAndCheckoutStorage: 'Nur passende Zusagen zählen für die Eventplanung und Ausgabe. Lagerbewegungen ändern Eigentum und Zusagen nicht. Rückgabe an den Eigentümer gemäß den vereinbarten Anweisungen koordinieren.',
       editTheOwnerKeeperAndAvailability: 'Eigentümer, Verwahrer und Verfügbarkeit bearbeiten',
-      editOwnership: 'Eigentum bearbeiten',
       recordAnAvailabilityCommitmentForAnEvent: 'Eine Verfügbarkeitszusage für ein Event erfassen',
       recordCommitment: 'Zusage erfassen',
       noCommitmentsRecorded: 'Keine Zusagen erfasst.',

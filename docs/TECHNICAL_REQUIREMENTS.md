@@ -35,7 +35,7 @@ Source: [package.json](../package.json), [Vite configuration](../vite.config.ts)
 | UI state | Zustand `^5.0.15` | Keep UI preferences separate from server state |
 | Routing | React Router DOM `^7.18.4`, BrowserRouter, lazy Routes | Data router / loaders remain planned, PLAN-08 |
 | Localization | i18next `^26.4.4`, German and English | Key-only DE/EN translations, typed keys and catalog validation; PLAN-09 complete |
-| Dates | MUI X Date Pickers `^9.15.0`, Day.js `^1.11.23` | Localized DD-MM-YYYY / 24-hour pickers through one `LocalizationProvider` |
+| Dates | MUI X Date Pickers `^9.15.0`, Day.js `^1.11.23` | DD.MM.YYYY (`DATE_FORMAT` in `src/utils/dateFormat.ts`) / 24-hour pickers through one `LocalizationProvider` |
 | Maps | Leaflet `^1.9.4`, React Leaflet `^5.0.0` | Location hierarchy, geographic position and overlays |
 | Charts | Recharts `^3.10.1` | Dashboard / reporting presentation |
 | Labels and exports | qrcode `^1.5.4`, jsPDF `^4.2.1` | Generate labels and PDFs; import heavy exports on demand |

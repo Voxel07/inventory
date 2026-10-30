@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '../../utils/dateFormat';
 import { csvDate } from './eventLogistics';
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
@@ -188,7 +189,7 @@ export function parseItemsFromCsv(
 
     if ([batteryReplacementDue, bestBeforeDate].some(value => value && !Number.isFinite(csvDate(value)))) {
       status = 'error';
-      statusMessage = 'Datum muss im Format TT-MM-JJJJ angegeben werden';
+      statusMessage = `Datum muss im Format ${DATE_FORMAT} angegeben werden`;
     } else if (lotError || locationError || identityError || quantityError) {
       status = 'error';
       statusMessage = lotError || locationError || identityError || quantityError;

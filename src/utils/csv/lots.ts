@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '../../utils/dateFormat';
 import { csvDate, isCsvDate } from './eventLogistics';
 import type { CsvItemLot } from '../../types/csvImport';
 import { inputChoice, inputRows, inputText } from '../inputValues';
@@ -18,7 +19,7 @@ export function parseItemLots(value: string | undefined): CsvItemLot[] | undefin
     }
     // A lot is a number, an expiry date and a status; its stock is the quantity booked with it.
     const expiry = row.expiryDate == null ? '' : inputText(row.expiryDate).trim();
-    if (expiry && !isCsvDate(expiry)) throw new Error(`Charge ${lotNumber}: expiryDate muss ein gültiges Datum (DD-MM-YYYY) sein`);
+    if (expiry && !isCsvDate(expiry)) throw new Error(`Charge ${lotNumber}: expiryDate muss ein gültiges Datum (${DATE_FORMAT}) sein`);
     if (row.quantity === 0) throw new Error(`Charge ${lotNumber}: Eine Charge entsteht nur mit Bestand (quantity > 0)`);
     return {
       lotNumber, quantity: row.quantity,

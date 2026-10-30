@@ -48,6 +48,18 @@ function serviceWorkerBuildId(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        configure(proxy) {
+          // The browser calls Vite on the same origin; the upstream request is server-to-server.
+          proxy.on('proxyReq', (request) => request.removeHeader('origin'))
+        },
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(getGitTag()),
   },

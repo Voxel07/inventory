@@ -99,13 +99,13 @@ test('reference planning reuses catalog IDs and does not create factions for exc
   expect(existing.parsedEvents.find((row) => row.data.eventType === 'DE')?.attendees[0].roles[0].factionId).toBe('KGG');
   expect(buildCsvImportPlan({ ...input, tabType: 'items', reference: { eventTypes: [], factions: [] } }).newFactions).toEqual([]);
   const invalid = buildCsvImportPlan({ ...input, reference: { eventTypes: [], factions: [] },
-    csvContent: 'Typ;Name;Eventtyp;Eventdatum;Fraktion\nBestellung;Invalid;DE;17-10-2026;New\nAusleihe;Unknown;DE;;Other' });
+    csvContent: 'Typ;Name;Eventtyp;Eventdatum;Fraktion\nBestellung;Invalid;DE;17.10.2026;New\nAusleihe;Unknown;DE;;Other' });
   expect(invalid.newFactions).toEqual([]);
   expect(invalid.totalErrorsCount).toBe(2);
 });
 
 test('reference auto-creation does not accept missing event types or checkout factions', () => {
-  const result = buildCsvImportPlan({ csvContent: 'Typ;Name;Kategorie;Menge;Eventtyp;Eventdatum;Fraktion\nArtikel;Radio;Equipment;2;;;\nEvent;Unnamed;;;;17-10-2026;\nAusleihe;Radio;;1;DE;;',
+  const result = buildCsvImportPlan({ csvContent: 'Typ;Name;Kategorie;Menge;Eventtyp;Eventdatum;Fraktion\nArtikel;Radio;Equipment;2;;;\nEvent;Unnamed;;;;17.10.2026;\nAusleihe;Radio;;1;DE;;',
     tabType: 'combined', items: [], assemblies: [], storageLocations: [], updateExistingItems: false,
     reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
   expect(result.parsedEvents[0].status).toBe('error');

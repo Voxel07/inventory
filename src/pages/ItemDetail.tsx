@@ -8,6 +8,7 @@ import { DetailPanel, Field, FieldGrid, Metric, MetricList } from '../components
 import { EquipmentOwnership } from '../components/items/EquipmentOwnership';
 import { InventorySharing } from '../components/items/InventorySharing';
 import { ActionBar } from '../components/shared/ActionBar';
+import { InfoTip } from '../components/shared/InfoTip';
 import { Button, IconButton } from '../components/shared/ActionButtons';
 import { MediaImage } from '../components/common/MediaImage';
 import { useEffect, useState } from 'react';
@@ -55,7 +56,7 @@ import { useTransactions, useCreateTransaction } from '../hooks/useTransactions'
 import { formatQuantity, fromSteps, getItemStock } from '../utils/stock';
 import { buildStockHistory } from '../utils/stockHistory';
 import { formatStatus } from '../utils/formatters';
-import { formatDate, formatDateTime } from '../utils/dateFormat';
+import { formatDate, formatDateTime, formatInstantDate } from '../utils/dateFormat';
 import { useStorageLocations } from '../hooks/useStorageLocations';
 import { useUIStore } from '../store/uiStore';
 import { ItemForm } from '../components/forms/ItemForm';
@@ -248,7 +249,7 @@ export function ItemDetail() {
             <ResponsiveContainer width="100%" height={210}>
                 <LineChart data={stockHistory} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="timestamp" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(value: number) => formatDateTime(value)} stroke={theme.palette.text.secondary} fontSize={11} minTickGap={40} />
+                    <XAxis dataKey="timestamp" type="category" tickFormatter={(value: number) => formatDateTime(value)} stroke={theme.palette.text.secondary} fontSize={11} minTickGap={40} />
                     <YAxis domain={[0, 'auto']} stroke={theme.palette.text.secondary} fontSize={11} allowDecimals={false} tickFormatter={(value: number) => formatQuantity(item, value, false)} />
                     <ChartTooltip
                         isAnimationActive={false}
@@ -270,23 +271,25 @@ export function ItemDetail() {
     const transactionList = itemTransactions.length === 0 ? (
         <Typography variant="body2" color="text.secondary">{t('pages.itemDetail.noTransactionsYet')}</Typography>
     ) : isMobile ? (
-        <Stack component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
+        // The rows share columns so action, amount, date and person line up across the list; free width goes between the columns.
+        <Box component="ul" sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gridTemplateColumns: 'max-content max-content max-content minmax(0, max-content)', justifyContent: 'space-between', columnGap: 1 }}>
             {sortedTransactions.map((tx) => (
-                <Box component="li" key={tx.id} sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={tinyChip} />
-                        <Typography variant="body2" className="tabular" sx={{ fontWeight: 600 }}>
-                            {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${formatQuantity(item, tx.quantityChanged)}` : formatQuantity(item, tx.quantityChanged)}
-                        </Typography>
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                        {formatDateTime(tx.timestamp)} · {userName(tx)}
+                <Box component="li" key={tx.id} sx={{ display: 'grid', gridTemplateColumns: 'subgrid', gridColumn: '1 / -1', alignItems: 'center', py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Chip label={formatStatus(tx.transactionType)} color={txColor(tx.transactionType)} size="small" variant="outlined" sx={{ ...tinyChip, justifySelf: 'start', '& .MuiChip-label': { px: 0.75 } }} />
+                    <Typography variant="body2" className="tabular" sx={{ fontWeight: 600, textAlign: 'right' }}>
+                        {tx.quantityChanged > 0 && tx.transactionType === 'added' ? `+${formatQuantity(item, tx.quantityChanged)}` : formatQuantity(item, tx.quantityChanged)}
                     </Typography>
-                    {assetLabel(tx) && <Typography variant="body2" className="mono">{assetLabel(tx)}</Typography>}
-                    {(tx.reason || tx.notes) && <Typography variant="body2">{[tx.reason, tx.notes].filter(Boolean).join(' — ')}</Typography>}
+                    <Typography variant="body2" color="text.secondary" className="tabular" sx={{ whiteSpace: 'nowrap' }}>{formatInstantDate(tx.timestamp)}</Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap title={userName(tx)} sx={{ textAlign: 'right' }}>{userName(tx)}</Typography>
+                    {(assetLabel(tx) || tx.reason || tx.notes) && <Typography variant="caption" color="text.secondary"
+                        // Zero width with a full minimum keeps long reasons from widening the shared columns.
+                        sx={{ gridColumn: '1 / -1', width: 0, minWidth: '100%', boxSizing: 'border-box', mt: 0.5, pl: 1, borderLeft: 2, borderColor: 'divider', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+                        {[assetLabel(tx) && <Box component="span" key="asset" className="mono">{assetLabel(tx)}</Box>, tx.reason, tx.notes]
+                            .filter(Boolean).flatMap((part, index) => index ? [' · ', part] : [part])}
+                    </Typography>}
                 </Box>
             ))}
-        </Stack>
+        </Box>
     ) : (
         <TableContainer sx={{ maxHeight: 360 }}>
             <Table size="small" stickyHeader aria-label={t('pages.itemDetail.transactions')} sx={denseTable}>
@@ -342,7 +345,7 @@ export function ItemDetail() {
                                 : `${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
                         </Stack>
                     </Box>
-                    <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
+                    <ActionBar size="small" stretch buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
                         (canTransact || canCheckout) && { key: 'checkout', label: t('pages.itemDetail.cra'), icon: <SwapHorizIcon />,
                             variant: 'contained', pinned: true, onClick: () => setCheckoutOpen(true) },
                         canEdit && { key: 'edit', label: t('common.edit'), icon: <EditIcon />, variant: canTransact ? 'outlined' : 'contained', pinned: !canTransact && !canCheckout, onClick: () => setEditOpen(true) },
@@ -439,7 +442,8 @@ export function ItemDetail() {
                 </Stack>
 
                 <Stack spacing={1.5}>
-                    <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}>
+                    <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}
+                        actions={canEdit && <InfoTip>{t('items.itemResponsiblePerson.choosePersonOrEnterName')}</InfoTip>}>
                         <EquipmentOwnership item={item} canEdit={canEdit} embedded showSummary={false} />
                     </DetailPanel>
                 </Stack>

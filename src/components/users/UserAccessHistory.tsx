@@ -10,7 +10,8 @@ import { getUserAccessHistory } from '../../services/userService';
 import type { Faction, User } from '../../types';
 import type { UserAccessState } from '../../types/user';
 import { canManageUsers, factionKeyOf } from '../../utils/access';
-import { useAppLanguage, useT } from '../../utils/naming';
+import { formatDateTime } from '../../utils/dateFormat';
+import { useT } from '../../utils/naming';
 import { UserRoleChips } from './UserRoleChips';
 
 function AccessState({ state, factions }: { state: UserAccessState; factions: Faction[] }) {
@@ -29,7 +30,6 @@ function AccessState({ state, factions }: { state: UserAccessState; factions: Fa
 
 export function UserAccessHistory({ user, factions, onClose }: { user: User; factions: Faction[]; onClose: () => void }) {
   const t = useT();
-  const language = useAppLanguage();
   const { user: me } = useAuth();
   const allowed = canManageUsers(me);
   const [page, setPage] = useState(0);
@@ -38,7 +38,6 @@ export function UserAccessHistory({ user, factions, onClose }: { user: User; fac
     queryFn: () => getUserAccessHistory(user.id, page, size), gcTime: 0 });
   if (!allowed) return null;
   const rows = history.data?.rows ?? [];
-  const date = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
   return <Dialog open onClose={onClose} fullWidth maxWidth="xl">
     <DialogTitle>{t('pages.userManagement.accessHistory')}: {user.name || user.email}</DialogTitle>
     <DialogContent>
@@ -57,7 +56,7 @@ export function UserAccessHistory({ user, factions, onClose }: { user: User; fac
           {history.isPending && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.loadingHistory')}</TableCell></TableRow>}
           {history.isSuccess && !rows.length && <TableRow><TableCell colSpan={5}>{t('pages.userManagement.noAccessHistory')}</TableCell></TableRow>}
           {!history.isError && rows.map(entry => <TableRow key={entry.id} sx={{ '& td': { verticalAlign: 'top', py: 2 } }}>
-            <TableCell sx={{ whiteSpace: 'nowrap' }}>{date.format(new Date(entry.occurredAt))}</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(entry.occurredAt)}</TableCell>
             <TableCell>{entry.changedBy?.name || t('profile.unknownUser')}</TableCell>
             <TableCell><AccessState state={entry.before} factions={factions} /></TableCell>
             <TableCell><AccessState state={entry.after} factions={factions} /></TableCell>

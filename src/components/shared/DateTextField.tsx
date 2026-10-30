@@ -10,12 +10,9 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { PickerDay, type PickerDayProps } from '@mui/x-date-pickers/PickerDay';
 import { TimeField } from '@mui/x-date-pickers/TimeField';
 import dayjs, { type Dayjs } from 'dayjs';
-import { type DateFieldValue } from '../../utils/dateFormat';
+import { DATE_FORMAT, DATE_TIME_FORMAT, TIME_FORMAT, type DateFieldValue } from '../../utils/dateFormat';
 import { Button, IconButton } from './ActionButtons';
 import { useT } from '../../utils/naming';
-
-const DATE_FORMAT = 'DD-MM-YYYY';
-const DATE_TIME_FORMAT = 'DD-MM-YYYY HH:mm';
 
 /** Pickers exchange epoch milliseconds; date-only values represent midnight UTC. */
 function toDayjs(value: unknown, withTime = false): Dayjs | null {
@@ -42,7 +39,7 @@ function useDateValidity(message: string) {
   };
 }
 
-/** Shared field: date and date-time types render MUI pickers that display DD-MM-YYYY. */
+/** Shared field: date and date-time types render MUI pickers in the app-wide DATE_FORMAT. */
 export function TextField(props: TextFieldProps) {
   return props.type === 'date' || props.type === 'datetime-local' ? <PickerField {...props} /> : <MuiTextField {...props} />;
 }
@@ -229,9 +226,9 @@ export function DateRangeField({ startLabel, endLabel, start, end, onChange, wit
             onChange={pickDay} slots={{ day: RangeDay }} />
         </RangeContext.Provider>
         {withTime && <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1 }}>
-          <TimeField label={startLabel} size="small" ampm={false} format="HH:mm" value={startDate?.isValid() ? startDate : null} disabled={!startDate?.isValid()}
+          <TimeField label={startLabel} size="small" ampm={false} format={TIME_FORMAT} value={startDate?.isValid() ? startDate : null} disabled={!startDate?.isValid()}
             onChange={(time) => time?.isValid() && startDate && emit({ start: startDate.hour(time.hour()).minute(time.minute()), end: endDate })} />
-          <TimeField label={endLabel} size="small" ampm={false} format="HH:mm" value={endDate?.isValid() ? endDate : null} disabled={!endDate?.isValid()}
+          <TimeField label={endLabel} size="small" ampm={false} format={TIME_FORMAT} value={endDate?.isValid() ? endDate : null} disabled={!endDate?.isValid()}
             onChange={(time) => time?.isValid() && endDate && emit({ start: startDate, end: endDate.hour(time.hour()).minute(time.minute()) })} />
         </Stack>}
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', px: 2, pb: 1 }}>

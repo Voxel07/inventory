@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Autocomplete, Stack, TextField, Typography } from '@mui/material';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
@@ -7,7 +7,8 @@ import type { AccessPerson } from '../../types/inventoryAccess';
 import { Button } from '../shared/ActionButtons';
 import { useT } from '../../utils/naming';
 
-export function ItemResponsiblePerson({ itemId, canEdit }: { itemId: string; canEdit: boolean }) {
+/** `actions` are further edit buttons that share the save button's row. */
+export function ItemResponsiblePerson({ itemId, canEdit, actions }: { itemId: string; canEdit: boolean; actions?: ReactNode }) {
   const t = useT(); const client = useQueryClient(); const feedback = useMutationFeedback();
   const key = ['item-responsibility', itemId];
   const query = useQuery({ queryKey: key, queryFn: () => orderPickupApi.responsibility(itemId) });
@@ -24,8 +25,7 @@ export function ItemResponsiblePerson({ itemId, canEdit }: { itemId: string; can
   return <Stack spacing={1}>
     <Typography variant="subtitle2">{t('items.itemResponsiblePerson.responsibleForOrders')}</Typography>
     {canEdit ? <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        <Autocomplete<AccessPerson, false, false, true> freeSolo fullWidth size="small" options={people.data ?? []} value={value}
+      <Autocomplete<AccessPerson, false, false, true> freeSolo fullWidth size="small" options={people.data ?? []} value={value}
           disabled={query.isLoading || people.isLoading || save.isPending}
           getOptionLabel={person => typeof person === 'string' ? person : person.name}
           isOptionEqualToValue={(a, b) => typeof b !== 'string' && a.id === b.id}
@@ -33,10 +33,11 @@ export function ItemResponsiblePerson({ itemId, canEdit }: { itemId: string; can
             : person ? { responsiblePersonId: person.id, responsiblePersonName: person.name } : {})}
           onInputChange={(_, name, reason) => { if (reason === 'input') setDraft({ responsiblePersonName: name }); }}
           renderInput={params => <TextField {...params} label={t('common.responsiblePerson')}
-            helperText={t('items.itemResponsiblePerson.choosePersonOrEnterName')}
             slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, maxLength: 255 } }} />} />
-        <Button disabled={draft === null || save.isPending} sx={{ flexShrink: 0, alignSelf: 'flex-start' }}
+      <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+        <Button disabled={draft === null || save.isPending}
           onClick={() => { if (draft !== null) save.mutate(draft); }}>{t('common.save')}</Button>
+        {actions}
       </Stack>
       {people.error && <Alert severity="error">{people.error.message}</Alert>}
     </> : <Typography variant="body2">{query.data?.responsiblePersonName || t('common.unassigned')}</Typography>}

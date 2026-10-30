@@ -3,7 +3,7 @@ import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Box, Checkbox, FormControl, InputLabel, ListItemIcon, ListItemText, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Checkbox, FormControl, InputLabel, ListItemIcon, ListItemText, ListSubheader, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
@@ -89,7 +89,11 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const query = server?.query;
     const update = (patch: ItemQuery) => server?.onQueryChange({ ...server.query, ...patch });
     const eventType = (query ? query.eventType ?? '' : localEventType) as EventType | '';
-    const setEventType = (value: EventType | '') => query ? update({ eventType: value || undefined }) : setLocalEventType(value);
+    const setEventType = (value: EventType | '') => {
+        if (query) { update({ eventType: value || undefined, category: undefined }); return; }
+        setLocalEventType(value);
+        setLocalCategory('');
+    };
     const search = query ? query.search ?? '' : localSearch;
     const setSearch = (value: string) => query ? update({ search: value || undefined }) : setLocalSearch(value);
     const category = query ? query.category ?? '' : localCategory;
@@ -98,6 +102,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     const setLocationIds = (ids: string[]) => update({ locationId: ids.length ? ids : undefined });
     const serverCategories = useItemCategories();
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [locationFilterOpen, setLocationFilterOpen] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
     const [menu, setMenu] = useState<{ anchor: HTMLElement; row: ItemRow } | null>(null);
     const list = server?.list;
@@ -155,10 +160,14 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         </>;
     }
 
-    function clearFilters() {
-        if (query) { update({ category: undefined, eventType: undefined, locationId: undefined }); return; }
-        setCategory('');
-        setEventType('');
+    function clearFilters(clearSearch = false) {
+        if (query) {
+            update({ category: undefined, eventType: undefined, locationId: undefined, ...(clearSearch && { search: undefined }) });
+            return;
+        }
+        setLocalCategory('');
+        setLocalEventType('');
+        if (clearSearch) setLocalSearch('');
     }
 
     function rowActions(row: ItemRow): RowAction[] {
@@ -216,15 +225,20 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             {categories.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
         <TextField select label={t('nav.event')} value={eventType} size={compact ? 'medium' : 'small'} fullWidth
-            onChange={(event) => { setEventType(event.target.value as EventType | ''); setCategory(''); }}>
+            onChange={(event) => setEventType(event.target.value as EventType | '')}>
             <MenuItem value="">{t('lists.itemsList.allEvents')}</MenuItem>
             {eventTypes.map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
         {query && !locationStock && <FormControl size={compact ? 'medium' : 'small'} fullWidth sx={{ minWidth: 0 }}>
             <InputLabel id="item-location-filter-label">{t('lists.itemsList.locations')}</InputLabel>
             <Select multiple labelId="item-location-filter-label" label={t('lists.itemsList.locations')} value={locationIds}
+                open={locationFilterOpen} onOpen={() => setLocationFilterOpen(true)} onClose={() => setLocationFilterOpen(false)}
+                MenuProps={{ slotProps: { paper: { sx: { maxHeight: 'min(50dvh, 360px)' } }, list: { sx: { pt: 0 } } } }}
                 onChange={(event) => { const ids = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value; setLocationIds(ids.includes('') ? [] : ids); }}
-                renderValue={(ids) => ids.map((id) => locationOptions.get(id) ?? id).join(', ')}>
+                renderValue={(ids) => <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ids.map((id) => locationOptions.get(id) ?? id).join(', ')}</Box>}>
+                <ListSubheader sx={{ borderBottom: 1, borderColor: 'divider', py: 1 }}>
+                    <Button fullWidth variant="contained" onClick={() => setLocationFilterOpen(false)}>{t('lists.catalogParts.done')}</Button>
+                </ListSubheader>
                 <MenuItem value="">{t('lists.itemsList.allLocations')}</MenuItem>
                 {[...locationOptions].sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => <MenuItem key={id} value={id}>
                     <Checkbox checked={locationIds.includes(id)} size="small" /><ListItemText primary={name} />
@@ -235,7 +249,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
 
     const initialLoading = !items && (isLoading || (!loadError && loadingMore));
     const initialError = !items?.length && loadError && !isLoading;
-    const empty = !initialLoading && !initialError && (items?.length ?? 0) === 0;
+    const empty = !initialLoading && !initialError && (items?.length ?? 0) === 0 && !search.trim() && activeFilters === 0;
     const noMatches = !initialLoading && !initialError && !empty && rows.length === 0 && !filtersLoading;
 
     const content = (() => {
@@ -248,7 +262,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             action={onCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>{t('common.addItem')}</Button>} />;
         if (noMatches) return <StateMessage kind="no-matches" title={t('lists.itemsList.noMatchingItems')}
             description={t('lists.itemsList.checkTheSpellingOrRemoveFilters')}
-            action={<Button variant="outlined" onClick={() => { setSearch(''); clearFilters(); }}>{t('lists.itemsList.clearSearchAndFilters')}</Button>} />;
+            action={<Button variant="outlined" onClick={() => clearFilters(true)}>{t('lists.itemsList.clearSearchAndFilters')}</Button>} />;
         if (compact) return <>
             <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('nav.items')}>
                 {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id}
@@ -282,9 +296,9 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
     return <Box>
         {!showSearch ? null : compact ? <>
             <CatalogSearchBar scope={scope} search={search} onSearch={setSearch} label={t('common.searchItems')}
-                activeFilters={activeFilters} onOpenFilters={() => setFiltersOpen(true)} onClearFilters={clearFilters}
+                activeFilters={activeFilters} onOpenFilters={() => setFiltersOpen(true)} onClearFilters={() => clearFilters()}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
-            <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters}>
+            <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} resultCount={rows.length} activeFilters={activeFilters} onClear={() => clearFilters()}>
                 {filterControls}
             </FilterSheet>
         </> : <>

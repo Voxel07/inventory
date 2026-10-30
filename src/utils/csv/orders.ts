@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '../../utils/dateFormat';
 import { createItemLookup } from './reference';
 import { csvDate, isCsvDate } from './eventLogistics';
 import { type Item } from '../../types';
@@ -82,7 +83,7 @@ export function parseFactionOrdersFromCsv(
       statusMessage = 'Unbekannter oder fehlender Eventtyp';
     } else if (!isCsvDate(eventDate)) {
       validationStatus = 'error';
-      statusMessage = 'Eventdatum muss im Format TT-MM-JJJJ angegeben werden';
+      statusMessage = `Eventdatum muss im Format ${DATE_FORMAT} angegeben werden`;
     } else if (!faction) {
       validationStatus = 'error';
       statusMessage = `Fraktion "${rawFaction}" gehört nicht zum Eventtyp ${eventType}`;
