@@ -2,6 +2,7 @@ import { IconButton } from '../shared/ActionButtons';
 import { Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import { QuantityInput } from './QuantityInput';
 import { translate, useT } from '../../utils/naming';
 import { formatQuantity, usesPercentage } from '../../utils/stock';
@@ -15,17 +16,28 @@ interface Props {
   onChange: (value: string) => void;
   /** Percentage consumables show and accept 1% increments; 100% is one full unit. */
   item?: Pick<Item, 'unit' | 'quantityDecimals' | 'unitCapacity'> | null;
+  /** Cart-style pill: at one unit the minus button removes the line instead. */
+  onRemove?: () => void;
+  removeLabel?: string;
 }
 
 /** Requested quantities may exceed stock; preparation supplies an explicit ceiling. */
-export function QuantityControl({ label, value, max, onChange, item }: Props) {
+export function QuantityControl({ label, value, max, onChange, item, onRemove, removeLabel }: Props) {
   const t = useT();
   const percentage = usesPercentage(item);
   const quantity = Number(value) || 0;
   const step = (delta: number) => onChange(String(Math.max(0, Math.min(max ?? Infinity, quantity + delta))));
+  const removes = Boolean(onRemove) && quantity === 1;
   return <Stack direction="row" title={percentage ? t('forms.itemForm.percentageCapacity', { quantity: formatQuantity(item, 100) }) : undefined}
-    sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', '& input': { width: percentage ? 64 : 48 }, '& button': { p: 0.5, minWidth: 36, minHeight: 36 } }}>
-    <IconButton title={translate('orders.quantityControl.decreaseTheQuantityByOne')} size="small" disabled={quantity <= 0} onClick={() => step(-1)} aria-label={`${label}: ${t('orders.quantityControl.decrease')}`}><RemoveIcon fontSize="small" /></IconButton>
+    sx={[{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', '& input': { width: percentage ? 64 : 48 }, '& button': { p: 0.5, minWidth: 36, minHeight: 36 } },
+      Boolean(onRemove) && {
+        flexWrap: 'nowrap', border: 1, borderColor: 'divider', borderRadius: 999, '&:focus-within': { borderColor: 'primary.main' },
+        '& input': { width: percentage ? 56 : 40 }, '& button': { minWidth: 32, minHeight: 32 },
+        '& .order-quantity-input, & .order-quantity-input:focus': { border: 0, height: 32, px: 0.25, fontWeight: 600 },
+      }]}>
+    {removes
+      ? <IconButton title={removeLabel ?? t('common.remove')} size="small" color="error" onClick={onRemove} aria-label={`${label}: ${removeLabel ?? t('common.remove')}`}><DeleteOutlinedIcon fontSize="small" /></IconButton>
+      : <IconButton title={translate('orders.quantityControl.decreaseTheQuantityByOne')} size="small" disabled={quantity <= 0} onClick={() => step(-1)} aria-label={`${label}: ${t('orders.quantityControl.decrease')}`}><RemoveIcon fontSize="small" /></IconButton>}
     <QuantityInput label={percentage ? `${label} (%)` : item?.unit ? `${label} (${item.unit})` : label} value={value} max={max}
       onChange={(next) => { if (next === '' || Number.isSafeInteger(Number(next)) && Number(next) >= 0) onChange(next); }} />
     {percentage && <span aria-hidden="true">%</span>}

@@ -30,7 +30,7 @@ export function CatalogRow({ to, title, primary, secondary, selectable, selected
     {selectable && <Checkbox checked={selected} onChange={onToggleSelected} sx={{ ml: 0.5, p: 1.25 }}
       slotProps={{ input: { 'aria-label': t('lists.catalogParts.selectTitle', { title: title }) } }} />}
     <ButtonBase component={RouterLink} to={to} onClick={onClick} sx={{
-      flex: 1, minWidth: 0, display: 'block', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
+      flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center', textAlign: 'left', px: 2, py: 0.75, minHeight: 48,
       '&:hover': { bgcolor: 'action.hover' }, '&.Mui-focusVisible': { bgcolor: 'action.focus', outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
     }}>
       <Box component="span" sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>

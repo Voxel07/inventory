@@ -46,6 +46,7 @@ import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { OrderListSection, type OrderListEntry } from './OrderListSection';
 import { ORDER_CATALOG_PAGE_SIZE } from './OrderCatalogPager';
 import { QuantityControl } from './QuantityControl';
+import { OrderReviewLine } from './OrderReviewLine';
 import { OrderPickupGroups } from './OrderPickupGroups';
 import { CatalogSearchField } from './CatalogSearchField';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
@@ -151,6 +152,7 @@ export function GeneralOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
           <Typography variant="caption" color="text.secondary">{item.category} · {t('enum.itemStatus.available')}: {formatQuantity(item, item.stock?.available ?? 0)}</Typography>
         </Box>
         <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
+          onRemove={() => setQuantities((current) => ({ ...current, [item.id]: '' }))} removeLabel={translate('orders.generalOrders.removeThisItemFromTheOrder')}
           onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
       </Stack>
     </Paper>
@@ -255,16 +257,17 @@ export function GeneralOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
           {chosenIds.length > 0 && <Box>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="h6" sx={{ mb: 1 }}>{t('ordering.reviewStep')}</Typography>
-            <Stack spacing={0.5}>
-              {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0).map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 1 }}>
-                <Stack direction="row" useFlexGap sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography sx={{ flex: '1 1 160px', fontWeight: 700 }}>{item.name}</Typography>
-                  <QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
-                    onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />
-                  <Button title={translate('orders.generalOrders.removeThisItemFromTheOrder')} size="small" color="error" onClick={() => setQuantities((current) => ({ ...current, [item.id]: '' }))}>{t('common.remove')}</Button>
-                </Stack>
-              </Paper>)}
-            </Stack>
+            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }}>
+              {(chosen.data ?? []).filter((item) => Number(quantities[item.id]) > 0)
+                .map((item) => ({ item, projected: (item.stock?.available ?? 0) - Number(quantities[item.id]) }))
+                // Shortages first, like the faction order review.
+                .sort((a, b) => Number(b.projected < 0) - Number(a.projected < 0))
+                .map(({ item, projected }) => <OrderReviewLine key={item.id} name={item.name}
+                  stock={{ projected, available: item.stock?.available ?? 0, format: (quantity) => formatQuantity(item, quantity) }}
+                  actions={<QuantityControl label={`${item.name} ${t('common.quantity')}`} value={quantities[item.id] ?? ''} item={item}
+                    onRemove={() => setQuantities((current) => ({ ...current, [item.id]: '' }))} removeLabel={translate('orders.generalOrders.removeThisItemFromTheOrder')}
+                    onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: value }))} />} />)}
+            </Paper>
           </Box>}
           <Divider />
           <Accordion key={editing === 'new' ? 'new' : editing?.id} defaultExpanded={itemRequests.length > 0} disableGutters>

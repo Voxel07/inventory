@@ -37,12 +37,7 @@ interface Props {
 export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry, collapsible }: Props) {
   const t = useT();
   const compact = useCompactCatalog();
-  if (collapsible) return <Accordion disableGutters sx={{ mb: 3 }}>
-    <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{title}</Typography></AccordionSummary>
-    <AccordionDetails><OrderListSection {...{ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }} /></AccordionDetails>
-  </Accordion>;
-  return <Box sx={{ mb: 3 }}>
-    <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>
+  const content = <>
     <Paper sx={{ overflow: 'hidden' }}>
       {!count && <Typography color="text.secondary" sx={{ p: 2 }}>
         {isLoading ? t('orders.orderListSection.loading') : loadError ? t('orders.orderListSection.ordersCouldNotBeLoaded') : emptyMessage}
@@ -69,6 +64,14 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
     {loadError && <Alert severity="error" sx={{ mt: 1 }} action={onRetry && <Button title={translate('orders.orderListSection.loadAgain')} onClick={onRetry}>{t('common.tryAgain')}</Button>}>
       {t('orders.orderListSection.ordersCouldNotBeLoaded')}</Alert>}
     <LoadMore list={list} />
+  </>;
+  if (collapsible) return <Accordion disableGutters sx={{ mb: 3 }}>
+    <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{title}</Typography></AccordionSummary>
+    <AccordionDetails>{content}</AccordionDetails>
+  </Accordion>;
+  return <Box sx={{ mb: 3 }}>
+    <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>
+    {content}
   </Box>;
 }
 

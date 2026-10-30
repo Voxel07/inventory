@@ -7,7 +7,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { getPreviousFactionOrder } from '../../services/factionOrderService';
 import { Button, ToggleButton, IconButton } from '../shared/ActionButtons';
 import { MediaImage } from '../common/MediaImage';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -26,8 +26,6 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { TextField } from '../shared/DateTextField';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -36,12 +34,10 @@ import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
 import GridViewIcon from '@mui/icons-material/GridView';
 import ViewListIcon from '@mui/icons-material/ViewList';
-import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import EditIcon from '@mui/icons-material/Edit';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { Dialog } from '../shared/ClosableDialog';
 import { DialogContent, DialogTitle } from '@mui/material';
@@ -58,7 +54,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { canWriteFaction, factionKeyOf } from '../../utils/access';
 import { formatQuantity, getItemStock } from '../../utils/stock';
 import { itemImageUrl } from '../../utils/itemImages';
-import { assemblyAvailability } from '../../utils/factionOrderQuantities';
 import { apiFileUrl } from '../../services/apiClient';
 import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { ListPagination } from '../shared/ListPagination';
@@ -66,6 +61,7 @@ import { ResizableScrollBox } from '../shared/ResizableScrollBox';
 import { ServerListPagination } from '../shared/ServerListPagination';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { QuantityControl } from '../orders/QuantityControl';
+import { OrderReviewGroup, OrderReviewLine, type ReviewStock } from '../orders/OrderReviewLine';
 import { CatalogSearchField } from '../orders/CatalogSearchField';
 import { ItemRequestEditor, ItemRequestLink, ItemRequestNoteInfo, ItemRequestOutcome, ItemRequestStatusChip } from '../orders/ItemRequests';
 import { toItemRequestDrafts, toItemRequestInputs, type ItemRequestDraft } from '../../utils/itemRequests';
@@ -81,8 +77,10 @@ interface ReviewEntry {
   id: string;
   name: string;
   kind: 'assembly' | 'item' | 'request';
-  detail: string;
+  detail?: string;
   value: string;
+  /** Remaining stock after the whole order; requests have none. */
+  stock?: ReviewStock;
   shortage: boolean;
   item?: Item;
   request?: ItemRequestDraft;
@@ -100,15 +98,6 @@ interface Props {
   onSubmit: (data: FactionOrderFormData) => void;
 }
 
-function AvailabilityWarning({ message }: { message: string }) {
-  return <Tooltip title={message} arrow>
-    <Box component="span" tabIndex={0} aria-label={message}
-      sx={{ display: 'inline-flex', verticalAlign: 'middle', color: 'warning.main', ml: 0.75 }}>
-      <WarningAmberIcon fontSize="small" />
-    </Box>
-  </Tooltip>;
-}
-
 export function FactionOrderForm({
   assemblies,
   initialData,
@@ -120,8 +109,6 @@ export function FactionOrderForm({
   onSubmit,
 }: Props) {
   const t = useT();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const setActiveEventType = useUIStore((state) => state.setActiveEventType);
   const catalog = useFactionCatalog();
   const { user } = useAuth();
@@ -197,13 +184,17 @@ export function FactionOrderForm({
   const visibleAssemblies = filterCatalogAssemblies(sortedAssemblies, search,
     assembly => assembly.id in assemblyQuantities || Boolean(assembly.eventTypes?.includes(eventType)));
   const { page: currentAssemblyPage, entries: pageAssemblies } = catalogPage(visibleAssemblies, assemblyPage, assemblyPageSize);
-  const requiredItemIds = [...Object.keys(quantities), ...Object.keys(comparison?.requestedQuantities ?? {}),
-    ...[...pageAssemblies, ...assemblies.filter(assembly => Number(assemblyQuantities[assembly.id]) > 0)].flatMap(assembly => Object.keys(assembly.itemQuantities ?? {}))];
-  const onOrder = useItemsByIds(requiredItemIds);
-  const items = [...new Map([...(orderable.data?.rows ?? []), ...(onOrder.data ?? [])].map(item => [item.id, item])).values()];
   const previous = useQuery({ queryKey: ['faction-orders', 'previous', eventType, faction, eventDate, initialData?.id],
     enabled: Boolean(faction && eventDate), networkMode: 'offlineFirst',
     queryFn: () => getPreviousFactionOrder(eventType, faction, eventDate, initialData?.id) });
+  const lastYear = comparison ?? previous.data;
+  const lastYearItems = lastYear ? factionOrderItemBaseline(lastYear) : {};
+  const lastYearAssemblies = lastYear ? factionOrderAssemblyBaseline(lastYear) : {};
+  const lastYearLabel = lastYear ? String(new Date(lastYear.eventDate).getUTCFullYear()) : '';
+  const requiredItemIds = [...Object.keys(quantities), ...Object.keys(lastYearItems),
+    ...[...pageAssemblies, ...assemblies.filter(assembly => Number(assemblyQuantities[assembly.id]) > 0)].flatMap(assembly => Object.keys(assembly.itemQuantities ?? {}))];
+  const onOrder = useItemsByIds(requiredItemIds);
+  const items = [...new Map([...(orderable.data?.rows ?? []), ...(onOrder.data ?? [])].map(item => [item.id, item])).values()];
   const { data: categories = [] } = useQuery({ queryKey: ['item-categories'], queryFn: getItemCategories, networkMode: 'offlineFirst' });
 
   const availableByItem = new Map(items.map((item) => [
@@ -252,100 +243,61 @@ export function FactionOrderForm({
     item.id,
     (availableByItem.get(item.id) ?? 0) - (orderDemandByItem.get(item.id) ?? 0),
   ]));
-  const shortageCount = [...projectedStockByItem.values()]
-    .reduce((total, projected) => total + Math.max(0, -projected), 0);
-  const stockWarning = t('ordering.stockWarning');
+  function projectedAssemblyStock(assembly: Assembly) {
+    const components = Object.entries(assembly.itemQuantities ?? {}).filter(([, count]) => count > 0);
+    // Keep deficits visible instead of clamping the remaining assembly count to zero.
+    return components.length ? Math.min(...components.map(([itemId, count]) =>
+      Math.floor((projectedStockByItem.get(itemId) ?? 0) / count))) : 0;
+  }
   const itemHasShortage = (id: string) => (projectedStockByItem.get(id) ?? 0) < 0;
   const assemblyHasShortage = (assembly: Assembly) => Number(assemblyQuantities[assembly.id]) > 0
     && Object.keys(assembly.itemQuantities ?? {}).some(itemHasShortage);
   const reviewEntries: ReviewEntry[] = [
     ...selectedItems.map((item): ReviewEntry => ({
       key: `item-${item.id}`, id: item.id, name: item.name, kind: 'item', item,
-      detail: `${item.category} · ${t('enum.itemStatus.available')}: ${formatQuantity(item, availableByItem.get(item.id) ?? 0)}`,
+      stock: { projected: projectedStockByItem.get(item.id) ?? 0, available: availableByItem.get(item.id) ?? 0, format: (quantity) => formatQuantity(item, quantity) },
       value: quantities[item.id] ?? '', shortage: itemHasShortage(item.id),
     })),
     ...selectedAssemblies.map((assembly): ReviewEntry => ({
-      key: `assembly-${assembly.id}`, id: assembly.id, name: assembly.name, kind: 'assembly',
-      detail: `${t('enum.value.assembly')} · ${Object.keys(assembly.itemQuantities ?? {}).length} ${t('forms.factionOrderForm.components')}`,
+      key: `assembly-${assembly.id}`, id: assembly.id, name: assembly.name, kind: 'assembly', detail: t('enum.value.assembly'),
+      stock: { projected: projectedAssemblyStock(assembly), format: String },
       value: assemblyQuantities[assembly.id] ?? '', shortage: assemblyHasShortage(assembly),
     })),
     ...itemRequests.map((request): ReviewEntry => ({
       key: `request-${request.key}`, id: request.key, name: request.name, kind: 'request', request,
       detail: t('itemRequests.kind'), value: request.quantity, shortage: false,
     })),
-  ];
+  ].sort((a, b) => Number(b.shortage) - Number(a.shortage));
+  const shortageLines = reviewEntries.filter((entry) => entry.shortage).length;
   const reviewTerm = reviewSearch.trim().toLocaleLowerCase();
-  const filteredReview = reviewEntries.filter((entry) => `${entry.name} ${entry.detail} ${entry.request?.note ?? ''}`.toLocaleLowerCase().includes(reviewTerm));
+  const filteredReview = reviewEntries.filter((entry) => `${entry.name} ${entry.detail ?? ''} ${entry.request?.note ?? ''}`.toLocaleLowerCase().includes(reviewTerm));
   const reviewPagination = useClientPagination(filteredReview, { initialPageSize: PAGE_SIZE_OPTIONS[0] });
+  const droppedSinceLastYear = [
+    ...Object.entries(lastYearItems).filter(([id, before]) => before > 0 && !(Number(quantities[id]) > 0))
+      .map(([id, before]) => ({ key: `item-${id}`, id, assembly: false, before, name: items.find((item) => item.id === id)?.name ?? id })),
+    ...Object.entries(lastYearAssemblies).filter(([id, before]) => before > 0 && !(Number(assemblyQuantities[id]) > 0))
+      .map(([id, before]) => ({ key: `assembly-${id}`, id, assembly: true, before, name: assemblies.find((assembly) => assembly.id === id)?.name ?? id })),
+  ].filter((entry) => entry.name.toLocaleLowerCase().includes(reviewTerm)).sort((a, b) => a.name.localeCompare(b.name));
   const selectedLineCount = selectedEntryCount + itemRequests.length;
   const canReview = Boolean(selectedEvent && faction && selectedLineCount);
   const canSave = canReview && !isLoading && !onOrder.isLoading && !onOrder.isError;
   const saveHint = `${initialData
     ? t('forms.factionOrderForm.updateTheOrderListWithTheChangedQuantities')
     : t('forms.factionOrderForm.createTheOrderListWithTheseQuantities')}${canReview ? '' : ` ${t('ordering.noSelection')}`}`;
-  const changes = (() => {
-    if (!comparison) return [];
-    const comparisonItems = factionOrderItemBaseline(comparison);
-    const comparisonAssemblies = factionOrderAssemblyBaseline(comparison);
-    const itemIds = new Set([...Object.keys(comparisonItems), ...Object.keys(currentQuantities)]);
-    const itemChanges = [...itemIds].flatMap((itemId) => {
-      const before = comparisonItems[itemId] ?? 0;
-      const after = currentQuantities[itemId] ?? 0;
-      if (before === after) return [];
-      const item = items.find((candidate) => candidate.id === itemId);
-      return [{ resourceKey: `item-${itemId}`, name: item?.name ?? itemId, before, after }];
-    });
-    const assemblyIds = new Set([
-      ...Object.keys(comparisonAssemblies),
-      ...Object.keys(currentAssemblyQuantities),
-    ]);
-    const assemblyChanges = [...assemblyIds].flatMap((assemblyId) => {
-      const before = comparisonAssemblies[assemblyId] ?? 0;
-      const after = currentAssemblyQuantities[assemblyId] ?? 0;
-      if (before === after) return [];
-      const assembly = assemblies.find((candidate) => candidate.id === assemblyId);
-      return [{ resourceKey: `assembly-${assemblyId}`, name: assembly?.name ?? assemblyId, before, after }];
-    });
-    return [...itemChanges, ...assemblyChanges];
-  })();
-
   const baselineYear = previousOrder ? String(new Date(previousOrder.eventDate).getUTCFullYear()) : '';
-  const lastYear = comparison ?? previousOrder;
-  const lastYearItems = lastYear ? factionOrderItemBaseline(lastYear) : {};
-  const lastYearAssemblies = lastYear ? factionOrderAssemblyBaseline(lastYear) : {};
   // Wide layouts only: the selected quantity next to last year's, e.g. "2026: 2 → 3".
   const lastYearChange = (before: number | undefined, value: string | undefined) => {
     const after = Number(value) || 0;
     if (!lastYear || !after || (before ?? 0) === after) return null;
-    const year = String(new Date(lastYear.eventDate).getUTCFullYear());
     return <Chip size="small" variant="outlined" color={after > (before ?? 0) ? 'primary' : 'default'}
-      label={`${year}: ${before ?? 0} → ${after}`} sx={{ display: { xs: 'none', md: 'inline-flex' }, flexShrink: 0 }} />;
+      label={`${lastYearLabel}: ${before ?? 0} → ${after}`} sx={{ display: { xs: 'none', md: 'inline-flex' }, flexShrink: 0 }} />;
   };
+  // Review rows: last year's quantity whenever it differs, on every screen size.
+  const lastYearNote = (before: number | undefined, value: string) => !lastYear || (before ?? 0) === (Number(value) || 0) ? null
+    : <Typography variant="caption" color="text.secondary">{t('ordering.lastYearQuantity', { year: lastYearLabel, quantity: before ?? 0 })}</Typography>;
   const baselineLabel = previousOrder
     ? t('forms.factionOrderForm.useYearAsBaseline', { year: baselineYear })
     : t('forms.factionOrderForm.usePreviousYearAsBaseline');
-  const comparisonSummary = comparison && (
-    <Alert severity={changes.length ? 'info' : 'success'} sx={{ mb: 2 }}>
-      <Typography variant="subtitle2">
-        {changes.length
-          ? t('forms.factionOrderForm.changeCountChangesFromThePreviousList', { changeCount: String(changes.length) })
-          : t('forms.factionOrderForm.noChangesFromThePreviousList')}
-      </Typography>
-      {changes.length > 0 && (
-        <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
-          {changes.map((change) => (
-            <Chip
-              key={change.resourceKey}
-              size="small"
-              label={`${change.name}: ${change.before} → ${change.after}`}
-              color={change.after > change.before ? 'primary' : 'default'}
-            />
-          ))}
-        </Stack>
-      )}
-    </Alert>
-  );
-
   function copyPrevious() {
     if (!previousOrder) return;
     useUIStore.getState().showSnackbar(t('forms.factionOrderForm.baselineApplied', { year: baselineYear }), 'success');
@@ -518,23 +470,18 @@ export function FactionOrderForm({
                   <Paper
                     key={item.id}
                     variant="outlined"
-                    sx={{ p: 1, position: 'relative', borderColor: projected < 0 ? 'warning.main' : isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', display: 'flex', flexDirection: 'column', borderColor: projected < 0 ? 'warning.main' : isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
                   >
                     {image ? <MediaImage src={image} alt={item.name} sx={{ width: '100%', height: 76, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 76, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><AddIcon color="disabled" /></Box>}
-                    <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{item.name}{projected < 0 && <AvailabilityWarning message={stockWarning} />}</Typography>
-                    <Typography variant="caption" color={available > 0 ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {formatQuantity(item, available)}</Typography>
-                    {/* Always reserve the line so the tile does not grow when the item is added. */}
-                    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, visibility: (orderDemandByItem.get(item.id) ?? 0) > 0 ? 'visible' : 'hidden' }} color={projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 0) ? 'warning.main' : 'success.main'}>
-                      {t('forms.factionOrderForm.afterOrder')}: {formatQuantity(item, projected)}
+                    <Typography sx={{ flex: 1, fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.3, minHeight: '2.6em', overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                    <Typography variant="body2" className="tabular" aria-label={`${t('enum.itemStatus.available')}: ${formatQuantity(item, projected)}`}
+                      sx={{ mt: 0.5, fontWeight: 600, textAlign: 'center', color: projected < 0 ? 'warning.main' : projected > 0 ? 'success.main' : 'text.secondary' }}>
+                      {formatQuantity(item, projected)}
                     </Typography>
-                    <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item} />
+                    <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'center' }}>
+                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item}
+                        onRemove={() => removeItem(item.id)} removeLabel={t('forms.factionOrderForm.removeAll')} />
                     </Stack>
-                    {isSelected && !isMobile && (
-
-                      <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(item.id)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
-
-                    )}
                   </Paper>
                 );
               })}
@@ -543,39 +490,21 @@ export function FactionOrderForm({
             <ResizableScrollBox key={currentItemPage} storageKey="faction-order-items-height" defaultHeight={360} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {pageItems.map((item) => {
                 const quantity = Number(quantities[item.id]) || 0;
-                const image = itemImageUrl(item, undefined, '96x96');
                 const available = availableByItem.get(item.id) ?? 0;
                 const projected = projectedStockByItem.get(item.id) ?? available;
                 return (
                   <Paper key={item.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: projected < 0 ? 'warning.main' : quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'action.selected' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      {image
-                        ? <MediaImage src={image} alt={item.name} sx={{ width: 36, height: 36, flexShrink: 0, objectFit: 'contain', borderRadius: 0.75 }} />
-                        : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><GridViewIcon color="disabled" fontSize="small" /></Box>}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{item.name}{projected < 0 && <AvailabilityWarning message={stockWarning} />}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                          {item.category} · {t('enum.itemStatus.available')}: {available}
-                          {(orderDemandByItem.get(item.id) ?? 0) > 0 && (
-                            <Box component="span" sx={{ fontWeight: 700, color: projected <= 0 ? 'error.main' : projected <= (item.minStock ?? 0) ? 'warning.main' : 'success.main' }}>
-                              {' · '}{t('forms.factionOrderForm.afterOrder')}: {projected}
-                            </Box>
-                          )}
+                      <Stack direction="row" spacing={1} sx={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                        <Typography variant="body2" className="tabular"
+                          aria-label={`${t('enum.itemStatus.available')}: ${formatQuantity(item, projected)}`} sx={{ color: projected < 0 ? 'warning.main' : projected > 0 ? 'success.main' : 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 600, textAlign: 'center' }}>
+                          {formatQuantity(item, projected)}
                         </Typography>
-                      </Box>
-                      {lastYearChange(lastYearItems[item.id], quantities[item.id])}
-                      <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-                        <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item} />
-                        {!isMobile && (
-                          <Box sx={{ width: 34, flexShrink: 0 }}>
-                            {quantity > 0 && (
-
-                              <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(item.id)}><DeleteIcon fontSize="inherit" /></IconButton>
-
-                            )}
-                          </Box>
-                        )}
                       </Stack>
+                      {lastYearChange(lastYearItems[item.id], quantities[item.id])}
+                      <QuantityControl label={`${item.name} ${t('forms.factionOrderForm.quantity')}`} value={quantities[item.id] ?? ''} onChange={(value) => setQuantity(item.id, value)} item={item}
+                        onRemove={() => removeItem(item.id)} removeLabel={t('forms.factionOrderForm.removeAll')} />
                     </Stack>
                   </Paper>
                 );
@@ -600,27 +529,24 @@ export function FactionOrderForm({
             <ResizableScrollBox key={currentAssemblyPage} storageKey="faction-order-assemblies-height" defaultHeight={280} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 1 }}>
               {pageAssemblies.map((assembly) => {
                 const isSelected = Number(assemblyQuantities[assembly.id]) > 0;
-                const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
-                const shortage = assemblyHasShortage(assembly);
+                const projected = projectedAssemblyStock(assembly);
                 return (
                   <Paper
                     key={assembly.id}
                     variant="outlined"
-                    sx={{ p: 1, position: 'relative', borderColor: shortage ? 'warning.main' : isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
+                    sx={{ p: 1, position: 'relative', display: 'flex', flexDirection: 'column', borderColor: projected < 0 ? 'warning.main' : isSelected ? 'primary.main' : 'divider', bgcolor: isSelected ? 'action.selected' : 'background.paper' }}
                   >
                     {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: '100%', height: 64, objectFit: 'contain', borderRadius: 0.75, display: 'block', mb: 0.75 }} /> : <Box sx={{ height: 64, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75, mb: 0.75 }}><CategoryIcon color="primary" /></Box>}
-                    <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.15, minHeight: '2.3em' }}>{assembly.name}{shortage && <AvailabilityWarning message={stockWarning} />}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('forms.factionOrderForm.components')}</Typography>
-                    <Typography variant="caption" color={available ? 'success.main' : 'error.main'}>{t('enum.itemStatus.available')}: {available}</Typography>
-                  <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
-                    <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
-                      <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
+                    <Typography sx={{ flex: 1, fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.3, minHeight: '2.6em', overflowWrap: 'anywhere' }}>{assembly.name}</Typography>
+                    <Box sx={{ mt: 0.5, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 36 }}>
+                      <Typography variant="body2" className="tabular" aria-label={`${t('enum.itemStatus.available')}: ${projected}`}
+                        sx={{ fontWeight: 600, textAlign: 'center', color: projected < 0 ? 'warning.main' : projected > 0 ? 'success.main' : 'text.secondary' }}>{projected}</Typography>
+                      <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`} sx={{ position: 'absolute', right: 0 }}><InfoOutlinedIcon fontSize="small" /></IconButton>
+                    </Box>
+                    <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'center' }}>
+                      <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)}
+                        onRemove={() => removeItem(assembly.id, true)} removeLabel={t('forms.factionOrderForm.removeAll')} />
                     </Stack>
-                    {isSelected && !isMobile && (
-
-                      <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(assembly.id, true)} sx={{ position: 'absolute', top: 4, right: 4 }}><DeleteIcon fontSize="small" /></IconButton>
-
-                    )}
                   </Paper>
                 );
               })}
@@ -629,30 +555,21 @@ export function FactionOrderForm({
             <ResizableScrollBox key={currentAssemblyPage} storageKey="faction-order-assemblies-height" defaultHeight={280} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {pageAssemblies.map((assembly) => {
                 const quantity = Number(assemblyQuantities[assembly.id]) || 0;
-                const available = assemblyAvailability(assembly, (itemId) => availableByItem.get(itemId) ?? 0);
-                const shortage = assemblyHasShortage(assembly);
+                const projected = projectedAssemblyStock(assembly);
                 return (
-                  <Paper key={assembly.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: shortage ? 'warning.main' : quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'action.selected' : 'background.paper' }}>
+                  <Paper key={assembly.id} variant="outlined" sx={{ px: 0.75, py: 0.4, borderColor: projected < 0 ? 'warning.main' : quantity ? 'primary.main' : 'divider', bgcolor: quantity ? 'action.selected' : 'background.paper' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                       {assembly.image ? <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name} sx={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 0.75, flexShrink: 0 }} /> : <Box sx={{ width: 36, height: 36, flexShrink: 0, bgcolor: 'grey.100', display: 'grid', placeItems: 'center', borderRadius: 0.75 }}><CategoryIcon color="primary" fontSize="small" /></Box>}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{assembly.name}{shortage && <AvailabilityWarning message={stockWarning} />}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{Object.keys(assembly.itemQuantities ?? {}).length} {t('forms.factionOrderForm.components')} · {t('enum.itemStatus.available')}: {available}</Typography>
-                      </Box>
+                      <Stack direction="row" spacing={1} sx={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: 'anywhere' }}>{assembly.name}</Typography>
+                        <Typography variant="body2" className="tabular"
+                          aria-label={`${t('enum.itemStatus.available')}: ${projected}`} sx={{ color: projected < 0 ? 'warning.main' : projected > 0 ? 'success.main' : 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 600, textAlign: 'center' }}>
+                          {projected}
+                        </Typography>
+                      </Stack>
                     <IconButton title={t('forms.factionOrderForm.showAssemblyContents')} size="small" onClick={() => setInfoAssembly(assembly)} aria-label={`${assembly.name}: ${t('forms.factionOrderForm.showContents')}`}><InfoOutlinedIcon fontSize="small" /></IconButton>
                       {lastYearChange(lastYearAssemblies[assembly.id], assemblyQuantities[assembly.id])}
-                      <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-                        <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)} />
-                        {!isMobile && (
-                          <Box sx={{ width: 34, flexShrink: 0 }}>
-                            {quantity > 0 && (
-
-                              <IconButton title={t('forms.factionOrderForm.removeAll')} size="small" color="error" onClick={() => removeItem(assembly.id, true)}><DeleteIcon fontSize="inherit" /></IconButton>
-
-                            )}
-                          </Box>
-                        )}
-                      </Stack>
+                      <QuantityControl label={`${assembly.name} ${t('forms.factionOrderForm.quantity')}`} value={assemblyQuantities[assembly.id] ?? ''} onChange={(value) => setQuantity(assembly.id, value, true)}
+                        onRemove={() => removeItem(assembly.id, true)} removeLabel={t('forms.factionOrderForm.removeAll')} />
                     </Stack>
                   </Paper>
                 );
@@ -674,96 +591,94 @@ export function FactionOrderForm({
         </>}
 
         {step === 'review' && (
-          <Box>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
-              <Typography variant="h6" component="h2" tabIndex={-1} ref={stepHeadingRef}>{t('ordering.reviewStep')}</Typography>
-              {shortageCount > 0 && <Tooltip title={stockWarning} arrow>
-                <Chip tabIndex={0} size="small" color="warning" icon={<WarningAmberIcon />} label={t('ordering.limitedAvailability')} />
-              </Tooltip>}
-              <Chip size="small" color="primary" sx={{ ml: 'auto' }} label={t('ordering.selectedLines', { count: selectedLineCount })} />
-            </Stack>
-            {/* Order summary and search share one row on wide screens. */}
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ alignItems: { md: 'center' }, mb: 1 }}>
-              <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, px: 1.5, py: 0.75 }}>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}>
-                  <Typography variant="subtitle2">{selectedEvent?.name} · {faction}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('common.requestedPickup')}: {requestedPickupDate === '' ? '—' : formatDate(requestedPickupDate)}
-                  </Typography>
-                  {notes.trim() && <Typography variant="body2" noWrap title={notes.trim()} sx={{ flex: '1 1 160px', minWidth: 0 }}>
-                    {t('forms.factionOrderForm.orderNote')}: {notes.trim()}
-                  </Typography>}
-                </Stack>
-              </Paper>
-              <CatalogSearchField label={t('ordering.searchOrder')} value={reviewSearch} sx={{ width: { md: 320 }, flexShrink: 0 }}
-                onChange={(value) => { setReviewSearch(value); reviewPagination.setPage(1); }} />
-            </Stack>
-            {comparisonSummary}
-            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, maxHeight: { sm: 420 }, overflowY: 'auto' }}>
-              {reviewPagination.pageItems.map((entry) => (
-                <Stack key={entry.key} component="li" direction="row" spacing={1} useFlexGap
-                  sx={{ alignItems: 'center', flexWrap: 'wrap', px: 1, py: 0.5, borderBottom: 1, borderColor: 'divider',
-                    borderLeft: entry.shortage ? 3 : 0, borderLeftColor: 'warning.main', bgcolor: entry.shortage ? 'action.hover' : undefined,
-                    '&:last-of-type': { borderBottom: 0 } }}>
-                  {/* Name, details, link and outcome share one line and wrap only when it runs out. */}
-                  <Stack direction="row" useFlexGap sx={{ flex: '1 1 240px', minWidth: 0, alignItems: 'baseline', flexWrap: 'wrap', columnGap: 1.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{entry.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{entry.detail}</Typography>
-                    {entry.shortage && <Typography variant="caption" color="warning.main">{t('ordering.limitedAvailability')}</Typography>}
-                    {entry.request?.link && <Box sx={{ minWidth: 0, maxWidth: '40%' }}><ItemRequestLink link={entry.request.link} noWrap /></Box>}
-                    {entry.request?.request && <ItemRequestOutcome request={entry.request.request} />}
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end', ml: 'auto', flexShrink: 0 }}>
-                    {entry.request && <ItemRequestNoteInfo note={entry.request.note} />}
-                    {entry.kind === 'item' && lastYearChange(lastYearItems[entry.id], entry.value)}
-                    {entry.kind === 'assembly' && lastYearChange(lastYearAssemblies[entry.id], entry.value)}
-                    {entry.request && <ItemRequestStatusChip status={entry.request.request?.status ?? 'open'} />}
-                    {entry.request?.request && entry.request.request.status !== 'open'
-                      ? <Typography variant="body2">{entry.value} ×</Typography>
-                      : <>
-                        <QuantityControl label={`${entry.name} ${t('forms.factionOrderForm.quantity')}`} value={entry.value} item={entry.item}
-                          onChange={(value) => {
-                            if (entry.kind !== 'request') setQuantity(entry.id, value, entry.kind === 'assembly');
-                            else if (Number(value) >= 1) setItemRequests((current) => current.map((request) => request.key === entry.id ? { ...request, quantity: value } : request));
-                          }} />
-                        <IconButton title={entry.kind === 'request' ? t('itemRequests.remove') : entry.kind === 'assembly'
-                          ? t('forms.factionOrderForm.removeThisAssemblyFromTheOrderList') : t('forms.factionOrderForm.removeThisItemFromTheOrderList')}
-                          size="small" color="error" onClick={() => {
-                            if (entry.kind === 'request') setItemRequests((current) => current.filter((request) => request.key !== entry.id));
-                            else removeItem(entry.id, entry.kind === 'assembly');
-                          }}><DeleteIcon fontSize="small" /></IconButton>
-                      </>}
-                  </Stack>
-                </Stack>
-              ))}
+          <Stack spacing={1.5}>
+            <Typography variant="h6" component="h2" tabIndex={-1} ref={stepHeadingRef}>{t('ordering.reviewStep')}</Typography>
+            <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 1.5, py: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle2">{selectedEvent?.name} · {faction}</Typography>
+                <Typography variant="body2" color="text.secondary" role="status">
+                  {t('common.requestedPickup')}: {requestedPickupDate === '' ? '—' : formatDate(requestedPickupDate)}
+                  {' · '}{t('ordering.selectedLines', { count: selectedLineCount })}
+                </Typography>
+                {notes.trim() && <Typography variant="body2" color="text.secondary" noWrap title={notes.trim()}>
+                  {t('forms.factionOrderForm.orderNote')}: {notes.trim()}
+                </Typography>}
+              </Box>
+              <Button type="button" size="small" startIcon={<EditIcon />} disabled={isLoading} onClick={() => setStep('select')}>{t('common.edit')}</Button>
             </Paper>
-            {!filteredReview.length && <Typography color="text.secondary" sx={{ p: 2 }}>{t('common.noMatchingItems')}</Typography>}
-            <ListPagination count={filteredReview.length} page={reviewPagination.page} onChange={reviewPagination.setPage}
-              pageSize={reviewPagination.pageSize} pageSizeOptions={PAGE_SIZE_OPTIONS} onPageSizeChange={reviewPagination.onPageSizeChange} />
-          </Box>
+            {/* Search only pays off on long lists. */}
+            {reviewEntries.length > 10 && <CatalogSearchField label={t('ordering.searchOrder')} value={reviewSearch}
+              onChange={(value) => { setReviewSearch(value); reviewPagination.setPage(1); }} />}
+            <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }}>
+              {reviewPagination.pageItems.map((entry, index, page) => {
+                const removeLabel = entry.kind === 'request' ? t('itemRequests.remove') : entry.kind === 'assembly'
+                  ? t('forms.factionOrderForm.removeThisAssemblyFromTheOrderList') : t('forms.factionOrderForm.removeThisItemFromTheOrderList');
+                const remove = () => {
+                  if (entry.kind === 'request') setItemRequests((current) => current.filter((request) => request.key !== entry.id));
+                  else removeItem(entry.id, entry.kind === 'assembly');
+                };
+                // Shortages sort first; captions mark where each group starts on this page.
+                const groupStart = shortageLines > 0 && (index === 0 || page[index - 1].shortage !== entry.shortage);
+                return <Fragment key={entry.key}>
+                  {groupStart && <OrderReviewGroup label={entry.shortage ? t('ordering.needsAttention') : t('ordering.otherLines')} />}
+                  <OrderReviewLine name={entry.name} stock={entry.stock}
+                    details={<>
+                      {entry.detail && <Typography variant="caption" color="text.secondary">{entry.detail}</Typography>}
+                      {entry.request?.link && <Box sx={{ minWidth: 0, maxWidth: '60%' }}><ItemRequestLink link={entry.request.link} noWrap /></Box>}
+                      {entry.request?.request && <ItemRequestOutcome request={entry.request.request} />}
+                      {entry.kind === 'item' && lastYearNote(lastYearItems[entry.id], entry.value)}
+                      {entry.kind === 'assembly' && lastYearNote(lastYearAssemblies[entry.id], entry.value)}
+                    </>}
+                    actions={<>
+                      {entry.request && <ItemRequestNoteInfo note={entry.request.note} />}
+                      {entry.request && <ItemRequestStatusChip status={entry.request.request?.status ?? 'open'} />}
+                      {entry.request?.request && entry.request.request.status !== 'open'
+                        ? <Typography variant="body2">{entry.value} ×</Typography>
+                        : <QuantityControl label={`${entry.name} ${t('forms.factionOrderForm.quantity')}`} value={entry.value} item={entry.item}
+                            onRemove={remove} removeLabel={removeLabel}
+                            onChange={(value) => {
+                              if (entry.kind !== 'request') setQuantity(entry.id, value, entry.kind === 'assembly');
+                              else if (Number(value) >= 1) setItemRequests((current) => current.map((request) => request.key === entry.id ? { ...request, quantity: value } : request));
+                            }} />}
+                    </>} />
+                </Fragment>;
+              })}
+              {!filteredReview.length && <Typography component="li" color="text.secondary" sx={{ p: 2 }}>{t('common.noMatchingItems')}</Typography>}
+              {droppedSinceLastYear.length > 0 && <OrderReviewGroup label={t('ordering.notOrderedThisYear', { year: lastYearLabel })} />}
+              {droppedSinceLastYear.map((entry) => <OrderReviewLine key={entry.key} name={entry.name}
+                details={<>
+                  {entry.assembly && <Typography variant="caption" color="text.secondary">{t('enum.value.assembly')}</Typography>}
+                  <Typography variant="caption" color="text.secondary">{t('ordering.lastYearQuantity', { year: lastYearLabel, quantity: entry.before })}</Typography>
+                </>}
+                actions={<Button type="button" size="small" startIcon={<AddIcon />} onClick={() => setQuantity(entry.id, String(entry.before), entry.assembly)}>
+                  {t('ordering.addAgain')}
+                </Button>} />)}
+              <Box component="li" sx={{ px: 0.5, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
+                <Button type="button" size="small" startIcon={<AddIcon />} disabled={isLoading} onClick={() => setStep('select')}>{t('ordering.addEquipment')}</Button>
+              </Box>
+            </Paper>
+            {filteredReview.length > PAGE_SIZE_OPTIONS[0] && <ListPagination count={filteredReview.length} page={reviewPagination.page} onChange={reviewPagination.setPage}
+              pageSize={reviewPagination.pageSize} pageSizeOptions={PAGE_SIZE_OPTIONS} onPageSizeChange={reviewPagination.onPageSizeChange} />}
+          </Stack>
         )}
 
         <QueryFeedback isLoading={onOrder.isLoading} error={onOrder.error || previous.error} />
         {/* Negative offset covers the dialog's bottom padding so rows never show below the actions. */}
         <Box sx={{ position: 'sticky', bottom: -16, bgcolor: 'background.paper', py: 1.5, zIndex: 1, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" sx={{ mb: 1 }} role="status">{t('ordering.selectedLines', { count: selectedLineCount })}</Typography>
+          {/* The review summary shows the count itself. */}
+          {step === 'select' && <Typography variant="body2" sx={{ mb: 1 }} role="status">{t('ordering.selectedLines', { count: selectedLineCount })}</Typography>}
           {step === 'select'
             ? <Button fullWidth type="button" variant="contained" size="large" endIcon={<ArrowForwardIcon />}
                 title={canReview ? undefined : t('ordering.noSelection')} disabled={!canReview || isLoading} onClick={reviewOrder}>
                 {t('ordering.reviewOrder')}
               </Button>
-            : <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button type="button" variant="outlined" startIcon={<ArrowBackIcon />} disabled={isLoading} onClick={() => setStep('select')}>
-                  {t('ordering.addMoreItems')}
-                </Button>
-                <Tooltip title={saveHint} arrow>
-                  <Box component="span" tabIndex={canSave ? undefined : 0} sx={{ display: 'block', flex: 1 }}>
-                    <Button fullWidth type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={!canSave}>
-                      {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('ordering.finishReviewAndSaveDraft'))}
-                    </Button>
-                  </Box>
-                </Tooltip>
-              </Stack>}
+            : <Tooltip title={saveHint} arrow>
+                <Box component="span" tabIndex={canSave ? undefined : 0} sx={{ display: 'block' }}>
+                  <Button fullWidth type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={!canSave}>
+                    {submitLabel ?? (initialData ? t('forms.factionOrderForm.updateOrderList') : t('ordering.saveDraft'))}
+                  </Button>
+                </Box>
+              </Tooltip>}
         </Box>
       </Stack>
       <Dialog open={Boolean(infoAssembly)} onClose={() => setInfoAssembly(null)} fullWidth maxWidth="sm">

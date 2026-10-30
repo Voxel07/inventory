@@ -7,9 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  ButtonBase,
   CircularProgress,
-  Collapse,
   DialogContent,
   DialogTitle,
   Stack,
@@ -41,7 +39,6 @@ import { useOrderEventSelection } from '../hooks/useOrderEventSelection';
 import { ItemRequestBadge } from '../components/orders/ItemRequests';
 import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 const ACTIVE_ORDER_STATUSES: readonly FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'];
@@ -255,39 +252,22 @@ export function FactionOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
 
 type FactionState = 'finished' | 'draft' | 'none';
 
-/**
- * Which factions of the selected event have submitted a list. Phones show one summary line with a dot per
- * faction that expands into the labelled list.
- */
+/** Each faction's order state, always visible for the selected event. */
 function FactionStatusOverview({ factions, loading, failed }: { factions: { faction: string; state: FactionState }[]; loading: boolean; failed: boolean }) {
   const t = useT();
-  const compact = useCompactCatalog();
-  const [open, setOpen] = useState(false);
   if (failed || (!loading && !factions.length)) return null;
   const label = (state: FactionState) => state === 'finished' ? t('enum.value.submitted') : state === 'draft' ? t('enum.value.draft') : t('pages.factionOrders.noOrder');
   const color = (state: FactionState) => state === 'finished' ? 'success.main' : state === 'draft' ? 'warning.main' : 'error.main';
-  const dot = (state: FactionState) => <Box aria-hidden="true" sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color(state), flexShrink: 0 }} />;
   const chips = <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
     {factions.map(({ faction, state }) => <Tooltip key={faction} title={label(state)} arrow>
-      <Stack direction="row" spacing={0.75} aria-label={`${faction}: ${label(state)}`} sx={{ alignItems: 'center', px: 1, py: 0.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-        {dot(state)}
-        <Typography variant="body2" sx={{ lineHeight: 1.2, whiteSpace: 'nowrap' }}>{faction}</Typography>
+      <Stack direction="row" spacing={0.75} aria-label={`${faction}: ${label(state)}`}
+        sx={{ alignItems: 'center', px: 1, py: 0.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+        <Box aria-hidden="true" sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color(state), flexShrink: 0 }} />
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{faction}</Typography>
       </Stack>
     </Tooltip>)}
   </Stack>;
   const heading = <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{t('pages.factionOrders.factionOrderStatus')}</Typography>;
   if (loading) return <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>{heading}<CircularProgress size={16} aria-label={t('pages.factionOrders.loadingOrderStatus')} /></Stack>;
-  if (!compact) return <Stack spacing={0.5} sx={{ mb: 3 }}>{heading}{chips}</Stack>;
-  const submitted = factions.filter(({ state }) => state === 'finished').length;
-  return <Box sx={{ mb: 2 }}>
-    <ButtonBase onClick={() => setOpen((value) => !value)} aria-expanded={open}
-      sx={{ width: '100%', minHeight: 44, justifyContent: 'flex-start', gap: 1, px: 1, borderRadius: 1, border: 1, borderColor: 'divider', textAlign: 'left' }}>
-      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-        {t('pages.factionOrders.factionsSubmitted', { submitted, total: factions.length })}
-      </Typography>
-      <Stack direction="row" spacing={0.5} sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>{factions.map(({ faction, state }) => <Box key={faction} sx={{ display: 'flex' }}>{dot(state)}</Box>)}</Stack>
-      <ExpandMoreIcon fontSize="small" sx={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />
-    </ButtonBase>
-    <Collapse in={open}><Box sx={{ pt: 1 }}>{chips}</Box></Collapse>
-  </Box>;
+  return <Box sx={{ mb: { xs: 2, md: 3 } }}>{chips}</Box>;
 }
