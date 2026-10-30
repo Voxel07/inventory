@@ -16,7 +16,7 @@ import { Button, IconButton, Tab } from '../shared/ActionButtons';
 import { FormDialog, DialogForm } from '../shared/FormDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { QueryFeedback } from '../common/QueryFeedback';
-import { EventMetric } from './EventWorkspace';
+import { StatStrip } from '../shared/StatStrip';
 import { timelineHooks } from '../../hooks/useEventLogistics';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditEvents } from '../../utils/access';
@@ -95,11 +95,12 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
       </Stack>
       <QueryFeedback isLoading={query.isLoading} error={query.error} />
       {ready && <>
-        {!!schedule.length && category !== 'catering' && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 3 }}>
-          <EventMetric label={t('pages.eventTimeline.scheduledEntries')} value={schedule.length} detail={t('pages.eventTimeline.acrossDayCountDays', { dayCount: String(days.length) })} />
-          <EventMetric label={t('pages.eventTimeline.progress')} value={`${completed} / ${schedule.length}`} detail={t('pages.eventTimeline.entriesCompleted')} />
-          <EventMetric label={t('pages.eventTimeline.firstScheduledDay')} value={formatDate(calendarDate(new Date(schedule[0].startsAt)))} detail={t('pages.eventTimeline.throughLastEnd', { lastEnd: String(formatDate(calendarDate(new Date(lastEnd)))) })} />
-        </Box>}
+        {!!schedule.length && category !== 'catering' && <StatStrip sx={{ mb: { xs: 2, md: 3 } }} minTileWidth={200} stats={[
+          { label: t('pages.eventTimeline.scheduledEntries'), value: schedule.length, detail: t('pages.eventTimeline.acrossDayCountDays', { dayCount: String(days.length) }) },
+          { label: t('pages.eventTimeline.progress'), value: `${completed} / ${schedule.length}`, detail: t('pages.eventTimeline.entriesCompleted') },
+          { label: t('pages.eventTimeline.firstScheduledDay'), value: formatDate(calendarDate(new Date(schedule[0].startsAt))),
+            detail: t('pages.eventTimeline.throughLastEnd', { lastEnd: String(formatDate(calendarDate(new Date(lastEnd)))) }) },
+        ]} />}
         {!schedule.length ? <Paper sx={{ p: { xs: 3, sm: 5 }, textAlign: 'center', borderStyle: 'dashed' }}>
           {category === 'catering' ? <RestaurantOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} /> : category === 'in_game' ? <SportsEsportsOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} /> : <ConstructionOutlinedIcon sx={{ fontSize: 42, color: 'primary.main', mb: 1 }} />}
           <Typography variant="h6" component="h3">{category === 'catering' ? t('pages.eventTimeline.planCrewCatering') : category === 'in_game' ? t('pages.eventTimeline.startPlanningTheGame') : t('pages.eventTimeline.startPreparingTheEvent')}</Typography>

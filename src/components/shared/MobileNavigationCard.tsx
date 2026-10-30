@@ -30,7 +30,7 @@ export function MobileNavigationCard() {
       <Stack spacing={1.5}>
         <Typography variant="h6">{t('profile.mobileNavigation.title')}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {t('profile.mobileNavigation.description')} {t('profile.mobileNavigation.limits', MOBILE_NAV_LIMITS)}
+          {t('profile.mobileNavigation.description')} {t('profile.mobileNavigation.limits', { bottom: MOBILE_NAV_LIMITS.bottom, top: MOBILE_NAV_LIMITS.top })}
         </Typography>
         <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {destinations.map((destination) => {

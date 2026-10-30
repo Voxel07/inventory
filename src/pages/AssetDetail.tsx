@@ -1,13 +1,11 @@
 import { Button } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
-import { useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
+import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom';
 import {
     Alert,
     Box,
     Chip,
-    Divider,
-    Link,
     Paper,
     Skeleton,
     Stack,
@@ -23,7 +21,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
-import HistoryIcon from '@mui/icons-material/History';
 import EditIcon from '@mui/icons-material/Edit';
 import AvTimerIcon from '@mui/icons-material/AvTimer';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,11 +44,16 @@ import { AssetMaintenance } from '../components/maintenance/AssetMaintenance';
 import { AssetEditFields } from '../components/items/AssetDetailsFields';
 import { assetEditInput } from '../components/items/assetInput';
 import { DialogForm, FormDialog } from '../components/shared/FormDialog';
-import { DetailPanel } from '../components/items/CompactDetail';
+import { DetailPanel, Field, FieldGrid } from '../components/items/CompactDetail';
+import { InfoTip } from '../components/shared/InfoTip';
 import { isOpenDamage } from '../utils/damage';
 import { locationLabel } from '../utils/locationHierarchy';
 import { useUIStore } from '../store/uiStore';
 import type { AssetInstanceInput, RuntimeEntry } from '../types';
+
+const ACTIVITY_PAGE = 10;
+const compactButton = { minHeight: { xs: 44, sm: 28 }, py: { sm: 0.25 }, fontSize: '0.8125rem' } as const;
+const tinyChip = { height: 20, fontSize: '0.75rem' } as const;
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
     available: 'success', in_custody: 'warning', in_field: 'warning', damaged: 'error',
@@ -63,7 +65,6 @@ export function AssetDetail() {
     const { user } = useAuth();
     const canReportDamage = canPerformCustody(user);
     const t = useT();
-    const navigate = useNavigate();
     const client = useQueryClient();
     const showSnackbar = useUIStore((s) => s.showSnackbar);
     const { itemId, assetId } = useParams<{ itemId: string; assetId: string }>();
@@ -75,6 +76,7 @@ export function AssetDetail() {
     const [action, setAction] = useState<'relocate' | 'condition' | null>(null);
     const [editing, setEditing] = useState<AssetInstanceInput | null>(null);
     const [hoursOpen, setHoursOpen] = useState(false);
+    const [activityLimit, setActivityLimit] = useState(ACTIVITY_PAGE);
     const { data: assets, isLoading: assetsLoading } = useItemAssets(itemId);
     const updateAsset = useUpdateItemAsset(itemId);
     const runtime = useAssetRuntime(itemId, assetId);
@@ -143,120 +145,122 @@ export function AssetDetail() {
     const currentLocation = locations.find((location) => location.id === asset.currentLocationId);
     const movable = ['available', 'damaged', 'in_repair', 'in_maintenance'].includes(asset.availabilityStatus);
 
+    const visibleActivity = activity.slice(0, activityLimit);
+    const info: [string, string, ReactNode?][] = [
+        [t('pages.assetDetail.condition'), formatStatus(asset.conditionStatus)],
+        [t('pages.assetDetail.currentLocation'), currentLocation ? locationLabel(currentLocation, locations) : asset.currentLocationName || '—', <PlaceOutlinedIcon key="icon" sx={{ fontSize: 14 }} />],
+        [t('pages.assetDetail.currentCustodian'), asset.currentCustodianName || '—', <PersonOutlineIcon key="icon" sx={{ fontSize: 14 }} />],
+        ...(item.tracksRuntime ? [[t('enum.value.operating_hours'), asset.operatingHours == null ? '—' : `${asset.operatingHours} h`] satisfies [string, string]] : []),
+    ];
+    // Purchase data stays out of the way unless it was recorded.
+    const purchase: [string, string][] = ([
+        [t('pages.assetDetail.manufacturerModel'), [asset.manufacturer, asset.model].filter(Boolean).join(' ')],
+        [t('items.assetDetailsFields.purchaseDate'), asset.purchaseDate != null ? formatDate(asset.purchaseDate) : ''],
+        [t('items.assetDetailsFields.purchasePrice'), asset.purchasePrice == null ? '' : formatMoney(asset.purchasePrice)],
+        [t('items.assetDetailsFields.replacementValue'), asset.replacementValue == null ? '' : formatMoney(asset.replacementValue)],
+    ] satisfies [string, string][]).filter(([, value]) => value);
+
     return (
         <Box>
-            <Button title={translate('pages.assetDetail.returnToTheItemDetails')} startIcon={<ArrowBackIcon />} onClick={() => navigate(`/items/${item.id}`)} sx={{ mb: 2 }}>
-                {t('pages.assetDetail.backToItem')}
+            <Button variant="text" size="small" startIcon={<ArrowBackIcon />} component={RouterLink} to={`/items/${item.id}`}
+                title={translate('pages.assetDetail.returnToTheItemDetails')} sx={{ ...compactButton, mb: 0.5, ml: -1, maxWidth: '100%' }}>
+                <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</Box>
             </Button>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Box>
-                    <Link component={RouterLink} to={`/items/${item.id}`} variant="overline" color="text.secondary" underline="hover">{item.name}</Link>
-                    <Typography variant="h4" className="mono" sx={{ overflowWrap: 'anywhere' }}>{asset.assetCode}</Typography>
-                    {asset.serialNumber && <Typography color="text.secondary">S/N {asset.serialNumber}</Typography>}
-                </Box>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flex: '1 0 auto', minWidth: 0, maxWidth: '100%' }}>
-                    <Chip label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
-                    <ActionBar align="start" actions={[
+
+            <Paper sx={{ p: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 1.5 }}>
+                    <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
+                        <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
+                            <Typography variant="h5" component="h1" className="mono" sx={{ overflowWrap: 'anywhere', mr: 0.25 }}>{asset.assetCode}</Typography>
+                            <Chip size="small" variant="outlined" sx={tinyChip} label={formatStatus(asset.availabilityStatus)} color={stateColors[asset.availabilityStatus] ?? 'default'} />
+                            {openReports.length > 0 && <Chip size="small" color="error" sx={tinyChip}
+                                label={t('pages.assetDetail.openReportCountOpen', { openReportCount: String(openReports.length) })} />}
+                        </Stack>
+                        {asset.serialNumber && <Typography variant="body2" color="text.secondary" className="mono">S/N {asset.serialNumber}</Typography>}
+                    </Box>
+                    <ActionBar size="small" buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
                         canEditAsset && { key: 'edit', label: t('common.edit'), title: translate('pages.assetDetail.editAssetInformation'), icon: <EditIcon />,
                             onClick: () => setEditing(assetEditInput(asset, Boolean(item.tracksRuntime))) },
                         canReportDamage && { key: 'damage', label: t('common.reportDamage'), title: translate('pages.assetDetail.reportDamageToThisAsset'), icon: <ReportProblemOutlinedIcon />,
                             variant: 'contained', color: 'error', pinned: true, onClick: () => setDamageOpen(true) },
                     ]} />
-                </Stack>
-            </Box>
+                </Box>
+                {asset.notes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{asset.notes}</Typography>}
+            </Paper>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(260px, 0.8fr) minmax(0, 1.7fr)' }, gap: 3 }}>
-                <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>{t('pages.assetDetail.assetInformation')}</Typography>
-                    <Stack spacing={1.5} divider={<Divider flexItem />}>
-                        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
-                            <InfoRow label={t('pages.assetDetail.condition')} value={formatStatus(asset.conditionStatus)} />
-                            {canEditAsset && <Button size="small" title={t('pages.assetDetail.updateCondition')} sx={{ flexShrink: 0 }} onClick={() => setAction('condition')}>{t('common.edit')}</Button>}
-                        </Box>
-                        <InfoRow label={t('pages.assetDetail.manufacturerModel')} value={[asset.manufacturer, asset.model].filter(Boolean).join(' ') || '—'} />
-                        <InfoRow label={t('items.assetDetailsFields.purchaseDate')} value={asset.purchaseDate != null ? formatDate(asset.purchaseDate) : '—'} />
-                        <InfoRow label={t('items.assetDetailsFields.purchasePrice')} value={asset.purchasePrice == null ? '—' : formatMoney(asset.purchasePrice)} />
-                        <InfoRow label={t('items.assetDetailsFields.replacementValue')} value={asset.replacementValue == null ? '—' : formatMoney(asset.replacementValue)} />
-                        {item.tracksRuntime && <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
-                            <InfoRow label={t('enum.value.operating_hours')} value={asset.operatingHours == null ? '—' : `${asset.operatingHours} h`} />
-                            {canEditAsset && <Button title={translate('pages.assetDetail.logHoursRunOrANewMeterReading')} size="small" startIcon={<AvTimerIcon />} sx={{ flexShrink: 0 }} onClick={() => setHoursOpen(true)}>
-                                {t('pages.assetDetail.log')}
-                            </Button>}
-                        </Box>}
-                        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1 }}>
-                            <InfoRow icon={<PlaceOutlinedIcon fontSize="small" />} label={t('pages.assetDetail.currentLocation')}
-                                value={currentLocation ? locationLabel(currentLocation, locations) : asset.currentLocationName || '—'} />
-                            {canEditAsset && <Button size="small" disabled={!movable} title={t('pages.assetDetail.moveAssetToAnotherStorageLocation')} sx={{ flexShrink: 0 }} onClick={() => setAction('relocate')}>
-                                {t('pages.assetDetail.moveAsset')}
-                            </Button>}
-                        </Box>
-                        <InfoRow icon={<PersonOutlineIcon fontSize="small" />} label={t('pages.assetDetail.currentCustodian')} value={asset.currentCustodianName || '—'} />
-                        <InfoRow label={t('pages.assetDetail.notes')} value={asset.notes || '—'} />
-                        <InfoRow label={t('pages.assetDetail.registered')} value={formatDateTime(asset.createdAt)} />
-                    </Stack>
-                </Paper>
+            <Stack spacing={1.5}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(260px, 0.8fr) minmax(0, 1.7fr)' }, gap: 1.5, alignItems: 'start' }}>
+                <DetailPanel title={t('pages.assetDetail.assetInformation')} actions={canEditAsset && <ActionBar size="small" buttonSx={compactButton} actions={[
+                    { key: 'condition', label: t('pages.assetDetail.updateCondition'), onClick: () => setAction('condition') },
+                    { key: 'move', label: t('pages.assetDetail.moveAsset'), title: movable ? undefined : t('pages.assetDetail.moveAssetToAnotherStorageLocation'),
+                        disabled: !movable, onClick: () => setAction('relocate') },
+                    item.tracksRuntime && { key: 'hours', label: t('pages.assetDetail.log'), title: translate('pages.assetDetail.logHoursRunOrANewMeterReading'),
+                        icon: <AvTimerIcon />, onClick: () => setHoursOpen(true) },
+                ]} />}>
+                    <FieldGrid>
+                        {info.map(([label, value, icon]) => <Field key={label} label={label}>
+                            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>{icon}{value}</Box>
+                        </Field>)}
+                        {purchase.map(([label, value]) => <Field key={label} label={label}>{value}</Field>)}
+                        <Field label={t('pages.assetDetail.registered')}>{formatDateTime(asset.createdAt)}</Field>
+                    </FieldGrid>
+                </DetailPanel>
 
-                <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}><HistoryIcon />{t('pages.assetDetail.usageHistory')}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {t('pages.assetDetail.showsCheckoutsReturnsEventsFactionsRepairsAndDamageReportsFor')}
-                    </Typography>
-                    {(transactionsLoading || reportsLoading) ? <Skeleton height={180} /> : activity.length === 0 ? (
-                        <Alert severity="info">{t('pages.assetDetail.noUsageHasBeenRecordedForThisAssetYet')}</Alert>
+                <DetailPanel title={`${t('pages.assetDetail.usageHistory')} (${activity.length})`}
+                    actions={<InfoTip>{t('pages.assetDetail.showsCheckoutsReturnsEventsFactionsRepairsAndDamageReportsFor')}</InfoTip>}>
+                    {(transactionsLoading || reportsLoading) ? <Skeleton height={120} /> : activity.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noUsageHasBeenRecordedForThisAssetYet')}</Typography>
                     ) : (
-                        <Stack spacing={0}>
-                            {activity.map((entry) => (
-                                <Box key={entry.id} sx={{ position: 'relative', pl: 3, pb: 2.5, borderLeft: 2, borderColor: 'divider', '&::before': { content: '""', position: 'absolute', left: -6, top: 4, width: 10, height: 10, borderRadius: '50%', bgcolor: entry.color } }}>
-                                    <Typography sx={{ fontWeight: 700 }}>{entry.title}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{formatDateTime(entry.timestamp)}</Typography>
-                                    {entry.detail && <Typography variant="body2" sx={{ mt: 0.5 }}>{entry.detail}</Typography>}
+                        <Stack spacing={0} component="ol" sx={{ listStyle: 'none', m: 0, p: 0, pl: 0.75 }}>
+                            {visibleActivity.map((entry) => (
+                                <Box component="li" key={entry.id} sx={{ position: 'relative', pl: 2, pb: 1.25, borderLeft: 2, borderColor: 'divider', '&::before': { content: '""', position: 'absolute', left: -6, top: 4, width: 10, height: 10, borderRadius: '50%', bgcolor: entry.color } }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                        {entry.title}
+                                        <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}> · {formatDateTime(entry.timestamp)}</Typography>
+                                    </Typography>
+                                    {entry.detail && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{entry.detail}</Typography>}
                                 </Box>
                             ))}
                         </Stack>
                     )}
-                    <LoadMore list={transactionPages} />
-                </Paper>
+                    {activity.length > activityLimit
+                        ? <Button size="small" onClick={() => setActivityLimit((limit) => limit + ACTIVITY_PAGE)} sx={{ mt: 0.5 }}>
+                            {t('common.showMoreRemainingCountRemaining', { remainingCount: String(activity.length - activityLimit) })}
+                        </Button>
+                        : <LoadMore list={transactionPages} />}
+                </DetailPanel>
             </Box>
 
             {item.tracksRuntime && <RuntimePanel entries={runtime.data ?? []} loading={runtime.isLoading} error={runtime.isError} onRetry={() => void runtime.refetch()}
                 actions={canEditAsset ? <Button size="small" startIcon={<AvTimerIcon />} onClick={() => setHoursOpen(true)}>{t('pages.assetDetail.log')}</Button> : undefined} />}
 
-            <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                    <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ReportProblemOutlinedIcon color={openReports.length ? 'error' : undefined} />
-                        {t('pages.assetDetail.reportedDamage')} ({assetReports.length})
-                    </Typography>
-                    {openReports.length > 0 && <Chip size="small" color="error" label={t('pages.assetDetail.openReportCountOpen', { openReportCount: String(openReports.length) })} />}
-                </Stack>
-                {reportsLoading ? <Skeleton height={80} /> : assetReports.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noDamageHasBeenReportedForThisAsset')}</Typography>
-                ) : (
-                    <Stack spacing={1}>
-                        {assetReports.map((report) => {
-                            const open = isOpenDamage(report);
-                            return <Box key={report.id} sx={{ border: 1, borderColor: open ? 'error.main' : 'divider', borderRadius: 1, p: 1.25 }}>
-                                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <Chip size="small" color={open ? 'error' : 'default'} label={formatStatus(report.status)} />
-                                    <Chip size="small" variant="outlined" label={formatStatus(report.severity)} />
-                                    <Typography variant="caption" color="text.secondary">
-                                        {[formatDateTime(report.timestamp), report.expand?.reportedBy?.name].filter(Boolean).join(' · ')}
-                                    </Typography>
-                                </Stack>
-                                <Typography sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{report.description}</Typography>
-                                {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{t('pages.assetDetail.actionTaken')}: {report.resolutionNotes}</Typography>}
-                            </Box>;
-                        })}
-                    </Stack>
-                )}
-            </Paper>
+            {/* No section for an asset without damage: "Report damage" sits in the header. */}
+            {(reportsLoading || assetReports.length > 0) && <DetailPanel title={`${t('pages.assetDetail.reportedDamage')} (${assetReports.length})`}>
+                {reportsLoading ? <Skeleton height={60} /> : <Stack spacing={1}>
+                    {assetReports.map((report) => {
+                        const open = isOpenDamage(report);
+                        return <Box key={report.id} sx={{ borderLeft: 3, borderColor: open ? 'error.main' : 'divider', pl: 1.25, py: 0.25 }}>
+                            <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Chip size="small" color={open ? 'error' : 'default'} label={formatStatus(report.status)} sx={tinyChip} />
+                                <Chip size="small" variant="outlined" label={formatStatus(report.severity)} sx={tinyChip} />
+                                <Typography variant="caption" color="text.secondary">
+                                    {[formatDateTime(report.timestamp), report.expand?.reportedBy?.name].filter(Boolean).join(' · ')}
+                                </Typography>
+                            </Stack>
+                            <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{report.description}</Typography>
+                            {report.resolutionNotes && <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>{t('pages.assetDetail.actionTaken')}: {report.resolutionNotes}</Typography>}
+                        </Box>;
+                    })}
+                </Stack>}
+            </DetailPanel>}
 
             <AssetMaintenance item={item} asset={asset} canEdit={canPerformMaintenance(user)} />
 
-            <DetailPanel title={t('pages.itemDetail.ownershipKeeper')} sx={{ mt: 3 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem')}</Typography>
+            <DetailPanel title={t('pages.itemDetail.ownershipKeeper')}
+                actions={<InfoTip>{t('items.equipmentOwnership.ownershipAndKeeperApplyToEveryUnitOfThisItem')}</InfoTip>}>
                 <EquipmentOwnership item={item} canEdit={canEditAsset} embedded highlightAssetId={asset.id} />
             </DetailPanel>
+            </Stack>
 
             {canEditAsset && action && <OperationForm title={action === 'relocate' ? t('pages.assetDetail.moveAsset') : t('pages.assetDetail.updateCondition')}
                 onClose={() => setAction(null)} initial={{ locationId: asset.currentLocationId ?? '', conditionStatus: asset.conditionStatus }}
@@ -307,7 +311,7 @@ function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: 
         current.hours = Math.round((current.hours + Number(entry.hours)) * 100) / 100;
         byEvent.set(key, current);
     }
-    return <DetailPanel title={t('pages.assetDetail.runtimeByEvent')} actions={actions} sx={{ mt: 3 }}>
+    return <DetailPanel title={t('pages.assetDetail.runtimeByEvent')} actions={actions}>
         {error ? <Alert severity="error" action={<Button size="small" onClick={onRetry}>{t('common.retry')}</Button>}>{t('pages.assetDetail.couldNotLoadRuntime')}</Alert>
             : loading ? <Skeleton height={80} />
             : entries.length === 0 ? <Typography variant="body2" color="text.secondary">{t('pages.assetDetail.noRuntimeRecordedYet')}</Typography>
@@ -342,13 +346,4 @@ function RuntimePanel({ entries, loading, error, onRetry, actions }: { entries: 
                 </TableContainer>
             </Stack>}
     </DetailPanel>;
-}
-
-function InfoRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
-    return (
-        <Box sx={{ minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>{icon}{label}</Typography>
-            <Typography sx={{ overflowWrap: 'anywhere' }}>{value}</Typography>
-        </Box>
-    );
 }

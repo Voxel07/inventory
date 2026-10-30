@@ -2,9 +2,10 @@ import { calendarDate, dateFieldValue, formatDate } from '../../utils/dateFormat
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Alert, Box, Chip, FormControlLabel, MenuItem, Paper, Stack, Switch, Typography } from '@mui/material';
+import { Alert, Box, Chip, FormControlLabel, MenuItem, Stack, Switch, Typography } from '@mui/material';
 import { TextField } from '../shared/DateTextField';
-import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import { DetailPanel } from '../items/CompactDetail';
+import { InfoTip } from '../shared/InfoTip';
 import { useCompleteList } from '../../hooks/usePagedList';
 import { operationsApi } from '../../services/operationsService';
 import { useUIStore } from '../../store/uiStore';
@@ -121,16 +122,13 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
   const duplicateType = draft && !draft.id && own.some((schedule) => schedule.maintenanceType === draft.type);
 
   return (
-    <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 0.5 }}>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><EventRepeatIcon />{t('maintenance.assetMaintenance.maintenanceOfThisAsset')}</Typography>
-        {canEdit && !draft && <Button title={translate('maintenance.assetMaintenance.createAMaintenanceIntervalForThisAsset')} size="small" variant="outlined" onClick={() => startDraft()}>
-          {t('maintenance.assetMaintenance.addInterval')}
-        </Button>}
-      </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {t('maintenance.assetMaintenance.ownIntervalsApplyToThisAssetOnlyAndReplaceThe')}
-      </Typography>
+    <DetailPanel title={t('maintenance.assetMaintenance.maintenanceOfThisAsset')} actions={<Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+      <InfoTip>{t('maintenance.assetMaintenance.ownIntervalsApplyToThisAssetOnlyAndReplaceThe')}</InfoTip>
+      {canEdit && !draft && <Button title={translate('maintenance.assetMaintenance.createAMaintenanceIntervalForThisAsset')} size="small" onClick={() => startDraft()}
+        sx={{ minHeight: { xs: 44, sm: 28 }, py: 0 }}>
+        {t('maintenance.assetMaintenance.addInterval')}
+      </Button>}
+    </Stack>}>
       {schedules.isError && <Alert severity="error" sx={{ mb: 2 }}>{t('maintenance.assetMaintenance.couldNotLoadMaintenanceSchedules')}</Alert>}
       <Stack spacing={1}>
         {own.map((schedule) => (
@@ -201,6 +199,6 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
           </Stack>
         </Stack>
       )}
-    </Paper>
+    </DetailPanel>
   );
 }

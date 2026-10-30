@@ -1,6 +1,7 @@
 import { Button } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
 import { PageHeader } from '../components/shared/PageHeader';
+import { StatStrip } from '../components/shared/StatStrip';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { SupplierDraft } from '../components/procurement/SupplierDraft';
 import { useState } from 'react';
@@ -80,19 +81,7 @@ export function Procurement() {
   const consumableDeficitUnits = deficits.filter((r) => r.classification === 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
   const assetDeficitUnits = deficits.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
 
-  function renderKpiValue(value: number, color?: string) {
-    if (isPending) {
-      return <Skeleton variant="text" width={60} height={32} />;
-    }
-    if (error) {
-      return <Typography variant="h5" component="p" color="text.secondary">—</Typography>;
-    }
-    return (
-      <Typography variant="h5" component="p" sx={{ fontWeight: 700, color }}>
-        {value}
-      </Typography>
-    );
-  }
+  const kpiValue = (value: number) => isPending ? <Skeleton variant="text" width={48} /> : error ? '—' : value;
 
   function exportCsv() {
     const header = ['supplier', 'sku', 'name', 'classification', 'demand', 'available', 'projected', 'deficit', 'ordered', 'to_order', 'action'];
@@ -241,71 +230,18 @@ export function Procurement() {
         ]} />}
       />
 
-      {/* KPI Cards */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
-          gap: 1.5,
-          mb: 3,
-          // Long German labels must wrap inside the half-width phone cards.
-          '& .MuiTypography-caption': { minWidth: 0, overflowWrap: 'anywhere' },
-        }}
-      >
-        <Paper sx={{ p: 2, borderLeft: 4, borderColor: 'error.main' }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <WarningAmberIcon color="error" fontSize="small" />
-            <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.totalDeficit')}
-            </Typography>
-          </Stack>
-          {renderKpiValue(totalDeficitUnits, 'error.main')}
-          <Typography variant="caption" color="text.secondary">
-            {t('pages.procurement.missingUnits')}
-          </Typography>
-        </Paper>
+      <StatStrip sx={{ mb: { xs: 2, md: 3 } }} stats={[
+        { label: t('pages.procurement.totalDeficit'), detail: t('pages.procurement.missingUnits'), value: kpiValue(totalDeficitUnits),
+          color: totalDeficitUnits ? 'error.main' : undefined, icon: <WarningAmberIcon />, accent: 'error.main' },
+        { label: t('pages.procurement.consumables'), detail: t('pages.procurement.stillToPurchase'), value: kpiValue(consumableDeficitUnits),
+          icon: <CategoryIcon />, accent: 'warning.main' },
+        { label: t('pages.procurement.assetsGear'), detail: t('pages.procurement.stillToRentOrBuy'), value: kpiValue(assetDeficitUnits),
+          icon: <ShoppingCartIcon />, accent: 'info.main' },
+        { label: t('pages.procurement.suppliers2'), detail: t('pages.procurement.affectedSources'), value: kpiValue(groups.length),
+          icon: <LocalShippingIcon />, accent: 'primary.main' },
+      ]} />
 
-        <Paper sx={{ p: 2, borderLeft: 4, borderColor: 'warning.main' }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <CategoryIcon color="warning" fontSize="small" />
-            <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.consumables')}
-            </Typography>
-          </Stack>
-          {renderKpiValue(consumableDeficitUnits)}
-          <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.stillToPurchase')}
-          </Typography>
-        </Paper>
-
-        <Paper sx={{ p: 2, borderLeft: 4, borderColor: 'info.main' }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <ShoppingCartIcon color="info" fontSize="small" />
-            <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.assetsGear')}
-            </Typography>
-          </Stack>
-          {renderKpiValue(assetDeficitUnits)}
-          <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.stillToRentOrBuy')}
-          </Typography>
-        </Paper>
-
-        <Paper sx={{ p: 2, borderLeft: 4, borderColor: 'primary.main' }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <LocalShippingIcon color="primary" fontSize="small" />
-            <Typography variant="caption" color="text.secondary">
-              {t('pages.procurement.suppliers2')}
-            </Typography>
-          </Stack>
-          {renderKpiValue(groups.length)}
-          <Typography variant="caption" color="text.secondary">
-            {t('pages.procurement.affectedSources')}
-          </Typography>
-        </Paper>
-      </Box>
-
-      <FormControl sx={{ minWidth: 260, mb: 3 }}>
+      <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 260 }, mb: { xs: 2, md: 3 } }}>
         <InputLabel>{t('pages.procurement.eventScope')}</InputLabel>
         <Select value={eventId} label={t('pages.procurement.eventScope')} onChange={(event) => setEventId(event.target.value)}>
           <MenuItem value="">{t('pages.procurement.allPlannedEvents')}</MenuItem>

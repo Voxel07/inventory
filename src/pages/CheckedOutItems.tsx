@@ -1,3 +1,5 @@
+import { PageHeader } from '../components/shared/PageHeader';
+import { FilterPanel } from '../components/shared/FilterPanel';
 import { Button } from '../components/shared/ActionButtons';
 import { useCustodyBalances } from '../hooks/useCustodyBalances';
 import { Dialog } from '../components/shared/ClosableDialog';
@@ -9,7 +11,6 @@ import {
     MenuItem,
     Paper,
     Skeleton,
-    Stack,
     TextField,
     Typography,
 } from '@mui/material';
@@ -90,23 +91,18 @@ export function CheckedOutItemsPage() {
 
     return (
         <Box>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-                {t('pages.checkedOutItems.checkedOutItems')}
-            </Typography>
-
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField fullWidth size="small" label={t('pages.checkedOutItems.searchItemPersonOrEvent')} value={search} onChange={(event) => setSearch(event.target.value)} />
-                    <TextField select size="small" label={t('enum.value.person')} value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} sx={{ minWidth: 190 }}>
-                        <MenuItem value="">{t('pages.checkedOutItems.allPeople')}</MenuItem>
-                        {people.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
-                    </TextField>
-                    <TextField select size="small" label={t('nav.event')} value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} sx={{ minWidth: 220 }}>
-                        <MenuItem value="">{t('pages.checkedOutItems.allEvents')}</MenuItem>
-                        {events.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
-                    </TextField>
-                </Stack>
-            </Paper>
+            <PageHeader title={t('pages.checkedOutItems.checkedOutItems')} />
+            <FilterPanel search={search} onSearch={setSearch} searchLabel={t('pages.checkedOutItems.searchItemPersonOrEvent')} resultCount={visibleRows.length}
+                activeFilters={(personFilter ? 1 : 0) + (eventFilter ? 1 : 0)} onClear={() => { setPersonFilter(''); setEventFilter(''); }}>
+                <TextField select size="small" label={t('enum.value.person')} value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} sx={{ minWidth: { md: 190 } }}>
+                    <MenuItem value="">{t('pages.checkedOutItems.allPeople')}</MenuItem>
+                    {people.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
+                </TextField>
+                <TextField select size="small" label={t('nav.event')} value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} sx={{ minWidth: { md: 220 } }}>
+                    <MenuItem value="">{t('pages.checkedOutItems.allEvents')}</MenuItem>
+                    {events.map(([id, name]) => <MenuItem key={id} value={id}>{name}</MenuItem>)}
+                </TextField>
+            </FilterPanel>
 
             <CheckedOutList
                 key={`${search}:${personFilter}:${eventFilter}`}

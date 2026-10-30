@@ -1180,6 +1180,7 @@ export default {
       doneSelecting: 'Done selecting',
       select: 'Select',
       showResultCount: 'Show {{resultCount}}',
+      done: 'Done',
     },
     checkedOutList: {
       loading: 'Loading…',
@@ -2036,6 +2037,9 @@ export default {
     actionMenu: {
       moreActions: 'More actions',
     },
+    infoTip: {
+      moreInformation: 'More information',
+    },
   },
   hooks: {
     useBarcodeScanner: {
@@ -2114,6 +2118,10 @@ export default {
       nameNeededNeededAvailableAvailable: '{{name}} (needed: {{needed}}, available: {{available}})',
       itemsInThisAssembly: 'Items in this assembly',
       quicklyAddItem: 'Quickly add item',
+      addItem: 'Add item',
+      showImage: 'Show image',
+      insufficientStockCount_one: 'Insufficient stock for {{count}} component',
+      insufficientStockCount_other: 'Insufficient stock for {{count}} components',
       checkOutAssembly: 'Check out assembly',
       thisChecksOutEveryItemInNameInTheSpecified: 'This checks out every item in “{{name}}” in the specified quantities.',
       eventOccurrence: 'Event occurrence',
@@ -2440,6 +2448,7 @@ export default {
       createANewFactionOrderList: 'Create a new faction order list',
       newList: 'New list',
       factionOrderStatus: 'Faction order status',
+      factionsSubmitted: '{{submitted}}/{{total}} factions submitted',
       loadingOrderStatus: 'Loading order status',
       finished: 'Finished',
       noOrder: 'No order',
@@ -2639,6 +2648,8 @@ export default {
       backToOrderOverview: 'Back to order overview',
       orderTypes: 'Order types',
       factionOrders: 'Faction orders',
+      general: 'General',
+      factions: 'Factions',
     },
     printQRCodes: {
       loadingData: 'Loading data...',

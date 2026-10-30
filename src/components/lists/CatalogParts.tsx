@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Badge, Box, ButtonBase, Checkbox, Stack, TextField, ToggleButtonGroup, Typography } from '@mui/material';
+import { useId, type ReactNode } from 'react';
+import { Badge, Box, ButtonBase, Checkbox, Drawer, Stack, TextField, ToggleButtonGroup, Typography } from '@mui/material';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -63,16 +63,18 @@ export function CatalogScopeToggle({ allLabel, mineLabel }: { allLabel: string; 
 
 /**
  * Scope and bulk selection share the top row; search stays visible below it, and secondary filters move into a
- * sheet with an active-filter count.
+ * sheet with an active-filter count. Without `onSearch` the filter button fills the row and shows `filterLabel`,
+ * e.g. a summary of the current choice.
  */
-export function CatalogSearchBar({ scope, search, onSearch, label, activeFilters = 0, onOpenFilters, onClearFilters, selecting, onToggleSelecting }: {
+export function CatalogSearchBar({ scope, search = '', onSearch, label, activeFilters = 0, onOpenFilters, onClearFilters, filterLabel, selecting, onToggleSelecting }: {
   scope?: ReactNode;
-  search: string;
-  onSearch: (value: string) => void;
-  label: string;
+  search?: string;
+  onSearch?: (value: string) => void;
+  label?: string;
   activeFilters?: number;
   onOpenFilters?: () => void;
   onClearFilters?: () => void;
+  filterLabel?: string;
   /** Undefined hides bulk selection. */
   selecting?: boolean;
   onToggleSelecting?: () => void;
@@ -88,25 +90,55 @@ export function CatalogSearchBar({ scope, search, onSearch, label, activeFilters
       </IconButton>}
     </Stack>}
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-      <TextField type="search" label={label} value={search} onChange={(event) => onSearch(event.target.value)} fullWidth size="small"
-        sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />
-      {onOpenFilters && <Button variant="outlined" aria-haspopup="dialog" onClick={onOpenFilters} sx={{ flexShrink: 0 }}
-        aria-label={activeFilters ? t('lists.catalogParts.filtersActiveFiltersActive', { activeFilters: activeFilters }) : t('common.filters')}
-        startIcon={<Badge badgeContent={activeFilters} color="primary"><FilterListIcon /></Badge>}>
-        {t('common.filters')}
-      </Button>}
+      {onSearch && <TextField type="search" label={label} value={search} onChange={(event) => onSearch(event.target.value)} fullWidth size="small"
+        sx={{ '& .MuiInputBase-root': { minHeight: 44 } }} />}
+      {onOpenFilters && <FilterButton activeFilters={activeFilters} onClick={onOpenFilters} label={filterLabel} fill={!onSearch} />}
     </Stack>
-    {activeFilters > 0 && <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, minHeight: 44 }}>
+    {activeFilters > 0 && onClearFilters && <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, minHeight: 44 }}>
       <Typography variant="body2" color="text.secondary">{t('lists.catalogParts.activeFilters', { count: activeFilters })}</Typography>
       <Button size="small" onClick={onClearFilters}>{t('lists.catalogParts.clear')}</Button>
     </Stack>}
   </Stack>;
 }
 
-export function FilterSheetActions({ resultCount, activeFilters, onClear, onDone }: { resultCount: number; activeFilters: number; onClear: () => void; onDone: () => void }) {
+/** Opens a filter sheet; `fill` stretches it over the row and lets a long `label` truncate. */
+export function FilterButton({ activeFilters = 0, onClick, label, fill = false }: { activeFilters?: number; onClick: () => void; label?: string; fill?: boolean }) {
+  const t = useT();
+  return <Button variant="outlined" aria-haspopup="dialog" onClick={onClick} fullWidth={fill}
+    sx={fill ? { flex: '1 1 0', justifyContent: 'flex-start', minWidth: 0 } : { flexShrink: 0 }}
+    aria-label={[label, activeFilters ? t('lists.catalogParts.filtersActiveFiltersActive', { activeFilters: activeFilters }) : t('common.filters')].filter(Boolean).join(' · ')}
+    startIcon={<Badge badgeContent={activeFilters} color="primary"><FilterListIcon /></Badge>}>
+    <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label ?? t('common.filters')}</Box>
+  </Button>;
+}
+
+/** Secondary filters in a bottom sheet; `resultCount` labels the close button with the matches. */
+export function FilterSheet({ open, onClose, resultCount, activeFilters = 0, onClear, children }: {
+  open: boolean;
+  onClose: () => void;
+  resultCount?: number;
+  activeFilters?: number;
+  onClear?: () => void;
+  children: ReactNode;
+}) {
+  const t = useT();
+  const id = useId();
+  return <Drawer anchor="bottom" open={open} onClose={onClose}
+    slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85dvh', pb: 'env(safe-area-inset-bottom)' } } }}>
+    <Stack spacing={2} sx={{ p: 2 }} role="group" aria-labelledby={id}>
+      <Typography id={id} variant="h6" component="h2">{t('common.filters')}</Typography>
+      {children}
+      <FilterSheetActions resultCount={resultCount} activeFilters={activeFilters} onClear={onClear} onDone={onClose} />
+    </Stack>
+  </Drawer>;
+}
+
+export function FilterSheetActions({ resultCount, activeFilters, onClear, onDone }: { resultCount?: number; activeFilters: number; onClear?: () => void; onDone: () => void }) {
   const t = useT();
   return <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-    <Button fullWidth variant="outlined" onClick={onClear} disabled={!activeFilters}>{t('lists.catalogParts.clear')}</Button>
-    <Button fullWidth variant="contained" onClick={onDone}>{t('lists.catalogParts.showResultCount', { resultCount: resultCount })}</Button>
+    {onClear && <Button fullWidth variant="outlined" onClick={onClear} disabled={!activeFilters}>{t('lists.catalogParts.clear')}</Button>}
+    <Button fullWidth variant="contained" onClick={onDone}>
+      {resultCount === undefined ? t('lists.catalogParts.done') : t('lists.catalogParts.showResultCount', { resultCount: resultCount })}
+    </Button>
   </Stack>;
 }

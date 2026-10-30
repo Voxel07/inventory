@@ -40,11 +40,3 @@ export function EventWorkspace({ workspace, page }: {
     </Alert>}
   </Box>;
 }
-
-export function EventMetric({ label, value, detail, compact = false }: { label: string; value: string | number; detail?: string; compact?: boolean }) {
-  return <Paper sx={{ p: compact ? 1.25 : 2, minWidth: 0 }}>
-    <Typography variant="body2" color="text.secondary">{label}</Typography>
-    <Typography variant={compact ? 'h6' : 'h4'} component="p" sx={{ my: compact ? 0 : 0.5, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
-    {detail && <Typography variant="caption" color="text.secondary">{detail}</Typography>}
-  </Paper>;
-}

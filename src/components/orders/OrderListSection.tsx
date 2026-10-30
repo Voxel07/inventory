@@ -1,5 +1,7 @@
 import { Button } from '../shared/ActionButtons';
+import { ActionBar, ActionMenu, type Action } from '../shared/ActionBar';
 import type { ReactNode } from 'react';
+import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -14,7 +16,8 @@ export interface OrderListEntry {
   details?: ReactNode;
   status: string;
   statusColor?: 'default' | 'info' | 'warning' | 'success' | 'secondary' | 'error';
-  actions?: ReactNode;
+  /** Buttons below the entry; a "more" menu beside it on phones and tablets. */
+  actions?: Action[];
   onOpen?: () => void;
 }
 
@@ -33,6 +36,7 @@ interface Props {
 
 export function OrderListSection({ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry, collapsible }: Props) {
   const t = useT();
+  const compact = useCompactCatalog();
   if (collapsible) return <Accordion disableGutters sx={{ mb: 3 }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{title}</Typography></AccordionSummary>
     <AccordionDetails><OrderListSection {...{ title, emptyMessage, groups, count, isLoading, list, loadError, onRetry }} /></AccordionDetails>
@@ -50,12 +54,15 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
           <Chip size="small" variant="outlined" label={group.entries.length} />
         </Stack>}
         {group.entries.map((entry) => <Box key={entry.id} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
-          {entry.onOpen ? <Button title={translate('orders.orderListSection.openTheDetailsOfThisOrderList')} color="inherit" onClick={entry.onOpen}
-            aria-label={`${t('ordering.reviewOrder')}: ${entry.title}`}
-            sx={{ width: '100%', p: 2, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left', textTransform: 'none' }}>
-            <OrderRow entry={entry} />
-          </Button> : <Box sx={{ p: 2 }}><OrderRow entry={entry} /></Box>}
-          {entry.actions && <Stack direction="row" spacing={1} useFlexGap sx={{ px: 2, pb: 1.5, flexWrap: 'wrap' }}>{entry.actions}</Stack>}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {entry.onOpen ? <Button title={translate('orders.orderListSection.openTheDetailsOfThisOrderList')} color="inherit" onClick={entry.onOpen}
+              aria-label={`${t('ordering.reviewOrder')}: ${entry.title}`}
+              sx={{ flex: 1, minWidth: 0, p: { xs: 1.5, md: 2 }, borderRadius: 0, justifyContent: 'flex-start', textAlign: 'left', textTransform: 'none' }}>
+              <OrderRow entry={entry} arrow={!compact} />
+            </Button> : <Box sx={{ flex: 1, minWidth: 0, p: { xs: 1.5, md: 2 } }}><OrderRow entry={entry} arrow={false} /></Box>}
+            {compact && entry.actions?.length ? <Box sx={{ pr: 0.5, flexShrink: 0 }}><ActionMenu actions={entry.actions} size="medium" /></Box> : null}
+          </Box>
+          {!compact && entry.actions?.length ? <Box sx={{ px: 2, pb: 1.5 }}><ActionBar actions={entry.actions} align="start" /></Box> : null}
         </Box>)}
       </Box>)}
     </Paper>
@@ -65,14 +72,16 @@ export function OrderListSection({ title, emptyMessage, groups, count, isLoading
   </Box>;
 }
 
-function OrderRow({ entry }: { entry: OrderListEntry }) {
-  return <Stack direction="row" useFlexGap sx={{ gap: 1.5, width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
-    <Box sx={{ flex: '1 1 180px', minWidth: 0, overflowWrap: 'anywhere' }}>
-      <Typography sx={{ fontWeight: 700 }}>{entry.title}</Typography>
+function OrderRow({ entry, arrow }: { entry: OrderListEntry; arrow: boolean }) {
+  return <Stack direction="row" sx={{ gap: 1.5, width: '100%', alignItems: 'center' }}>
+    <Box sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+      <Stack direction="row" sx={{ gap: 1, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Typography sx={{ fontWeight: 700, minWidth: 0 }}>{entry.title}</Typography>
+        <Chip size="small" color={entry.statusColor ?? 'default'} label={entry.status} sx={{ flexShrink: 0, maxWidth: '50%' }} />
+      </Stack>
       <Typography variant="body2" color="text.secondary">{entry.subtitle}</Typography>
       {entry.details}
     </Box>
-    <Chip size="small" color={entry.statusColor ?? 'default'} label={entry.status} sx={{ maxWidth: '100%', height: 'auto', minHeight: 24, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 } }} />
-    {entry.onOpen && <ArrowForwardIcon fontSize="small" />}
+    {arrow && <ArrowForwardIcon fontSize="small" />}
   </Stack>;
 }

@@ -3,7 +3,7 @@ import { Button } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
 import { Link } from 'react-router-dom';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -11,11 +11,23 @@ import {
   Card,
   CardContent,
   Chip,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Paper,
   Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import TuneIcon from '@mui/icons-material/Tune';
+import { IconButton } from '../components/shared/ActionButtons';
+import { Dialog } from '../components/shared/ClosableDialog';
+import { PageHeader } from '../components/shared/PageHeader';
+import { ActionBar } from '../components/shared/ActionBar';
+import { InfoTip } from '../components/shared/InfoTip';
+import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import { TextField } from '../components/shared/DateTextField';
 import BuildIcon from '@mui/icons-material/Build';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -59,7 +71,12 @@ export function Maintenance() {
   const t = useT();
   const { user } = useAuth();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
-  const formRef = useRef<HTMLDivElement | null>(null);
+  const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down('sm'));
+  const compact = useCompactCatalog();
+  // Recording an inspection and the per-category intervals are dialogs, so the due list leads the page.
+  const [formOpen, setFormOpen] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   // Items needing attention come filtered from the server; the inspection picker searches the server.
   const attentionItems = usePagedItems({ maintenanceAttention: true, sort: 'name' });
@@ -109,6 +126,7 @@ export function Maintenance() {
       }),
     onSuccess: () => {
       showSnackbar(t('pages.maintenance.inspectionRecordedSuccessfully'), 'success');
+      setFormOpen(false);
       setItemId('');
       setNotes('');
       setCertificateNumber('');
@@ -139,7 +157,7 @@ export function Maintenance() {
     setAssetId(schedule.assetInstanceId ?? '');
     setType(schedule.maintenanceType);
     setNextDueAt(scheduleDue(schedule));
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFormOpen(true);
   }
 
   function prefillInspection(item: Item) {
@@ -157,58 +175,56 @@ export function Maintenance() {
     }
     const schedule = dateSchedules.find((candidate) => candidate.itemId === item.id);
     setNextDueAt(schedule ? scheduleDue(schedule) : '');
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFormOpen(true);
   }
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4">{t('pages.maintenance.maintenanceInspections')}</Typography>
-        <Typography color="text.secondary">
-          {t('pages.maintenance.dGUVV3ServiceIntervalsBatteryTestsAndChronoRecords')}
-        </Typography>
-      </Box>
+      <PageHeader title={t('pages.maintenance.maintenanceInspections')} description={t('pages.maintenance.dGUVV3ServiceIntervalsBatteryTestsAndChronoRecords')}
+        inlineActions={compact} actions={<ActionBar iconOnly={compact} actions={[
+          { key: 'intervals', label: t('pages.maintenance.maintenanceByCategory'), icon: <TuneIcon />, onClick: () => setPolicyOpen(true) },
+          canPerformMaintenance(user) && { key: 'record', label: t('pages.maintenance.recordInspection'), icon: <AddIcon />, variant: 'contained', pinned: true,
+            onClick: () => setFormOpen(true) },
+        ]} />} />
 
-      <Paper sx={{ p: 2.5, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>{t('pages.maintenance.maintenanceByCategory')}</Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <TextField select fullWidth label={t('common.category')} value={policyCategory}
-            onChange={(event) => {
-              const category = event.target.value;
-              setPolicyCategory(category);
-              setPolicyInterval(String(categoryPolicies.find((policy) => policy.category.toLowerCase() === category.toLowerCase())?.intervalDays
-                ?? 0));
-            }}>
-            {categories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
-          </TextField>
-          <TextField fullWidth type="number" label={t('pages.maintenance.maintenanceIntervalDays')}
-            value={policyInterval} onChange={(event) => setPolicyInterval(event.target.value)}
-            helperText={t('pages.maintenance.0NoScheduledMaintenance')}
-            slotProps={{ htmlInput: { min: 0, step: 1 } }} />
-          <Button title={translate('pages.maintenance.saveThisCategorySInspectionInterval')} variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
-            sx={{ flexShrink: 0, alignSelf: { sm: 'flex-start' }, mt: { sm: 1 } }} onClick={() => policyMutation.mutate()}>{t('common.save')}</Button>
-        </Stack>
-      </Paper>
-
-      <IndividualSchedules schedules={schedules.data ?? []} canEdit={canPerformMaintenance(user)} onInspect={prefillSchedule} />
+      <Dialog open={policyOpen} onClose={() => setPolicyOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('pages.maintenance.maintenanceByCategory')}</DialogTitle>
+        <DialogContent sx={{ pt: '8px !important' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField select fullWidth label={t('common.category')} value={policyCategory}
+              onChange={(event) => {
+                const category = event.target.value;
+                setPolicyCategory(category);
+                setPolicyInterval(String(categoryPolicies.find((policy) => policy.category.toLowerCase() === category.toLowerCase())?.intervalDays
+                  ?? 0));
+              }}>
+              {categories.map((category) => <MenuItem key={category} value={category}>{category}</MenuItem>)}
+            </TextField>
+            <TextField fullWidth type="number" label={t('pages.maintenance.maintenanceIntervalDays')}
+              value={policyInterval} onChange={(event) => setPolicyInterval(event.target.value)}
+              helperText={t('pages.maintenance.0NoScheduledMaintenance')}
+              slotProps={{ htmlInput: { min: 0, step: 1 } }} />
+            <Button title={translate('pages.maintenance.saveThisCategorySInspectionInterval')} variant="contained" disabled={!canEditCatalog(user) || !policyCategory || policyMutation.isPending || !/^\d+$/.test(policyInterval)}
+              sx={{ flexShrink: 0, alignSelf: { sm: 'flex-start' }, mt: { sm: 1 } }} onClick={() => policyMutation.mutate()}>{t('common.save')}</Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
       {/* Attention / Overdue Section */}
       {!!attentionCount && (
-        <Paper sx={{ p: 2, mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
+        <Paper sx={{ p: { xs: 1.5, sm: 2 }, mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
             <WarningAmberIcon color="warning" />
             <Typography variant="h6">
               {t('pages.maintenance.dueOverdueInspections')} ({attentionCount}{attentionItems.hasNextPage ? '+' : ''})
             </Typography>
+            <InfoTip>{t('pages.maintenance.overdueOrInServiceItemsAreBlockedFromCheckoutUntil')}</InfoTip>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('pages.maintenance.overdueOrInServiceItemsAreBlockedFromCheckoutUntil')}
-          </Typography>
           <Stack spacing={1}>
             {attention.map((item) => (
               <Card key={item.id} variant="outlined">
                 <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
                         <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
@@ -231,16 +247,8 @@ export function Maintenance() {
                         {item.nextMaintenanceDue != null ? ` · ${t('pages.maintenance.dueOn')}: ${formatDate(item.nextMaintenanceDue)}` : ''}
                       </Typography>
                     </Box>
-                    <Button title={translate('pages.maintenance.fillInTheInspectionFormForThisItem')}
-                      size="small"
-                      variant="contained"
-                      color="primary"
-                      endIcon={<ArrowForwardIcon fontSize="small" />}
-                      onClick={() => prefillInspection(item)}
-                      sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-                    >
-                      {t('pages.maintenance.inspectNow')}
-                    </Button>
+                    <InspectButton phone={phone} title={translate('pages.maintenance.fillInTheInspectionFormForThisItem')}
+                      label={t('pages.maintenance.inspectNow')} onClick={() => prefillInspection(item)} />
                   </Stack>
                 </CardContent>
               </Card>
@@ -248,7 +256,7 @@ export function Maintenance() {
             {attentionSchedules.map((schedule) => (
               <Card key={schedule.id} variant="outlined">
                 <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
                         <Typography sx={{ fontWeight: 700 }}>{schedule.itemName}</Typography>
@@ -261,11 +269,8 @@ export function Maintenance() {
                         {maintenanceTypeLabel(schedule.maintenanceType)} · {t('pages.maintenance.dueOn')}: {formatDate(schedule.nextDueAt)}
                       </Typography>
                     </Box>
-                    <Button title={translate('pages.maintenance.fillInTheInspectionFormForThisDevice')}
-                      size="small" variant="contained" color="primary" endIcon={<ArrowForwardIcon fontSize="small" />}
-                      onClick={() => prefillSchedule(schedule)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {t('pages.maintenance.inspectNow')}
-                    </Button>
+                    <InspectButton phone={phone} title={translate('pages.maintenance.fillInTheInspectionFormForThisDevice')}
+                      label={t('pages.maintenance.inspectNow')} onClick={() => prefillSchedule(schedule)} />
                   </Stack>
                 </CardContent>
               </Card>
@@ -276,12 +281,14 @@ export function Maintenance() {
       )}
       {!attentionCount && !attentionItems.isLoading && <Alert severity="success" sx={{ mb: 3 }}>{t('pages.maintenance.noMaintenanceDue')}</Alert>}
 
+      <IndividualSchedules schedules={schedules.data ?? []} canEdit={canPerformMaintenance(user)} onInspect={prefillSchedule} />
+
       {/* Record Inspection Form */}
-      <Paper ref={formRef} sx={{ p: 2.5, mb: 3 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
-          <BuildIcon color="primary" />
-          <Typography variant="h6">{t('pages.maintenance.recordInspection')}</Typography>
-        </Stack>
+      <Dialog open={formOpen} onClose={() => { if (!mutation.isPending) setFormOpen(false); }} fullScreen={phone} fullWidth maxWidth="md">
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 7 }}>
+          <BuildIcon color="primary" />{t('pages.maintenance.recordInspection')}
+        </DialogTitle>
+        <DialogContent dividers>
         <Stack spacing={2}>
           <ItemAutocomplete
             label={t('pages.maintenance.selectItem')}
@@ -404,7 +411,8 @@ export function Maintenance() {
                 : t('pages.maintenance.saveInspectionCertifyItem')}
           </Button>
         </Stack>
-      </Paper>
+        </DialogContent>
+      </Dialog>
 
       {/* Recent Inspections History */}
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
@@ -424,7 +432,7 @@ export function Maintenance() {
             return (
               <Card key={record.id} variant="outlined">
                 <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
                         <Typography sx={{ fontWeight: 700 }}>{record.itemName}</Typography>
@@ -463,4 +471,15 @@ export function Maintenance() {
       )}
     </Box>
   );
+}
+
+/** Opens the inspection form for a due entry; an icon on phones so the entry keeps one row. */
+function InspectButton({ phone, title, label, onClick }: { phone: boolean; title: string; label: string; onClick: () => void }) {
+  if (phone) return <IconButton title={label} color="primary" onClick={onClick} sx={{ flexShrink: 0, border: 1, borderColor: 'divider' }}>
+    <ArrowForwardIcon />
+  </IconButton>;
+  return <Button title={title} size="small" variant="contained" color="primary" endIcon={<ArrowForwardIcon fontSize="small" />}
+    onClick={onClick} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+    {label}
+  </Button>;
 }

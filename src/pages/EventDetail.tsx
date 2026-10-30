@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { canEditEvents } from '../utils/access';
 import { EventQuantities } from '../components/events/EventQuantities';
 import { AddEventItemsDialog } from '../components/events/AddEventItemsDialog';
+import { StatStrip } from '../components/shared/StatStrip';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -172,16 +173,16 @@ export function EventDetail() {
       </Stack>
 
       {!editing && <>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: { xs: 1, sm: 1.5 }, mb: 3 }}>
-          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.linesUsed')}</Typography><Typography variant="h5" component="p">{usedLines}</Typography></Paper>
-          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.totalPlanned')}</Typography><Typography variant="h5" component="p">{plannedTotal}</Typography></Paper>
-          <Paper sx={{ p: { xs: 1.25, sm: 2 } }}><Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{t('pages.eventDetail.totalUsed')}</Typography><Typography variant="h5" component="p">{usedTotal}</Typography></Paper>
-        </Box>
+        <StatStrip sx={{ mb: { xs: 2, md: 3 } }} stats={[
+          { label: t('pages.eventDetail.linesUsed'), value: usedLines },
+          { label: t('pages.eventDetail.totalPlanned'), value: plannedTotal },
+          { label: t('pages.eventDetail.totalUsed'), value: usedTotal },
+        ]} />
         <EventQuantities event={report} />
-        <Paper sx={{ p: 2 }}>
+        {report.notes && <Paper sx={{ p: 2 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>{t('common.notes')}</Typography>
-          <Typography color={report.notes ? 'text.primary' : 'text.secondary'}>{report.notes || t('pages.eventDetail.noNotes')}</Typography>
-        </Paper>
+          <Typography sx={{ whiteSpace: 'pre-wrap' }}>{report.notes}</Typography>
+        </Paper>}
       </>}
 
       {editing && <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>

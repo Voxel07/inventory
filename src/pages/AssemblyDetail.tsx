@@ -7,14 +7,24 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
+    ButtonBase,
     Typography,
-    Paper,
     Chip,
+    DialogContent,
+    DialogTitle,
     Skeleton,
     Alert,
-
     Stack,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import { Dialog } from '../components/shared/ClosableDialog';
+import { PageHeader } from '../components/shared/PageHeader';
+import { StatStrip } from '../components/shared/StatStrip';
+import { DetailSection } from '../components/items/DetailSection';
+import { Field, FieldGrid } from '../components/items/CompactDetail';
+import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
@@ -54,6 +64,11 @@ export function AssemblyDetail() {
     const [editOpen, setEditOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [damageOpen, setDamageOpen] = useState(false);
+    const [addOpen, setAddOpen] = useState(false);
+    const [imageOpen, setImageOpen] = useState(false);
+    const compact = useCompactCatalog();
+    const theme = useTheme();
+    const phone = useMediaQuery(theme.breakpoints.down('sm'));
     function handleUpdate(data: AssemblyFormData) {
         if (!assembly) return;
         updateAssembly.mutate(
@@ -157,117 +172,80 @@ export function AssemblyDetail() {
     const maxAssembliesPossible = assemblyItems.length ? Math.min(...assemblyItems.map(item => Math.floor((stockInfo.get(item.id) ?? 0) / (assembly.itemQuantities[item.id] ?? 1)))) : 0;
     const canCheckout = componentsReady && insufficientItems.length === 0 && assemblyItems.length > 0;
 
+    const available = componentsReady ? maxAssembliesPossible : null;
+
     return (
         <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                <TooltipButton
-                    variant="icon"
-                    tooltipText={t('pages.assemblyDetail.backToAssemblies')}
-                    icon={<ArrowBackIcon />}
-                    onClick={() => navigate('/assemblies')}
-                />
-                <Typography variant="h4" sx={{ flex: '1 1 200px', minWidth: 0, overflowWrap: 'anywhere' }}>
-                    {assembly.name}
-                </Typography>
-                <ActionBar sx={{ flex: '1 0 auto' }} actions={[
+            <PageHeader title={assembly.name} back={{ label: t('pages.assemblyDetail.backToAssemblies'), to: '/assemblies' }} inlineActions={compact}
+                actions={<ActionBar collapsed={compact ? true : undefined} actions={[
+                    canEdit && compact && { key: 'add', label: t('pages.assemblyDetail.addItem'), icon: <AddIcon />, onClick: () => setAddOpen(true) },
                     canEdit && { key: 'edit', label: t('common.edit'), title: t('pages.assemblyDetail.editAssemblyDetails'), icon: <EditIcon />, onClick: () => setEditOpen(true) },
                     canTransact && { key: 'damage', label: t('common.reportDamage'), title: t('pages.assemblyDetail.reportDamageToThisAssembly'), icon: <ReportProblemOutlinedIcon />,
                         color: 'error', onClick: () => setDamageOpen(true) },
                     assemblyItems.every(item => canCheckoutItem(user, item)) && { key: 'checkout', label: t('enum.action.checkout'), title: t('pages.assemblyDetail.checkOutAllItemsInThisAssembly'), icon: <ShoppingCartCheckoutIcon />,
                         variant: 'contained', pinned: true, disabled: !canCheckout, onClick: () => setCheckoutOpen(true) },
+                ]} />} />
+
+            {/* The image is a thumbnail that opens full size, so the components stay near the top on phones. */}
+            <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'stretch' }}>
+                {assembly.image && <ButtonBase onClick={() => setImageOpen(true)} aria-label={t('pages.assemblyDetail.showImage')}
+                    sx={{ flexShrink: 0, borderRadius: 1, border: 1, borderColor: 'divider', overflow: 'hidden', bgcolor: 'background.paper' }}>
+                    <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name}
+                        sx={{ display: 'block', width: { xs: 64, md: 112 }, height: { xs: 64, md: 112 }, objectFit: 'contain' }} />
+                </ButtonBase>}
+                <StatStrip sx={{ flex: 1, minWidth: 0, alignSelf: 'center' }} stats={[
+                    { label: t('pages.assemblyDetail.components'), value: assemblyItems.length },
+                    { label: t('enum.itemStatus.available'), value: available ?? '…', color: available ? 'success.main' : undefined },
+                    { label: t('pages.assemblyDetail.totalValue'), value: formatMoney(totalValue) },
                 ]} />
-            </Box>
+            </Stack>
 
-            <Paper sx={{ p: { xs: 1.5, md: 2 }, mb: 3, overflow: 'hidden' }}>
-                <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: assembly.image ? { xs: '1fr', md: 'minmax(260px, 420px) minmax(0, 1fr)' } : '1fr',
-                    gap: { xs: 2, md: 2.5 },
-                    alignItems: 'stretch',
-                }}>
-                    {assembly.image && (
-                        <MediaImage
-                            src={apiFileUrl(assembly.image)}
-                            alt={assembly.name}
-                            sx={{
-                                display: 'block',
-                                width: '100%',
-                                height: { xs: 240, md: 320 },
-                                objectFit: 'contain',
-                                bgcolor: 'background.default',
-                                borderRadius: 1,
-                            }}
-                        />
-                    )}
-                    <Stack spacing={2} sx={{ minWidth: 0 }}>
-                        <Box>
-                            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
-                                {t('pages.assemblyDetail.eventUse')}
-                            </Typography>
-                            {assembly.eventTypes?.length ? (
-                                <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                                    {assembly.eventTypes.map((eventType) => (
-                                        <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" size="small" />
-                                    ))}
-                                </Stack>
-                            ) : (
-                                <Typography variant="body2" color="text.secondary">{t('pages.assemblyDetail.notAssignedToAnEvent')}</Typography>
-                            )}
-                        </Box>
-
-                        {assembly.category && <Box>
-                            <Typography variant="caption" color="text.secondary">{t('common.category')}</Typography>
-                            <Typography variant="body2">{[assembly.category, assembly.subcategory].filter(Boolean).join(' · ')}</Typography>
-                        </Box>}
-
-                        {assembly.description && <Typography variant="body1">{assembly.description}</Typography>}
-
-                        {assembly.hint && (
-                            <Alert severity="info" sx={{ py: 0.75, alignItems: 'flex-start', '& .MuiAlert-icon': { py: 1, fontSize: '1.5em' } }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('pages.assemblyDetail.assemblyInstruction')}</Typography>
-                                <Typography variant="body2">{assembly.hint}</Typography>
-                            </Alert>
-                        )}
-
-                        <InventorySharing kind="assemblies" id={assembly.id} access={assembly.access} />
-
-                        <Box sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
-                            gap: 1,
-                            mt: 'auto !important',
-                        }}>
-                            {[
-                                [t('pages.assemblyDetail.components'), String(assemblyItems.length), 'text.primary'],
-                                [t('pages.assemblyDetail.totalValue'), formatMoney(totalValue), 'text.primary'],
-                                [t('enum.itemStatus.available'), componentsReady ? String(maxAssembliesPossible) : '…', maxAssembliesPossible > 0 ? 'success.main' : 'text.secondary'],
-                                [t('pages.assemblyDetail.created'), formatDate(assembly.created), 'text.primary'],
-                            ].map(([label, value, color]) => (
-                                <Box key={label} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
-                                    <Typography variant="subtitle1" color={color} sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{value}</Typography>
-                                </Box>
-                            ))}
-                        </Box>
-                    </Stack>
-                </Box>
-            </Paper>
-
-            {insufficientItems.length > 0 && (
-                <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
-                    {t('pages.assemblyDetail.insufficientStockFor')}: {insufficientItems.map((i) => {
-                        const needed = assembly.itemQuantities?.[i.id] ?? 1;
-                        const available = stockInfo.get(i.id) ?? 0;
-                        return t('pages.assemblyDetail.nameNeededNeededAvailableAvailable', { name: String(i.name), needed: needed, available: available });
-                    }).join(', ')}
+            {assembly.hint && (
+                <Alert severity="info" sx={{ mb: 2, py: 0.5, alignItems: 'flex-start', '& .MuiAlert-icon': { py: 0.75 } }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{t('pages.assemblyDetail.assemblyInstruction')}</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{assembly.hint}</Typography>
                 </Alert>
             )}
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+            {insufficientItems.length > 0 && (
+                <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
+                    {phone ? t('pages.assemblyDetail.insufficientStockCount', { count: insufficientItems.length }) : <>
+                        {t('pages.assemblyDetail.insufficientStockFor')}: {insufficientItems.map((i) => {
+                            const needed = assembly.itemQuantities?.[i.id] ?? 1;
+                            const available = stockInfo.get(i.id) ?? 0;
+                            return t('pages.assemblyDetail.nameNeededNeededAvailableAvailable', { name: String(i.name), needed: needed, available: available });
+                        }).join(', ')}
+                    </>}
+                </Alert>
+            )}
+
+            <Box sx={{ mb: 2 }}>
+                <DetailSection title={t('common.details')} defaultExpanded={false}>
+                    <Stack spacing={1.5}>
+                        <FieldGrid>
+                            <Field label={t('common.category')}>{[assembly.category, assembly.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
+                            <Field label={t('pages.assemblyDetail.created')}>{formatDate(assembly.created)}</Field>
+                            <Field wide label={t('pages.assemblyDetail.eventUse')}>
+                                {assembly.eventTypes?.length ? <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                                    {assembly.eventTypes.map((eventType) => (
+                                        <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" size="small" />
+                                    ))}
+                                </Stack> : t('pages.assemblyDetail.notAssignedToAnEvent')}
+                            </Field>
+                            {assembly.description && <Field wide label={t('common.description')}>
+                                <Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{assembly.description}</Box>
+                            </Field>}
+                        </FieldGrid>
+                        <InventorySharing kind="assemblies" id={assembly.id} access={assembly.access} />
+                    </Stack>
+                </DetailSection>
+            </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6">
                     {t('pages.assemblyDetail.itemsInThisAssembly')}
                 </Typography>
-                {canEdit && <Box sx={{ minWidth: 250, maxWidth: 350, flex: 1 }}>
+                {canEdit && !compact && <Box sx={{ minWidth: 250, maxWidth: 350, flex: 1 }}>
                     <ItemAutocomplete size="small" label={t('pages.assemblyDetail.quicklyAddItem')} value={null}
                         filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
                         onChange={(newItem) => { if (newItem) handleAddItem(newItem.id); }} />
@@ -276,8 +254,24 @@ export function AssemblyDetail() {
 
             <ItemsList items={assemblyItems} isLoading={itemsQuery.isLoading && !assemblyItems.length}
                 requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit ? handleRemoveItem : undefined}
-                loadingMore={false} loadError={itemsQuery.isError}
+                loadingMore={false} loadError={itemsQuery.isError} searchFrom={10}
                 onRetry={() => { void itemsQuery.refetch(); }} />
+
+            <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{t('pages.assemblyDetail.addItem')}</DialogTitle>
+                <DialogContent sx={{ pt: '8px !important' }}>
+                    <ItemAutocomplete label={t('pages.assemblyDetail.quicklyAddItem')} value={null}
+                        filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
+                        onChange={(newItem) => { if (newItem) { handleAddItem(newItem.id); setAddOpen(false); } }} />
+                </DialogContent>
+            </Dialog>
+
+            {assembly.image && <Dialog open={imageOpen} onClose={() => setImageOpen(false)} maxWidth="md" fullWidth>
+                <DialogContent sx={{ p: 1 }}>
+                    <MediaImage src={apiFileUrl(assembly.image)} alt={assembly.name}
+                        sx={{ display: 'block', width: '100%', maxHeight: '80dvh', objectFit: 'contain' }} />
+                </DialogContent>
+            </Dialog>}
 
             {checkoutOpen && <AssemblyCheckoutForm assembly={assembly} items={assemblyItems} onClose={() => setCheckoutOpen(false)} />}
 

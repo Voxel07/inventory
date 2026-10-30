@@ -9,7 +9,7 @@ import { canOperateWarehouse, canPerformCustody, canTakeOut, canUseGeneralOrders
 import { Dialog } from '../shared/ClosableDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { OrderStatusGuide } from './OrderStatusGuide';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { generalOrderApi } from '../../services/orderService';
 import {
@@ -23,7 +23,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
   ListSubheader,
   MenuItem,
   Paper,
@@ -35,7 +34,6 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
-import SearchIcon from '@mui/icons-material/Search';
 import { useCreateOrder, useOrders, useTransitionOrder, useUpdateOrder } from '../../hooks/useOrders';
 import { useEventReports } from '../../hooks/useEvents';
 import { useItemsByIds, usePagedItems } from '../../hooks/useItems';
@@ -54,6 +52,7 @@ import { toPositiveIntegerQuantities } from '../../utils/quantityMaps';
 import { useOrderEventSelection } from '../../hooks/useOrderEventSelection';
 import { useUIStore } from '../../store/uiStore';
 import { OrderEventFilter } from './OrderEventFilter';
+import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { ItemRequestBadge, ItemRequestEditor, ItemRequestList } from './ItemRequests';
 import { toItemRequestDrafts, toItemRequestInputs, type ItemRequestDraft } from '../../utils/itemRequests';
 
@@ -66,10 +65,11 @@ const statusLabels = {
   returned: 'orders.generalOrders.statusLabels.returned', closed: 'orders.generalOrders.statusLabels.closed', cancelled: 'orders.generalOrders.statusLabels.cancelled',
 } as const;
 
-export function GeneralOrders() {
+export function GeneralOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
   const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const compact = useCompactCatalog();
   const { eventTypes } = useFactionCatalog();
   const feedback = useMutationFeedback();
   const { data: events = [] } = useEventReports();
@@ -194,9 +194,9 @@ export function GeneralOrders() {
   }
 
   return <Box>
-    <PageHeader title={t('common.generalOrders')} description={t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')}
-      actions={<ActionBar actions={[{ key: 'new', label: t('orders.generalOrders.newOrder'), title: translate('orders.generalOrders.createANewGeneralOrder'),
-        icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canUseGeneralOrders(user), onClick: () => startEditing() }]} />} />
+    <PageHeader title={t('nav.orders')} description={t('orders.generalOrders.itemsForCateringSponsorTentsStagesAndOtherPurposes')} inlineActions={compact}
+      actions={<ActionBar iconOnly={compact} actions={[{ key: 'new', label: t('orders.generalOrders.newOrder'), title: translate('orders.generalOrders.createANewGeneralOrder'),
+          icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canUseGeneralOrders(user), onClick: () => startEditing() }]} />} />
     {!canUseGeneralOrders(user) && <Alert severity="info" sx={{ mb: 2 }}>{t('ordering.readOnly')}</Alert>}
     <OrderEventFilter
       eventTypes={eventTypes}
@@ -205,11 +205,9 @@ export function GeneralOrders() {
       eventOptions={eventOptions}
       selectedEventId={selectedEventId}
       onEventChange={setSelectedEventId}
-    >
-      <TextField fullWidth size="small" label={t('orders.generalOrders.searchOrders')} value={search}
-        onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
-        sx={{ maxWidth: 520 }} />
-    </OrderEventFilter>
+      leading={kindSwitch}
+      search={{ value: search, onChange: setSearch, label: t('orders.generalOrders.searchOrders') }}
+    />
     <OrderListSection
       title={t('orders.generalOrders.activeOrders')}
       emptyMessage={t('orders.generalOrders.noMatchingActiveOrdersYet')}

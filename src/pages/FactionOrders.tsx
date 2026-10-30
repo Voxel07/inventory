@@ -1,14 +1,15 @@
 import { locationLabel } from '../utils/locationHierarchy';
 import { formatDate } from '../utils/dateFormat';
-import { Button } from '../components/shared/ActionButtons';
 import { ActionBar } from '../components/shared/ActionBar';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Dialog } from '../components/shared/ClosableDialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
+  ButtonBase,
   CircularProgress,
+  Collapse,
   DialogContent,
   DialogTitle,
   Stack,
@@ -38,6 +39,9 @@ import { isOfflineQueuedError } from '../utils/offline';
 import { OrderListSection, type OrderListEntry } from '../components/orders/OrderListSection';
 import { useOrderEventSelection } from '../hooks/useOrderEventSelection';
 import { ItemRequestBadge } from '../components/orders/ItemRequests';
+import { useCompactCatalog } from '../hooks/useCompactCatalog';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const HISTORY_ORDER_STATUSES: readonly FactionOrderStatus[] = ['returned', 'closed', 'cancelled'];
 const ACTIVE_ORDER_STATUSES: readonly FactionOrderStatus[] = ['draft', 'submitted', 'preparing', 'ready', 'picked_up', 'partially_returned'];
@@ -55,11 +59,12 @@ function statusColor(status: FactionOrderStatus): 'default' | 'info' | 'warning'
   return 'error';
 }
 
-export function FactionOrders() {
+export function FactionOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
   const t = useT();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const compact = useCompactCatalog();
   const showSnackbar = useUIStore((state) => state.showSnackbar);
   const eventType = useUIStore((state) => state.activeEventType);
   const setEventType = useUIStore((state) => state.setActiveEventType);
@@ -92,7 +97,7 @@ export function FactionOrders() {
   const activeOrders = (active.data ?? []).filter((order) => canViewFaction(currentUser, order.factionKey));
   const factionOverview = visibleFactions.map((faction) => {
     const factionOrders = (overviewOrders.data ?? []).filter((order) => order.faction === faction);
-    const state = factionOrders.some((order) => order.status !== 'draft')
+    const state: FactionState = factionOrders.some((order) => order.status !== 'draft')
       ? 'finished'
       : factionOrders.length ? 'draft' : 'none';
     return { faction, state };
@@ -139,15 +144,14 @@ export function FactionOrders() {
     return { requested: requested + requestedAssemblies, prepared: prepared + preparedAssemblies };
   }
 
+  /** The location names the pickup; raw coordinates only stand in when there is none (the detail page has the map). */
   function pickupLabel(order: FactionOrderSummary) {
     const location = order.expand?.pickupLocation
       ?? storageLocations.find((candidate) => candidate.id === order.pickupLocation);
-    const point = order.pickupLatitude != null && order.pickupLongitude != null
+    if (location) return locationLabel(location);
+    return order.pickupLatitude != null && order.pickupLongitude != null
       ? `${order.pickupLatitude.toFixed(5)}, ${order.pickupLongitude.toFixed(5)}`
-      : undefined;
-    return location
-      ? [locationLabel(location), point].filter(Boolean).join(' · ')
-      : point ?? '—';
+      : '—';
   }
 
   function orderEntry(order: FactionOrderSummary, history = false): OrderListEntry {
@@ -158,10 +162,10 @@ export function FactionOrders() {
       title: history ? `${order.faction} · ${order.orderCode}` : order.orderCode,
       subtitle: `${date} · ${totals.prepared}/${totals.requested} ${['picked_up', 'partially_returned', 'returned'].includes(order.status) ? t('pages.factionOrders.used') : t('pages.factionOrders.prepared')}`,
       details: <>
-        {order.requestedPickupDate != null && <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-          {t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)}
-        </Typography>}
         <Typography variant="caption" color={order.status === 'ready' ? 'success.main' : 'text.secondary'} sx={{ display: 'block' }}>
+          {order.requestedPickupDate != null && <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+            {t('common.requestedPickup')}: {formatDate(order.requestedPickupDate)} ·{' '}
+          </Box>}
           {t('common.pickupLocation')}: {pickupLabel(order)}
         </Typography>
         <ItemRequestBadge requests={order.itemRequests} />
@@ -169,15 +173,16 @@ export function FactionOrders() {
       status: statusLabel(order.status),
       statusColor: statusColor(order.status),
       onOpen: () => navigate(`/orders/faction/${order.id}`),
-      actions: <Button onClick={() => navigate(`/orders?pickupOrder=${order.id}&pickupKind=faction`)}>{t('pages.factionOrders.itemsPickupGroups')}</Button>,
+      actions: [{ key: 'pickup-groups', label: t('pages.factionOrders.itemsPickupGroups'), icon: <GroupsOutlinedIcon fontSize="small" />,
+        onClick: () => navigate(`/orders?pickupOrder=${order.id}&pickupKind=faction`) }],
     };
   }
 
   return (
     <Box>
-      <PageHeader title={t('pages.factionOrders.factionOrderLists')}
-        actions={<ActionBar actions={[{ key: 'new', label: t('pages.factionOrders.newList'), title: translate('pages.factionOrders.createANewFactionOrderList'),
-          icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canCreateList, onClick: () => openCreate() }]} />} />
+      <PageHeader title={t('nav.orders')} inlineActions={compact}
+        actions={<ActionBar iconOnly={compact} actions={[{ key: 'new', label: t('pages.factionOrders.newList'), title: translate('pages.factionOrders.createANewFactionOrderList'),
+            icon: <AddIcon />, variant: 'contained', pinned: true, disabled: !canCreateList, onClick: () => openCreate() }]} />} />
 
       <OrderEventFilter
         eventTypes={selectableEvents}
@@ -186,31 +191,10 @@ export function FactionOrders() {
         eventOptions={eventOptions}
         selectedEventId={selectedEventId}
         onEventChange={setSelectedEventId}
-      >
-        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5, overflowX: { md: 'auto' } }}>
-          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-            {t('pages.factionOrders.factionOrderStatus')}
-          </Typography>
-          {overviewOrders.isLoading ? <CircularProgress size={20} aria-label={t('pages.factionOrders.loadingOrderStatus')} /> : !overviewOrders.isError && (
-            <Stack direction="row" sx={{ flexWrap: { xs: 'wrap', md: 'nowrap' }, gap: 1 }}>
-              {factionOverview.map(({ faction, state }) => {
-                const label = state === 'finished' ? t('enum.value.submitted')
-                  : state === 'draft' ? t('enum.value.draft') : t('pages.factionOrders.noOrder');
-                const color = state === 'finished' ? 'success.main'
-                  : state === 'draft' ? 'warning.main' : 'error.main';
-                return <Tooltip key={faction} title={label} arrow>
-                  <Stack direction="row" spacing={0.75} aria-label={`${faction}: ${label}`} sx={{ alignItems: 'center', flexShrink: 0, px: 1, py: 0.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                    <Box aria-hidden="true" sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                    <Typography variant="body2" sx={{ lineHeight: 1.2, whiteSpace: 'nowrap' }}>{faction}</Typography>
-                  </Stack>
-                </Tooltip>;
-              })}
-            </Stack>
-          )}
-        </Box>
-        {!isManager && canOrder(currentUser) && <Box sx={{ alignSelf: { xs: 'flex-end', md: 'center' }, ml: { md: 'auto' } }}><FactionAccessNotice /></Box>}
-      </OrderEventFilter>
-
+        leading={kindSwitch}
+      />
+      <FactionStatusOverview factions={factionOverview} loading={overviewOrders.isLoading} failed={overviewOrders.isError} />
+      {!isManager && canOrder(currentUser) && <Box sx={{ mb: 2 }}><FactionAccessNotice /></Box>}
 
       <OrderListSection
         title={t('pages.factionOrders.activeOrders')}
@@ -267,4 +251,43 @@ export function FactionOrders() {
       </Dialog>
     </Box>
   );
+}
+
+type FactionState = 'finished' | 'draft' | 'none';
+
+/**
+ * Which factions of the selected event have submitted a list. Phones show one summary line with a dot per
+ * faction that expands into the labelled list.
+ */
+function FactionStatusOverview({ factions, loading, failed }: { factions: { faction: string; state: FactionState }[]; loading: boolean; failed: boolean }) {
+  const t = useT();
+  const compact = useCompactCatalog();
+  const [open, setOpen] = useState(false);
+  if (failed || (!loading && !factions.length)) return null;
+  const label = (state: FactionState) => state === 'finished' ? t('enum.value.submitted') : state === 'draft' ? t('enum.value.draft') : t('pages.factionOrders.noOrder');
+  const color = (state: FactionState) => state === 'finished' ? 'success.main' : state === 'draft' ? 'warning.main' : 'error.main';
+  const dot = (state: FactionState) => <Box aria-hidden="true" sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color(state), flexShrink: 0 }} />;
+  const chips = <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+    {factions.map(({ faction, state }) => <Tooltip key={faction} title={label(state)} arrow>
+      <Stack direction="row" spacing={0.75} aria-label={`${faction}: ${label(state)}`} sx={{ alignItems: 'center', px: 1, py: 0.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+        {dot(state)}
+        <Typography variant="body2" sx={{ lineHeight: 1.2, whiteSpace: 'nowrap' }}>{faction}</Typography>
+      </Stack>
+    </Tooltip>)}
+  </Stack>;
+  const heading = <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{t('pages.factionOrders.factionOrderStatus')}</Typography>;
+  if (loading) return <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>{heading}<CircularProgress size={16} aria-label={t('pages.factionOrders.loadingOrderStatus')} /></Stack>;
+  if (!compact) return <Stack spacing={0.5} sx={{ mb: 3 }}>{heading}{chips}</Stack>;
+  const submitted = factions.filter(({ state }) => state === 'finished').length;
+  return <Box sx={{ mb: 2 }}>
+    <ButtonBase onClick={() => setOpen((value) => !value)} aria-expanded={open}
+      sx={{ width: '100%', minHeight: 44, justifyContent: 'flex-start', gap: 1, px: 1, borderRadius: 1, border: 1, borderColor: 'divider', textAlign: 'left' }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+        {t('pages.factionOrders.factionsSubmitted', { submitted, total: factions.length })}
+      </Typography>
+      <Stack direction="row" spacing={0.5} sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>{factions.map(({ faction, state }) => <Box key={faction} sx={{ display: 'flex' }}>{dot(state)}</Box>)}</Stack>
+      <ExpandMoreIcon fontSize="small" sx={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />
+    </ButtonBase>
+    <Collapse in={open}><Box sx={{ pt: 1 }}>{chips}</Box></Collapse>
+  </Box>;
 }

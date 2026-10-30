@@ -1,6 +1,8 @@
 import { ToggleButton } from '../shared/ActionButtons';
 import { useId, type ReactNode } from 'react';
-import { FormControl, InputLabel, MenuItem, Select, Stack, ToggleButtonGroup } from '@mui/material';
+import { FormControl, InputLabel, MenuItem, Select, TextField, ToggleButtonGroup } from '@mui/material';
+import { useCompactCatalog } from '../../hooks/useCompactCatalog';
+import { FilterPanel } from '../shared/FilterPanel';
 import type { EventReport, EventType } from '../../types';
 import { translate, useT } from '../../utils/naming';
 
@@ -12,33 +14,44 @@ interface Props {
   eventOptions: EventReport[];
   selectedEventId: string;
   onEventChange: (id: string) => void;
-  /** Extra controls on the same row, e.g. a search field or status overview. */
-  children?: ReactNode;
+  /** An order search that stays in view on phones. */
+  search?: { value: string; onChange: (value: string) => void; label: string };
+  /** First control of the row, e.g. the order kind switch. */
+  leading?: ReactNode;
 }
 
-/** Event type toggle plus yearly occurrence, shared by faction and general orders. */
-export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eventOptions, selectedEventId, onEventChange, children }: Props) {
+/**
+ * Event type toggle plus yearly occurrence, shared by faction and general orders. Phones show one button
+ * summarising the choice, which opens both controls in a sheet; beside `leading` the search gets its own row.
+ */
+export function OrderEventFilter({ eventTypes, eventType, onEventTypeChange, eventOptions, selectedEventId, onEventChange, search, leading }: Props) {
   const t = useT();
+  const compact = useCompactCatalog();
+  const searchRow = compact && leading && search;
   const labelId = useId();
-  return <>
+  const event = eventOptions.find((entry) => entry.id === selectedEventId);
+  const summary = [eventTypes.length > 1 && eventType, event?.name ?? t('orders.orderEventFilter.allYears')].filter(Boolean).join(' · ');
+  return <><FilterPanel leading={leading} filterLabel={summary} activeFilters={selectedEventId ? 1 : 0} onClear={() => onEventChange('')}
+    search={searchRow ? undefined : search?.value} onSearch={searchRow ? undefined : search?.onChange} searchLabel={search?.label}>
     {eventTypes.length > 1 && <ToggleButtonGroup
       exclusive
+      size="small"
       value={eventType}
       aria-label={t('nav.event')}
       onChange={(_event, value: EventType | null) => { if (value) onEventTypeChange(value); }}
-      sx={{ mb: 2, flexWrap: 'wrap' }}
+      sx={{ flexWrap: 'wrap' }}
     >
       {eventTypes.map((type) => <ToggleButton title={translate('orders.orderEventFilter.filterOrdersByThisEventType')} key={type} value={type}>{type}</ToggleButton>)}
     </ToggleButtonGroup>}
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { xs: 'stretch', md: 'center' } }}>
-      <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: { md: 360 } }}>
-        <InputLabel id={labelId}>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
-        <Select labelId={labelId} value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
-          <MenuItem value="">{t('orders.orderEventFilter.allYears')}</MenuItem>
-          {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name}</MenuItem>)}
-        </Select>
-      </FormControl>
-      {children}
-    </Stack>
+    <FormControl size="small" sx={{ minWidth: { md: 280 }, maxWidth: { md: 360 } }}>
+      <InputLabel id={labelId}>{t('orders.orderEventFilter.yearlyEvent')}</InputLabel>
+      <Select labelId={labelId} value={selectedEventId} label={t('orders.orderEventFilter.yearlyEvent')} onChange={(event) => onEventChange(event.target.value)}>
+        <MenuItem value="">{t('orders.orderEventFilter.allYears')}</MenuItem>
+        {eventOptions.map((entry) => <MenuItem key={entry.id} value={entry.id}>{entry.name}</MenuItem>)}
+      </Select>
+    </FormControl>
+  </FilterPanel>
+  {searchRow && <TextField type="search" size="small" fullWidth label={search.label} value={search.value}
+    onChange={(event) => search.onChange(event.target.value)} sx={{ mb: 2 }} />}
   </>;
 }

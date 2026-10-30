@@ -3,7 +3,7 @@ import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canEditCatalog } from '../../utils/access';
 import { IconButton, Button, MenuItem } from '../shared/ActionButtons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Box, Checkbox, Drawer, FormControl, InputLabel, ListItemIcon, ListItemText, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Checkbox, FormControl, InputLabel, ListItemIcon, ListItemText, Menu, Paper, Link, Select, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
@@ -20,7 +20,7 @@ import { locationPath, locationLabel } from '../../utils/locationHierarchy';
 import { openCatalogRowInNewTab } from '../../utils/catalogNavigation';
 import { StateMessage } from '../common/StateMessage';
 import { catalogGridSx } from './catalogGrid';
-import { CatalogRow, CatalogSearchBar, FilterSheetActions, type RowAction } from './CatalogParts';
+import { CatalogRow, CatalogSearchBar, FilterSheet, type RowAction } from './CatalogParts';
 import { useCompactCatalog } from '../../hooks/useCompactCatalog';
 import { selectFilterColumn } from '../../utils/catalogFilters';
 
@@ -42,6 +42,8 @@ interface Props {
     emptyHint?: string;
     /** The page's scope switch, shown above the search beside bulk selection. */
     scope?: ReactNode;
+    /** Hides search and filters for short bounded lists, e.g. an assembly's components. */
+    searchFrom?: number;
     /**
      * Catalog mode: `items` are server pages already filtered by `query`; filter controls edit the query and
      * the remaining pages of `list` load in the background once the first page is shown. Without it, `items`
@@ -67,7 +69,7 @@ type ItemRow = {
 
 const PAGE_STEP = 30;
 
-export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint, scope, server }: Props) {
+export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, onCreate, onEdit, onDelete, onDeleteMany, requiredQuantities, onRemoveItem, locationStock, emptyHint, scope, searchFrom, server }: Props) {
     const { user } = useAuth();
     const canEditItem = (item: Item) => item.access?.privateResource ? item.access.canEdit : canEditCatalog(user);
     const canManage = Boolean(onEdit && onDelete && onDeleteMany);
@@ -275,19 +277,16 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             sx={catalogGridSx} />;
     })();
 
+    const showSearch = !searchFrom || allRows.length >= searchFrom || Boolean(search) || activeFilters > 0;
+
     return <Box>
-        {compact ? <>
+        {!showSearch ? null : compact ? <>
             <CatalogSearchBar scope={scope} search={search} onSearch={setSearch} label={t('common.searchItems')}
                 activeFilters={activeFilters} onOpenFilters={() => setFiltersOpen(true)} onClearFilters={clearFilters}
                 selecting={canManage ? selecting : undefined} onToggleSelecting={() => { setSelecting((value) => !value); setSelectedIds(new Set()); }} />
-            <Drawer anchor="bottom" open={filtersOpen} onClose={() => setFiltersOpen(false)}
-                slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85dvh', pb: 'env(safe-area-inset-bottom)' } } }}>
-                <Stack spacing={2} sx={{ p: 2 }} role="group" aria-labelledby="item-filter-title">
-                    <Typography id="item-filter-title" variant="h6" component="h2">{t('common.filters')}</Typography>
-                    {filterControls}
-                    <FilterSheetActions resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters} onDone={() => setFiltersOpen(false)} />
-                </Stack>
-            </Drawer>
+            <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} resultCount={rows.length} activeFilters={activeFilters} onClear={clearFilters}>
+                {filterControls}
+            </FilterSheet>
         </> : <>
             {scope && <Box sx={{ mb: 2 }}>{scope}</Box>}
             <TextField type="search" label={t('lists.itemsList.searchByName')} value={search}

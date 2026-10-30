@@ -2,9 +2,9 @@ import { calendarDate, dateFieldValue, formatDate } from '../../utils/dateFormat
 import { Button } from '../shared/ActionButtons';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Alert, Box, Card, CardContent, Chip, MenuItem, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, MenuItem, Stack, Typography } from '@mui/material';
 import { TextField } from '../shared/DateTextField';
-import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import { DetailSection } from '../items/DetailSection';
 import { useItemAssets, useItemsByIds } from '../../hooks/useItems';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { operationsApi } from '../../services/operationsService';
@@ -97,11 +97,8 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
   const intervalValid = /^\d+$/.test(draft.intervalDays) && Number(draft.intervalDays) > 0;
   const noDevices = serialized && !draft.assetId && assetsComplete && activeAssets.length === 0;
 
-  return <Paper sx={{ p: 2.5, mb: 3 }}>
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-      <EventRepeatIcon color="primary" />
-      <Typography variant="h6">{t('maintenance.individualSchedules.maintenancePerItemOrDevice')}</Typography>
-    </Stack>
+  // Collapsed on phones: setting up schedules is occasional, inspecting due entries is the daily task.
+  return <Box sx={{ mb: 3 }}><DetailSection title={t('maintenance.individualSchedules.maintenancePerItemOrDevice')} defaultExpanded={false}>
     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
       {t('maintenance.individualSchedules.ownInspectionIntervalForASingleItemOrASerialized')}
     </Typography>
@@ -166,5 +163,5 @@ export function IndividualSchedules({ schedules, canEdit, onInspect }: {
         })}
       </Stack>}
     </Stack>
-  </Paper>;
+  </DetailSection></Box>;
 }

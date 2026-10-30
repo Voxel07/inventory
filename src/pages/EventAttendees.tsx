@@ -17,7 +17,8 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { Dialog } from '../components/shared/ClosableDialog';
 import { Field, FieldGrid } from '../components/items/CompactDetail';
 import { QueryFeedback } from '../components/common/QueryFeedback';
-import { EventMetric, EventWorkspace } from '../components/events/EventWorkspace';
+import { EventWorkspace } from '../components/events/EventWorkspace';
+import { StatStrip } from '../components/shared/StatStrip';
 import { EventPeopleDirectory } from '../components/events/EventPeopleDirectory';
 import { TimelineSchedule } from '../components/events/EventTimelineSchedule';
 import { attendeeHooks, useCateringSettings, useSaveCateringSettings, useEventAccounts, useEventPeople } from '../hooks/useEventLogistics';
@@ -149,13 +150,14 @@ function AttendeeList({ event }: { event: EventReport }) {
   return <>
     <QueryFeedback isLoading={query.isLoading} error={query.error} />
     {ready && <>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 1, mb: 2 }}>
-        <EventMetric compact label={t('pages.eventAttendees.attendees')} value={attendees.length} detail={missingDates ? t('pages.eventAttendees.missingDatesWithTravelTimesToConfirm', { missingDates }) : undefined} />
-        <EventMetric compact label={t('pages.eventAttendees.mainMealStamps')} value={totalMain} />
-        <EventMetric compact label={t('pages.eventAttendees.breakfastStamps')} value={totalBreakfast} />
-        <EventMetric compact label={t('pages.eventAttendees.stillToIssue')} value={unissued.reduce((sum, attendee) => sum + attendee.mainMealStamps + attendee.breakfastStamps, 0)}
-          detail={t('pages.eventAttendees.forUnissuedCountPeople', { unissuedCount: String(unissued.length) })} />
-      </Box>
+      <StatStrip sx={{ mb: 2 }} stats={[
+        { label: t('pages.eventAttendees.attendees'), value: attendees.length, color: missingDates ? 'warning.main' : undefined,
+          detail: missingDates ? t('pages.eventAttendees.missingDatesWithTravelTimesToConfirm', { missingDates }) : undefined },
+        { label: t('pages.eventAttendees.mainMealStamps'), value: totalMain },
+        { label: t('pages.eventAttendees.breakfastStamps'), value: totalBreakfast },
+        { label: t('pages.eventAttendees.stillToIssue'), value: unissued.reduce((sum, attendee) => sum + attendee.mainMealStamps + attendee.breakfastStamps, 0),
+          detail: t('pages.eventAttendees.forUnissuedCountPeople', { unissuedCount: String(unissued.length) }) },
+      ]} />
       <CateringRates eventId={eventId} canEdit={canEdit} />
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>

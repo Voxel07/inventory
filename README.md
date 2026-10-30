@@ -22,8 +22,10 @@ Backend (Java 25):
 
 ```bash
 cd backend
-mvn quarkus:dev
+mvn clean quarkus:dev
 ```
+
+Clean on each dev-mode start so removed or renamed classes (including nested DTO records) cannot remain in `target/classes` and break startup with `IncompatibleClassChangeError`. Stop the existing dev process before restarting with this command; live reload remains available during the session.
 
 With Docker or Podman running, Quarkus Dev Services automatically starts a disposable PostgreSQL 18 database on a random port and supplies its connection settings. No `DB_*` variables or manually started database are needed for this local JVM workflow. Data survives live reloads and is discarded when dev mode stops. Restart dev mode after editing the schema baseline. Production and Docker Compose use their configured databases; tests use the dedicated `TEST_DB_*` settings.
 

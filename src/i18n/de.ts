@@ -1182,6 +1182,7 @@ export default {
       doneSelecting: 'Auswahl beenden',
       select: 'Auswählen',
       showResultCount: '{{resultCount}} anzeigen',
+      done: 'Fertig',
     },
     checkedOutList: {
       loading: 'Lade…',
@@ -2038,6 +2039,9 @@ export default {
     actionMenu: {
       moreActions: 'Weitere Aktionen',
     },
+    infoTip: {
+      moreInformation: 'Weitere Informationen',
+    },
   },
   hooks: {
     useBarcodeScanner: {
@@ -2116,6 +2120,10 @@ export default {
       nameNeededNeededAvailableAvailable: '{{name}} (benötigt: {{needed}}, vorhanden: {{available}})',
       itemsInThisAssembly: 'Komponenten in dieser Baugruppe',
       quicklyAddItem: 'Artikel schnell hinzufügen',
+      addItem: 'Artikel hinzufügen',
+      showImage: 'Bild anzeigen',
+      insufficientStockCount_one: 'Zu wenig Bestand für {{count}} Komponente',
+      insufficientStockCount_other: 'Zu wenig Bestand für {{count}} Komponenten',
       checkOutAssembly: 'Baugruppe ausleihen',
       thisChecksOutEveryItemInNameInTheSpecified: 'Dies leiht alle Artikel in „{{name}}“ mit den angegebenen Mengen aus.',
       eventOccurrence: 'Eventtermin',
@@ -2442,6 +2450,7 @@ export default {
       createANewFactionOrderList: 'Eine neue Fraktionsbestellliste anlegen',
       newList: 'Neue Liste',
       factionOrderStatus: 'Bestellstatus der Fraktionen',
+      factionsSubmitted: '{{submitted}}/{{total}} Fraktionen eingereicht',
       loadingOrderStatus: 'Bestellstatus wird geladen',
       finished: 'Fertig',
       noOrder: 'Keine Bestellung',
@@ -2641,6 +2650,8 @@ export default {
       backToOrderOverview: 'Zur Bestellübersicht',
       orderTypes: 'Bestellarten',
       factionOrders: 'Fraktionsbestellungen',
+      general: 'Allgemein',
+      factions: 'Fraktionen',
     },
     printQRCodes: {
       loadingData: 'Lade Daten...',

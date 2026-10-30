@@ -108,17 +108,17 @@ export function Header() {
         <>
         <AppBar position="fixed" elevation={0} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
-                <IconButton title={translate('shared.header.showOrHideTheNavigationMenu')}
+                {/* Phones open the menu from "More" in the bottom bar. */}
+                {!isCompact && <IconButton title={translate('shared.header.showOrHideTheNavigationMenu')}
                     color="inherit"
                     edge="start"
                     onClick={toggleSidebar}
-                    // The phone toolbar padding is narrower than the edge offset; keep the button fully on screen.
-                    sx={{ ml: { xs: -0.5, sm: -1.5 }, mr: { xs: 0.5, sm: 1.5 } }}
+                    sx={{ ml: -1.5, mr: 1.5 }}
                     aria-label={t('header.toggleNavigation')}
                 >
                     <MenuIcon />
-                </IconButton>
-                <InventoryIcon sx={{ mr: 1, color: 'primary.main', display: { xs: 'none', sm: 'block' } }} />
+                </IconButton>}
+                <InventoryIcon sx={{ ml: { xs: 1, sm: 0 }, mr: 1, color: 'primary.main' }} />
                 <Typography variant="body1" noWrap component="div" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.125rem' } }}>
                     {t('header.inventory')}
                 </Typography>
