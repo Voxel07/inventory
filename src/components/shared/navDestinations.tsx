@@ -123,10 +123,11 @@ export function useMobileDestinations(): MobileDestination[] {
     ];
 }
 
-/** The signed-in user's saved layout, or the default until they choose one. */
+/** The layout being edited, else the signed-in user's saved layout, or the default until they choose one. */
 export function useMobileNavLayout(): MobileNavLayout {
     const { user } = useAuth();
-    return user?.mobileNavigation ?? DEFAULT_MOBILE_NAV;
+    const draft = useUIStore((s) => s.mobileNavDraft);
+    return (draft === undefined ? user?.mobileNavigation : draft) ?? DEFAULT_MOBILE_NAV;
 }
 
 /**

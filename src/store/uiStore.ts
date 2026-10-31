@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EventType } from '../types';
+import type { EventType, MobileNavLayout } from '../types';
 
 const ACTIVE_EVENT_STORAGE_KEY = 'inventory-active-event';
 const THEME_MODE_STORAGE_KEY = 'inventory-theme-mode';
@@ -69,6 +69,10 @@ interface UIState {
   quickScanOpen: boolean;
   setQuickScanOpen: (open: boolean) => void;
 
+  /** Unsaved phone navigation shown at once; null previews the default layout, undefined shows the saved one. */
+  mobileNavDraft: MobileNavLayout | null | undefined;
+  setMobileNavDraft: (draft: MobileNavLayout | null | undefined) => void;
+
   snackbar: { open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' };
   showSnackbar: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
   hideSnackbar: () => void;
@@ -133,6 +137,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   quickScanOpen: false,
   setQuickScanOpen: (open) => set({ quickScanOpen: open }),
+
+  mobileNavDraft: undefined,
+  setMobileNavDraft: (draft) => set({ mobileNavDraft: draft }),
 
   snackbar: { open: false, message: '', severity: 'info' },
   showSnackbar: (message, severity = 'info') =>

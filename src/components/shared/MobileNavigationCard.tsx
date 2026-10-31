@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Accordion, AccordionDetails, Box, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -6,27 +6,26 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { AccordionSummary, Button, IconButton } from './ActionButtons';
 import { useUIStore } from '../../store/uiStore';
 import { saveMobileNavigation } from '../../services/apiClient';
-import { useAuth } from '../../hooks/useAuth';
-import { DEFAULT_MOBILE_NAV, MOBILE_NAV_LIMITS, TASKS_KEY, resolveMobileNav, useMobileDestinations, type MobileDestination } from './navDestinations';
+import { MOBILE_NAV_LIMITS, TASKS_KEY, resolveMobileNav, useMobileDestinations, useMobileNavLayout, type MobileDestination } from './navDestinations';
 import { useT } from '../../utils/naming';
 import type { MobileNavLayout, MobileNavPlacement } from '../../types';
 
 type Choice = MobileNavPlacement | 'menu' | 'hidden';
 
 /**
- * Arranges the phone's bottom and top bars, what stays under "More", and what phones leave out. Changes stay a draft
- * until saved to the user's account; null is the default layout.
+ * Arranges the phone's bottom and top bars, what stays under "More", and what phones leave out. Changes show at once
+ * but are saved to the user's account only on Save; leaving the card unsaved discards them.
  */
 export function MobileNavigationCard() {
   const t = useT();
   const destinations = useMobileDestinations();
-  const saved = useAuth().user?.mobileNavigation ?? null;
-  // Undefined while nothing has changed since the last save.
-  const [draft, setDraft] = useState<MobileNavLayout | null | undefined>(undefined);
+  const draft = useUIStore((s) => s.mobileNavDraft);
+  const setDraft = useUIStore((s) => s.setMobileNavDraft);
   const [saving, setSaving] = useState(false);
-  const layout = resolveMobileNav((draft === undefined ? saved : draft) ?? DEFAULT_MOBILE_NAV, destinations);
+  const layout = resolveMobileNav(useMobileNavLayout(), destinations);
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const change = (next: MobileNavLayout | null) => setDraft(next);
+  useEffect(() => () => setDraft(undefined), [setDraft]);
   const save = () => {
     if (draft === undefined) return;
     setSaving(true);
