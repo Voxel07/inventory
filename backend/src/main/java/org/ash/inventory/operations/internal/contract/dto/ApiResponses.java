@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.internal.contract.dto;
 
 import org.ash.inventory.operations.internal.application.InventoryAccessService;
+import org.ash.inventory.operations.internal.model.MobileNavigation;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -45,7 +46,7 @@ public final class ApiResponses {
             List<String> faction,
             long revision, boolean active,
             /** Only for the signed-in user; omitted in listings and while the default layout applies. */
-            @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> mobileNavigation
+            @JsonInclude(JsonInclude.Include.NON_NULL) MobileNavigation mobileNavigation
     ) {}
 
     /** Attribution outside account administration never discloses contact details or access assignments. */

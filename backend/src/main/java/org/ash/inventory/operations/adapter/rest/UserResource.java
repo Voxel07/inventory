@@ -48,6 +48,11 @@ public class UserResource {
     public ApiResponses.UserResponse updateMobileNavigation(@jakarta.validation.constraints.NotNull @Valid ApiModels.MobileNavigationInput input) {
         return mapper.currentUser(users.updateMobileNavigation(input));
     }
+
+    @jakarta.ws.rs.DELETE @Path("/auth/me/mobile-navigation")
+    public ApiResponses.UserResponse resetMobileNavigation() {
+        return mapper.currentUser(users.updateMobileNavigation(null));
+    }
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.AuthSessionService sessions;
     @POST @Path("/auth/logout") public void logout() { sessions.logout(actors.authenticated().id); }
 

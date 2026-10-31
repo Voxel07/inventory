@@ -1,14 +1,18 @@
-import { Avatar, Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Avatar, Box, Chip, Paper, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import LogoutIcon from '@mui/icons-material/Logout';
 import BadgeIcon from '@mui/icons-material/Badge';
 import GroupsIcon from '@mui/icons-material/Groups';
 import { useAuth } from '../hooks/useAuth';
+import { useSignOut } from '../hooks/useSignOut';
 import { useT, type TranslationKey } from '../utils/naming';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { factionKeyOf } from '../utils/access';
 import { NotificationSettingsCard } from '../components/shared/NotificationSettingsCard';
 import { InstallAppCard } from '../components/shared/InstallAppCard';
 import { MobileNavigationCard } from '../components/shared/MobileNavigationCard';
+import { LanguageSelector } from '../components/shared/LanguageSelector';
+import { Button } from '../components/shared/ActionButtons';
 
 const ROLE_KEYS: Record<string, TranslationKey> = {
   admin: 'profile.roles.admin',
@@ -22,6 +26,10 @@ const ROLE_KEYS: Record<string, TranslationKey> = {
 export function Profile() {
   const { user } = useAuth();
   const t = useT();
+  const signOut = useSignOut();
+  const theme = useTheme();
+  // Phones have no menu footer, so the profile offers the language and sign-out.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const role = user?.role?.trim().toLowerCase() ?? '';
   const displayName = user?.name?.trim() || user?.email || t('profile.unknownUser');
   const { factions } = useFactionCatalog();
@@ -33,9 +41,14 @@ export function Profile() {
 
   return (
     <Box sx={{ maxWidth: 720, mx: 'auto' }}>
-      <Typography variant="h4" sx={{ mb: { xs: 2.5, sm: 4 } }}>
-        {t('profile.title')}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: { xs: 2.5, sm: 4 } }}>
+        <Typography variant="h4">
+          {t('profile.title')}
+        </Typography>
+        <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
+          <InstallAppCard compact />
+        </Box>
+      </Box>
 
       <Paper sx={{ overflow: 'hidden' }}>
         <Box
@@ -100,11 +113,14 @@ export function Profile() {
           </Box>
         </Box>
       </Paper>
-      <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: 1 }}>
-        <InstallAppCard compact />
-      </Box>
       <MobileNavigationCard />
       <NotificationSettingsCard />
+      {isMobile && <Paper variant="outlined" sx={{ mt: 3, p: 2.5 }}>
+        <Stack spacing={2}>
+          <LanguageSelector />
+          <Button variant="outlined" color="error" startIcon={<LogoutIcon />} onClick={signOut}>{t('nav.signOut')}</Button>
+        </Stack>
+      </Paper>}
     </Box>
   );
 }

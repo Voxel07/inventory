@@ -4,6 +4,7 @@ import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.notification.api.PersonalWebhookPublisher;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.model.DomainEnums;
+import org.ash.inventory.operations.internal.model.MobileNavigation;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.UserOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
@@ -11,7 +12,6 @@ import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
-import java.util.Map;
 /**
  * Accounts are provisioned from the identity provider (access group membership); their role and
  * faction memberships are managed here by the inventory admin.
@@ -73,19 +73,18 @@ public class UserService {
         return user;
     }
 
-    /** Destinations that fit beside "More" in the phone's bottom bar, and beside the profile in its top bar. */
-    private static final Map<String, Integer> MOBILE_NAVIGATION_LIMITS = Map.of("bottom", 4, "top", 2);
-
-    /** The current user places phone destinations in the bottom or top bar; null restores the default layout. */
+    /** The current user arranges their phone navigation; null restores the default layout. */
     @Transactional
     public UserAccount updateMobileNavigation(ApiModels.MobileNavigationInput input) {
-        var placements = input.placements();
-        if (placements != null) MOBILE_NAVIGATION_LIMITS.forEach((bar, limit) -> {
-            if (placements.values().stream().filter(bar::equals).count() > limit)
-                throw ApiException.badRequest("At most " + limit + " destinations fit in the " + bar + " bar");
-        });
+        MobileNavigation layout = null;
+        if (input != null) {
+            var keys = java.util.stream.Stream.of(input.bottom(), input.top(), input.hidden()).flatMap(java.util.List::stream).toList();
+            if (keys.size() != new java.util.HashSet<>(keys).size())
+                throw ApiException.badRequest("Each destination can have only one place");
+            layout = new MobileNavigation(java.util.List.copyOf(input.bottom()), java.util.List.copyOf(input.top()), java.util.List.copyOf(input.hidden()), input.inboxInProfile());
+        }
         var user = users.findLocked(actors.current().id);
-        user.mobileNavigation = placements == null ? null : new java.util.TreeMap<>(placements);
+        user.mobileNavigation = layout;
         return user;
     }
 

@@ -12,7 +12,8 @@ import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutlined';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
+import MailOutlineIcon from '@mui/icons-material/MailOutlined';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
@@ -21,6 +22,7 @@ import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useUIStore } from '../../store/uiStore';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { useT } from '../../utils/naming';
@@ -82,7 +84,10 @@ export function isActivePath(pathname: string, path: string) {
     return path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`);
 }
 
-export const DEFAULT_MOBILE_NAV: MobileNavLayout = { '/items': 'bottom', '/assemblies': 'bottom', '/orders': 'bottom', tasks: 'top' };
+export const TASKS_KEY = 'tasks';
+export const SCANNER_KEY = 'scanner';
+
+export const DEFAULT_MOBILE_NAV: MobileNavLayout = { bottom: ['/items', '/assemblies', '/orders'], top: [SCANNER_KEY, TASKS_KEY], hidden: [], inboxInProfile: false };
 
 /** How many destinations fit beside "More" in the bottom bar, and beside the profile in the top bar, on a phone. */
 export const MOBILE_NAV_LIMITS: Record<MobileNavPlacement, number> = { bottom: 4, top: 2 };
@@ -95,11 +100,13 @@ export type MobileDestination = {
     /** Set for routes, to mark the active destination. */
     path?: string;
     open: () => void;
-    /** Has no entry in the "More" menu, so it must stay in one of the bars. */
-    required?: boolean;
+    /** Listed in the "More" menu; others appear only in a bar. */
+    menuEntry: boolean;
+    /** May be left out on phones altogether. */
+    hideable: boolean;
 };
 
-/** Every destination the user may open: Tasks (the action inbox), then the menu entries in menu order. */
+/** Every destination the user may open: Tasks (the action inbox), the scanner, then the menu entries in menu order. */
 export function useMobileDestinations(): MobileDestination[] {
     const t = useT();
     const navigate = useNavigate();
@@ -107,10 +114,12 @@ export function useMobileDestinations(): MobileDestination[] {
     const { openActionInbox } = useActionInboxDialog();
     const inboxCount = useInboxCount();
     const groups = useNavGroups(user);
+    const setQuickScanOpen = useUIStore((s) => s.setQuickScanOpen);
     return [
-        { key: 'tasks', label: t('common.tasks'), icon: <Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>,
-            open: openActionInbox, required: true },
-        ...groups.flatMap((group) => group.items).map((item) => ({ key: item.path, ...item, open: () => { void navigate(item.path); } })),
+        { key: TASKS_KEY, label: t('common.tasks'), icon: <Badge badgeContent={inboxCount} color="error" max={99}><MailOutlineIcon /></Badge>,
+            open: openActionInbox, menuEntry: false, hideable: false },
+        { key: SCANNER_KEY, label: t('nav.scanner'), icon: <QrCodeScannerIcon />, open: () => setQuickScanOpen(true), menuEntry: false, hideable: true },
+        ...groups.flatMap((group) => group.items).map((item) => ({ key: item.path, ...item, open: () => { void navigate(item.path); }, menuEntry: true, hideable: true })),
     ];
 }
 
@@ -120,19 +129,27 @@ export function useMobileNavLayout(): MobileNavLayout {
     return user?.mobileNavigation ?? DEFAULT_MOBILE_NAV;
 }
 
-/** The placement of each destination; a required destination without one stays in the top bar. */
-export function useMobileNavPlacement() {
-    const layout = useMobileNavLayout();
-    return (destination: MobileDestination): MobileNavPlacement | undefined => layout[destination.key] ?? (destination.required ? 'top' : undefined);
+/**
+ * The layout as the phone shows it: limited to destinations the user may open and bars within their limits. A
+ * destination without a menu entry that has no place goes to the front of the top bar, unless it is hidden or the
+ * profile opens it.
+ */
+export function resolveMobileNav(layout: MobileNavLayout, destinations: MobileDestination[]): MobileNavLayout {
+    const byKey = new Map(destinations.map((destination) => [destination.key, destination]));
+    const keep = (keys: string[]) => keys.filter((key) => byKey.has(key) && !(layout.inboxInProfile && key === TASKS_KEY));
+    const bottom = keep(layout.bottom).slice(0, MOBILE_NAV_LIMITS.bottom);
+    const hidden = keep(layout.hidden).filter((key) => byKey.get(key)?.hideable && !bottom.includes(key) && !layout.top.includes(key));
+    const unplaced = keep(destinations.filter((destination) => !destination.menuEntry).map((destination) => destination.key))
+        .filter((key) => !bottom.includes(key) && !layout.top.includes(key) && !hidden.includes(key));
+    const top = [...unplaced, ...keep(layout.top)].slice(0, MOBILE_NAV_LIMITS.top);
+    return { bottom, top, hidden, inboxInProfile: layout.inboxInProfile };
 }
 
-/** The phone's bottom- and top-bar destinations, limited to those the user may open. */
+/** The phone's bottom- and top-bar destinations in the user's order, limited to those the user may open. */
 export function useMobileNavigation() {
     const destinations = useMobileDestinations();
-    const placementOf = useMobileNavPlacement();
-    const placed = (placement: MobileNavPlacement) => destinations.filter((destination) => placementOf(destination) === placement)
-        .slice(0, MOBILE_NAV_LIMITS[placement]);
-    const bottom = placed('bottom');
-    // A layout chosen for other permissions may leave nothing the user can open; Home keeps the bar useful.
-    return { bottom: bottom.length ? bottom : destinations.filter((destination) => destination.key === '/'), top: placed('top') };
+    const layout = resolveMobileNav(useMobileNavLayout(), destinations);
+    const byKey = new Map(destinations.map((destination) => [destination.key, destination]));
+    const placed = (keys: string[]) => keys.flatMap((key) => byKey.get(key) ?? []);
+    return { bottom: placed(layout.bottom), top: placed(layout.top), inboxInProfile: layout.inboxInProfile };
 }

@@ -3,11 +3,11 @@ import { CameraScanner } from './CameraScanner';
 import { useInboxCount } from '../../hooks/useInbox';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { Dialog } from './ClosableDialog';
-import { AppBar, Toolbar, Typography, Box, DialogTitle, DialogContent, TextField, Badge, useTheme, useMediaQuery } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, DialogTitle, DialogContent, TextField, Badge, ButtonBase, ListItemIcon, ListItemText, Menu, MenuItem, useTheme, useMediaQuery } from '@mui/material';
 import { amber, blue } from '@mui/material/colors';
 import MenuIcon from '@mui/icons-material/Menu';
 import InventoryIcon from '@mui/icons-material/Inventory2';
-import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
+import MailOutlineIcon from '@mui/icons-material/MailOutlined';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -20,7 +20,7 @@ import { translate, useT } from '../../utils/naming';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 import { useAuth } from '../../hooks/useAuth';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { SyncIssuesDialog } from '../dialogs/SyncIssuesDialog';
 import { QueuedActionsDialog } from '../dialogs/QueuedActionsDialog';
 import { discardSyncFailure, getSyncFailures, type SyncFailure } from '../../services/offlineQueue';
@@ -40,14 +40,17 @@ export function Header() {
     const [queuedActionsOpen, setQueuedActionsOpen] = useState(false);
     const theme = useTheme();
     const isCompact = useMediaQuery(theme.breakpoints.down('md'));
-    const { top } = useMobileNavigation();
+    const { top, inboxInProfile } = useMobileNavigation();
+    const profileOpensInbox = isCompact && inboxInProfile;
+    const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
     const { online, queued, syncIssues, sync } = useOfflineStatus();
     const { generation } = useAuth();
     const snapshot = useSyncExternalStore(subscribeSnapshot, getSnapshotStatus);
     useEffect(() => { void restoreSnapshotStatus().catch(() => {}); }, [generation]);
     const themeMode = useUIStore((s) => s.themeMode);
     const toggleThemeMode = useUIStore((s) => s.toggleThemeMode);
-    const [quickScanOpen, setQuickScanOpen] = useState(false);
+    const quickScanOpen = useUIStore((s) => s.quickScanOpen);
+    const setQuickScanOpen = useUIStore((s) => s.setQuickScanOpen);
     const [quickScanInput, setQuickScanInput] = useState('');
     const syncPending = queued > 0 || syncIssues > 0 || sync.kind !== 'idle' || snapshot.kind === 'downloading';
     let syncColor = theme.palette.success.main;
@@ -118,26 +121,29 @@ export function Header() {
                 >
                     <MenuIcon />
                 </IconButton>}
-                <InventoryIcon sx={{ ml: { xs: 1, sm: 0 }, mr: 1, color: 'primary.main' }} />
-                <Typography variant="body1" noWrap component="div" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-                    {t('header.inventory')}
-                </Typography>
+                <ButtonBase component={RouterLink} to="/" aria-label={t('nav.home')}
+                    sx={{ ml: { xs: 1, sm: 0 }, px: 0.5, py: 0.5, borderRadius: 1, minWidth: 0 }}>
+                    <InventoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                    <Typography variant="body1" noWrap component="span" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.125rem' } }}>
+                        {t('header.inventory')}
+                    </Typography>
+                </ButtonBase>
                 <Box sx={{ flexGrow: 1 }} />
-                <IconButton title={translate('shared.header.openTheQRCodeAndBarcodeScanner')}
+                {/* On phones the scanner and the inbox ("Tasks") are placeable destinations, like the user's other top-bar picks. */}
+                {!isCompact && <IconButton title={translate('shared.header.openTheQRCodeAndBarcodeScanner')}
                     color="inherit"
                     onClick={() => setQuickScanOpen(true)}
                     aria-label={translate('shared.header.scanAQRCodeOrBarcode')}
                     sx={{ mr: 0.5 }}
                 >
                     <QrCodeScannerIcon />
-                </IconButton>
-                {/* On phones the inbox is a placeable destination ("Tasks"), like the user's other top-bar picks. */}
+                </IconButton>}
                 {isCompact ? top.map((destination) => <IconButton key={destination.key} title={destination.label} color="inherit"
                     aria-haspopup={destination.path ? undefined : 'dialog'} onClick={destination.open} sx={{ mr: 0.5 }}>
                     {destination.icon}
                 </IconButton>) : <Button color="inherit" aria-haspopup="dialog" onClick={openActionInbox}
                     aria-label={translate('shared.header.openInboxInboxCountOpen', { inboxCount: inboxCount })}
-                    startIcon={<Badge badgeContent={inboxCount} color="error" max={99}><InboxOutlinedIcon /></Badge>}
+                    startIcon={<Badge badgeContent={inboxCount} color="error" max={99}><MailOutlineIcon /></Badge>}
                     sx={{ mr: 0.5, px: 1.5 }}>
                     {translate('shared.header.inbox')}
                 </Button>}
@@ -150,14 +156,32 @@ export function Header() {
                     {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
                 </IconButton>
 
-                <IconButton title={t('header.openProfile')}
+                {profileOpensInbox ? <IconButton title={t('header.profileAndInbox')}
+                    color="inherit"
+                    onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
+                    aria-label={translate('shared.header.openInboxInboxCountOpen', { inboxCount: inboxCount })}
+                    aria-haspopup="menu"
+                    sx={{ mr: { xs: 0.5, sm: 1 } }}
+                >
+                    <Badge badgeContent={inboxCount} color="error" max={99}><AccountCircleIcon /></Badge>
+                </IconButton> : <IconButton title={t('header.openProfile')}
                     color="inherit"
                     onClick={() => navigate('/profile')}
                     aria-label={t('header.openProfile')}
                     sx={{ mr: { xs: 0.5, sm: 1 } }}
                 >
                     <AccountCircleIcon />
-                </IconButton>
+                </IconButton>}
+                <Menu anchorEl={profileMenuAnchor} open={profileOpensInbox && profileMenuAnchor !== null} onClose={() => setProfileMenuAnchor(null)}>
+                    <MenuItem onClick={() => { setProfileMenuAnchor(null); openActionInbox(); }}>
+                        <ListItemIcon><Badge badgeContent={inboxCount} color="error" max={99}><MailOutlineIcon fontSize="small" /></Badge></ListItemIcon>
+                        <ListItemText>{translate('shared.header.inbox')}</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={() => { setProfileMenuAnchor(null); navigate('/profile'); }}>
+                        <ListItemIcon><AccountCircleIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText>{t('profile.title')}</ListItemText>
+                    </MenuItem>
+                </Menu>
 
                 <IconButton title={syncLabel}
                     onClick={openQueuedActions}

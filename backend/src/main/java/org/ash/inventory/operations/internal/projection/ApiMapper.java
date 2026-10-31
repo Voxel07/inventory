@@ -42,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.ash.inventory.operations.internal.model.MobileNavigation;
 
 @ApplicationScoped
 public class ApiMapper {
@@ -66,7 +67,7 @@ public class ApiMapper {
         return user(value, value.mobileNavigation);
     }
 
-    private ApiResponses.UserResponse user(UserAccount value, Map<String, String> mobileNavigation) {
+    private ApiResponses.UserResponse user(UserAccount value, MobileNavigation mobileNavigation) {
         return new ApiResponses.UserResponse(
                 value.id,
                 value.createdAt,

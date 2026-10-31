@@ -1,10 +1,19 @@
 /** Display attribution; account details and permissions are never embedded in operational responses. */
 export type ActorSummary = Pick<User, 'id' | 'name'>;
 
-/** Where a phone destination appears; destinations without a placement stay in the "More" menu. */
+/** The phone bars a destination can be placed in; destinations in neither stay in the "More" menu. */
 export type MobileNavPlacement = 'bottom' | 'top';
-/** Destination key (`tasks` or a route path) to its placement. */
-export type MobileNavLayout = Partial<Record<string, MobileNavPlacement>>;
+/** Phone navigation chosen by the user. Keys are `tasks`, `scanner` or a route path. */
+export interface MobileNavLayout {
+  /** Bottom-bar destinations, left to right. */
+  bottom: string[];
+  /** Top-bar destinations, left to right. */
+  top: string[];
+  /** Destinations left out of the bars and the "More" menu. */
+  hidden: string[];
+  /** The profile button also opens the inbox, so Tasks needs no place of its own. */
+  inboxInProfile: boolean;
+}
 
 export interface User {
   active: boolean;

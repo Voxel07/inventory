@@ -17,9 +17,12 @@ import { formatDate, formatDateTime } from '../../utils/dateFormat';
 
 type Category = 'all' | 'notices' | 'tasks' | 'later';
 
-function InboxSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+function InboxSection({ title, count, action, children }: { title: string; count: number; action?: ReactNode; children: ReactNode }) {
   return <Box component="section">
-    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>{title} <Typography component="span" variant="body2" color="text.secondary">({count})</Typography></Typography>
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+      <Typography variant="subtitle2">{title} <Typography component="span" variant="body2" color="text.secondary">({count})</Typography></Typography>
+      {action}
+    </Box>
     <List disablePadding>{children}</List>
   </Box>;
 }
@@ -58,10 +61,6 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
   </ListItem>;
 
   return <Stack spacing={2}>
-    {/* Applies to every unread notice up to the newest shown, including pages not loaded yet. */}
-    {notices.unreadTotal > 0 && <Button size="small" startIcon={<DoneAllIcon />} sx={{ alignSelf: 'flex-end' }}
-      disabled={notices.markAll.isPending || notices.unread.length === 0} onClick={() => notices.markAll.mutate()}>
-      {t('dialogs.actionInboxContent.markAllUnreadTotalAsRead', { unreadTotal: String(notices.unreadTotal) })}</Button>}
     <ToggleButtonGroup exclusive size="small" value={category} onChange={(_, value: Category | null) => { if (value) setCategory(value); }}
       aria-label={t('common.category')} sx={{ flexWrap: 'wrap' }}>
       <ToggleButton value="all">{t('common.all')} ({due.length + notices.unreadTotal})</ToggleButton>
@@ -77,7 +76,10 @@ export function ActionInboxContent({ onOpenTask }: { onOpenTask: () => void }) {
     {!loading && !failed && visibleCount === 0 && <StateMessage kind="done" title={t('dialogs.actionInboxContent.allCaughtUp')}
       description={t('dialogs.actionInboxContent.completedTasksDisappearAutomatically')} />}
 
-    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('dialogs.actionInboxContent.notices')} count={notices.unreadTotal}>
+    {show('notices') && notices.unread.length > 0 && <InboxSection title={t('dialogs.actionInboxContent.notices')} count={notices.unreadTotal}
+      // Applies to every unread notice up to the newest shown, including pages not loaded yet.
+      action={<Button size="small" startIcon={<DoneAllIcon />} sx={{ flexShrink: 0 }} disabled={notices.markAll.isPending} onClick={() => notices.markAll.mutate()}>
+        {t('dialogs.actionInboxContent.markAllUnreadTotalAsRead', { unreadTotal: String(notices.unreadTotal) })}</Button>}>
       {notices.unread.map((notification) => {
         const path = notificationPath(notification);
         const details = noticeDetails(notification);

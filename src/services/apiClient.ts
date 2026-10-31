@@ -138,7 +138,9 @@ export async function saveMobileNavigation(layout: MobileNavLayout | null): Prom
   const previous = getAuthSnapshot().user?.mobileNavigation;
   withLayout(layout ?? undefined);
   try {
-    const saved = await apiRequest<User>('/api/auth/me/mobile-navigation', { method: 'PUT', body: { placements: layout }, session: context });
+    const saved = await apiRequest<User>('/api/auth/me/mobile-navigation', layout
+      ? { method: 'PUT', body: layout, session: context }
+      : { method: 'DELETE', session: context });
     withLayout(saved.mobileNavigation);
   } catch (error) {
     withLayout(previous);

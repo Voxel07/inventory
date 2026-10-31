@@ -65,6 +65,10 @@ interface UIState {
   storageLocationView: StorageLocationView;
   setStorageLocationView: (view: StorageLocationView) => void;
 
+  /** The header's QR and barcode scanner, which phones can also open from the bottom bar. */
+  quickScanOpen: boolean;
+  setQuickScanOpen: (open: boolean) => void;
+
   snackbar: { open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' };
   showSnackbar: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
   hideSnackbar: () => void;
@@ -126,6 +130,9 @@ export const useUIStore = create<UIState>((set) => ({
     }
     set({ storageLocationView: view });
   },
+
+  quickScanOpen: false,
+  setQuickScanOpen: (open) => set({ quickScanOpen: open }),
 
   snackbar: { open: false, message: '', severity: 'info' },
   showSnackbar: (message, severity = 'info') =>

@@ -16,27 +16,35 @@ import {
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
-import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
-import { AuthPersistenceError } from '../../services/authManager';
+import { useSignOut } from '../../hooks/useSignOut';
+import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { LanguageSelector } from './LanguageSelector';
 import { useT } from '../../utils/naming';
-import { isActivePath, useMobileNavigation, useNavGroups } from './navDestinations';
+import { isActivePath, useMobileNavigation, useMobileNavLayout, useNavGroups } from './navDestinations';
 
 const DRAWER_WIDTH = 256;
+/** Height of the phone's bottom bar, without the safe-area inset below it. */
+const BOTTOM_NAV_HEIGHT = 64;
 
 export function Navigation() {
     const t = useT();
-    const navigate = useNavigate();
     const location = useLocation();
     const sidebarOpen = useUIStore((s) => s.sidebarOpen);
     const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
-    const showSnackbar = useUIStore((s) => s.showSnackbar);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const { logout, user } = useAuth();
-    const groups = useNavGroups(user);
+    const { user } = useAuth();
+    const signOut = useSignOut();
+    const { closeActionInbox } = useActionInboxDialog();
+    const { hidden } = useMobileNavLayout();
+    const allGroups = useNavGroups(user);
+    // Phones leave out destinations the user hid; the desktop menu always lists everything.
+    const groups = isMobile
+        ? allGroups.map((group) => ({ ...group, items: group.items.filter((item) => !hidden.includes(item.path)) })).filter((group) => group.items.length > 0)
+        : allGroups;
     const { bottom } = useMobileNavigation();
 
     const drawerContent = (
@@ -68,22 +76,14 @@ export function Navigation() {
             </Box>
             <Box sx={{ px: 1.5, pb: 1.5 }}>
                 <Divider sx={{ mb: 1.5 }} />
-                <Box sx={{ px: 1, pb: 1.5 }}><LanguageSelector /></Box>
-                <ListItemButton
-                    onClick={() => {
-                        void logout()
-                            .then((redirectingToProvider) => {
-                                if (!redirectingToProvider) navigate('/');
-                            })
-                            .catch((error: unknown) => {
-                                navigate('/');
-                                showSnackbar(t(error instanceof AuthPersistenceError ? 'nav.signOutPersistFailed' : 'nav.signOutProviderFailed'), 'error');
-                            });
-                    }}
-                >
-                    <ListItemIcon><LogoutIcon /></ListItemIcon>
-                    <ListItemText primary={t('nav.signOut')} />
-                </ListItemButton>
+                {/* Phones offer the language and sign-out on the profile page. */}
+                {!isMobile && <>
+                    <Box sx={{ px: 1, pb: 1.5 }}><LanguageSelector /></Box>
+                    <ListItemButton onClick={signOut}>
+                        <ListItemIcon><LogoutIcon /></ListItemIcon>
+                        <ListItemText primary={t('nav.signOut')} />
+                    </ListItemButton>
+                </>}
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', px: 1, pt: 1.25 }}>
                     {t('nav.version')} {__APP_VERSION__}
                 </Typography>
@@ -125,10 +125,12 @@ export function Navigation() {
                         showLabels
                         value={bottomValue}
                         onChange={(_, value: string) => {
+                            // The inbox leaves the bar uncovered; any destination replaces it.
+                            closeActionInbox();
                             if (value === 'more') setSidebarOpen(true);
                             else bottom.find((destination) => destination.key === value)?.open();
                         }}
-                        sx={{ height: 64, '& .MuiBottomNavigationAction-root': { minWidth: 0, px: 0.5 },
+                        sx={{ height: BOTTOM_NAV_HEIGHT, '& .MuiBottomNavigationAction-root': { minWidth: 0, px: 0.5 },
                             '& .MuiBottomNavigationAction-label': { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}
                     >
                         {bottom.map((destination) => <BottomNavigationAction key={destination.key} label={destination.label} value={destination.key}
@@ -160,4 +162,4 @@ export function Navigation() {
     );
 }
 
-export { DRAWER_WIDTH };
+export { DRAWER_WIDTH, BOTTOM_NAV_HEIGHT };
