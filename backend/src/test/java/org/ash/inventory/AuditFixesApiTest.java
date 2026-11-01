@@ -160,15 +160,25 @@ class AuditFixesApiTest {
                 "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
         String other = admin().body(Map.of("sku", tag + "-B", "name", tag + " B", "category", "Audit", "value", 0, "trackingMode", "lot_tracked"))
                 .post("/api/items").then().statusCode(200).extract().path("id");
-        String lot = admin().body(Map.of("itemId", first, "lotNumber", "L1")).post("/api/inventory-lots").then().statusCode(201)
-                .body("itemName", equalTo(tag + " A")).body("empty", equalTo(true)).extract().path("id");
-        admin().body(Map.of("itemId", other, "lotNumber", "L1")).put("/api/inventory-lots/" + lot).then().statusCode(400);
-        admin().body(Map.of("itemId", first, "transactionType", "added", "quantityChanged", 4, "reason", "Audit", "lotId", lot,
-                "locationId", location)).post("/api/transactions").then().statusCode(200);
-        admin().queryParam("itemId", first).get("/api/inventory-lots").then().statusCode(200)
-                .body("[0].itemId", equalTo(first)).body("[0].empty", equalTo(false))
-                .body("[0].stock[0].locationId", equalTo(location)).body("[0].stock[0].onHand", equalTo(4));
-        admin().body(Map.of("lotNumber", "L1-renamed", "status", "hold")).put("/api/inventory-lots/" + lot).then().statusCode(200)
-                .body("itemId", equalTo(first));
+        // Lots are never created empty: only a stock addition brings a new lot into being.
+        admin().body(Map.of("itemId", first, "lotNumber", "L1")).post("/api/inventory-lots").then().statusCode(405);
+        admin().body(Map.of("itemId", first, "transactionType", "added", "quantityChanged", 1, "locationId", location,
+                "lotId", java.util.UUID.randomUUID().toString(), "newLot", Map.of("lotNumber", "L0"))).post("/api/transactions").then().statusCode(400);
+        String lot = TestLots.receive(AuditFixesApiTest::admin, first, 4, location, "L1", null, null);
+        // With stock available, only additions may create a lot.
+        admin().body(Map.of("itemId", first, "transactionType", "checkout", "quantityChanged", 1, "eventType", "DE", "faction", "KGG",
+                "newLot", Map.of("lotNumber", "L0"))).post("/api/transactions").then().statusCode(400);
+        admin().queryParam("itemId", first).get("/api/inventory-lots").then().statusCode(200).body("size()", equalTo(1))
+                .body("[0].id", equalTo(lot)).body("[0].itemId", equalTo(first)).body("[0].itemName", equalTo(tag + " A"))
+                .body("[0].empty", equalTo(false)).body("[0].stock[0].locationId", equalTo(location)).body("[0].stock[0].onHand", equalTo(4));
+        // The same number is unique per item; another item may reuse it.
+        admin().body(Map.of("itemId", first, "transactionType", "added", "quantityChanged", 1, "locationId", location,
+                "newLot", Map.of("lotNumber", "L1"))).post("/api/transactions").then().statusCode(409);
+        TestLots.receive(AuditFixesApiTest::admin, other, 1, location, "L1", null, null);
+        // The parent item is not part of the lot input: an itemId in the body cannot move the lot.
+        admin().body(Map.of("itemId", other, "lotNumber", "L1-renamed", "status", "hold")).put("/api/inventory-lots/" + lot).then().statusCode(200)
+                .body("itemId", equalTo(first)).body("lotNumber", equalTo("L1-renamed")).body("status", equalTo("hold"));
+        admin().queryParam("itemId", other).get("/api/inventory-lots").then().statusCode(200)
+                .body("size()", equalTo(1)).body("[0].lotNumber", equalTo("L1"));
     }
 }

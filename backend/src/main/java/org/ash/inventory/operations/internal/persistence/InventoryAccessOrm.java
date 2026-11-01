@@ -19,6 +19,60 @@ public class InventoryAccessOrm extends EntityOrm {
         return " and function('inventory_resource_visible', '" + kind + "', " + alias
                 + ".id, :accessActor, :accessAdmin, :accessPublic) = true";
     }
+    /**
+     * {@link #scope(String, String)} for the hot order, movement and damage aggregates, chosen by the actor's access:
+     * administrators see everything, tenants keep the per-row check. Members who see organization data can only miss
+     * rows that reference a resource with a policy they cannot see. Those are rare, so each reference becomes a
+     * top-level {@code not exists} that Postgres plans as an anti-join over the few private rows (index on
+     * {@code access_policy_id}) instead of one nested PL/pgSQL walk per row. Mirrors {@code inventory_resource_visible}
+     * with {@code sees_public = true}; {@code PrivateInventoryApiTest} pins both paths to the same result.
+     */
+    public static String scope(String kind, String alias, UserAccount actor) {
+        if (actor.role == DomainEnums.UserRole.admin) return "";
+        if (!actor.role.atLeast(DomainEnums.UserRole.read_only)) return scope(kind, alias);
+        return switch (kind) {
+            case "order" -> orderNotHidden(alias, "ho");
+            case "damage" -> damageNotHidden(alias, "hd");
+            case "transaction" -> transactionNotHidden(alias);
+            default -> scope(kind, alias);
+        };
+    }
+    /** {@link #transactionScope} chosen by the actor's access, like {@link #scope(String, String, UserAccount)}. */
+    public static String transactionScope(String tx, String source, String destination, UserAccount actor) {
+        if (actor.role == DomainEnums.UserRole.admin) return "";
+        if (!actor.role.atLeast(DomainEnums.UserRole.read_only)) return transactionScope(tx, source, destination);
+        return transactionNotHidden(tx);
+    }
+    private static String transactionNotHidden(String tx) {
+        return notHidden("Item", tx + ".item", "ht0") + notHidden("StorageLocation", tx + ".sourceLocation", "ht1")
+                + notHidden("StorageLocation", tx + ".destinationLocation", "ht2")
+                + orderNotHidden(tx + ".order", "hto") + damageNotHidden(tx + ".damageReport", "htd");
+    }
+    /** {@code order} is an InventoryOrder expression (alias or nullable reference); a null reference hides nothing. */
+    private static String orderNotHidden(String order, String p) {
+        return " and not exists (select 1 from InventoryOrder " + p + "o join " + p + "o.pickupLocation " + p + "l where " + p + "o = " + order + " and " + hidden(p + "l") + ")"
+                + " and not exists (select 1 from OrderLine " + p + "i join " + p + "i.item " + p + "ii where " + p + "i.order = " + order + " and " + hidden(p + "ii") + ")"
+                + " and not exists (select 1 from OrderLine " + p + "s join " + p + "s.sourceLocation " + p + "sl where " + p + "s.order = " + order + " and " + hidden(p + "sl") + ")"
+                + " and not exists (select 1 from OrderLine " + p + "a join " + p + "a.sourceAssembly " + p + "aa where " + p + "a.order = " + order + " and " + assemblyHidden(p + "aa", p + "ac") + ")"
+                + " and not exists (select 1 from StockReservation " + p + "r join " + p + "r.position " + p + "rp join " + p + "rp.location " + p + "rl where " + p + "r.order = " + order + " and " + hidden(p + "rl") + ")";
+    }
+    private static String damageNotHidden(String damage, String p) {
+        return " and not exists (select 1 from DamageReport " + p + "i join " + p + "i.item " + p + "ii where " + p + "i = " + damage + " and " + hidden(p + "ii") + ")"
+                + " and not exists (select 1 from DamageReport " + p + "a join " + p + "a.assembly " + p + "aa where " + p + "a = " + damage + " and " + assemblyHidden(p + "aa", p + "ac") + ")";
+    }
+    private static String notHidden(String entity, String reference, String alias) {
+        return " and not exists (select 1 from " + entity + " " + alias + " where " + alias + " = " + reference + " and " + hidden(alias) + ")";
+    }
+    /** An assembly is hidden by its own policy or by any hidden component. */
+    private static String assemblyHidden(String assembly, String component) {
+        return "(" + hidden(assembly) + " or exists (select 1 from AssemblyItem " + component + " join " + component + ".item " + component + "i where "
+                + component + ".assembly = " + assembly + " and " + hidden(component + "i") + "))";
+    }
+    /** Only resources that carry a policy can be hidden from a member who sees organization data. */
+    private static String hidden(String resource) {
+        return resource + ".accessPolicy is not null and function('inventory_policy_visible', " + resource
+                + ".accessPolicy.id, :accessActor, false, true, false) = false";
+    }
     /** Inline simple relationships so deep movement pages do not re-read each movement in PL/pgSQL. */
     public static String transactionScope(String tx, String source, String destination) {
         return " and " + visible(tx + ".item.accessPolicy")
@@ -42,10 +96,17 @@ public class InventoryAccessOrm extends EntityOrm {
                 + " join grp.members member where grp = g.group and member.id = :accessActor)))"
                 + " or exists (select k.id from InventoryAccessLink k where k.policy = p and k.ancestor.owner.id = :accessActor))))";
     }
+    /** Binds the access parameters the query declares; actor-specific scopes use only some of them (or none). */
     public static <T> TypedQuery<T> bind(TypedQuery<T> query, UserAccount actor) {
-        return query.setParameter("accessAdmin", actor.role == DomainEnums.UserRole.admin)
-                .setParameter("accessPublic", actor.role.atLeast(DomainEnums.UserRole.read_only))
-                .setParameter("accessActor", actor.id);
+        for (var parameter : query.getParameters()) {
+            switch (String.valueOf(parameter.getName())) {
+                case "accessAdmin" -> query.setParameter("accessAdmin", actor.role == DomainEnums.UserRole.admin);
+                case "accessPublic" -> query.setParameter("accessPublic", actor.role.atLeast(DomainEnums.UserRole.read_only));
+                case "accessActor" -> query.setParameter("accessActor", actor.id);
+                default -> { }
+            }
+        }
+        return query;
     }
     public List<InventoryAccessGrant> grants(InventoryAccessPolicy policy) {
         return entityManager.createQuery("from InventoryAccessGrant g left join fetch g.user left join fetch g.group where g.policy = :policy", InventoryAccessGrant.class)

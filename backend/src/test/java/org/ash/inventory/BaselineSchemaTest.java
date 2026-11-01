@@ -28,8 +28,21 @@ class BaselineSchemaTest {
     }
     @Inject EntityManager entityManager;
     @Test @Transactional void canonicalBaselineContainsAllPrivacyTablesAndMatchesEntities() {
-        assertEquals(65L, ((Number) entityManager.createNativeQuery("select count(*) from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getSingleResult()).longValue());
+        // Every baseline table is registered under exactly one owning module, and every registered table exists.
+        @SuppressWarnings("unchecked")
+        var actual = new java.util.TreeSet<String>(entityManager.createNativeQuery("select table_name from information_schema.tables where table_schema = 'inventory_baseline_test' and table_name <> 'flyway_schema_history'").getResultList());
+        assertEquals(ownedTables(), actual);
         assertEquals(0L, ((Number) entityManager.createQuery("select count(p) from InventoryAccessPolicy p").getSingleResult()).longValue());
+    }
+    private static java.util.SortedSet<String> ownedTables() {
+        try {
+            var modules = new com.fasterxml.jackson.databind.ObjectMapper().readTree(java.nio.file.Path.of("architecture/modules.json").toFile()).get("modules");
+            var tables = new java.util.TreeSet<String>();
+            modules.forEach(module -> module.path("tables").forEach(table -> {
+                if (!tables.add(table.asText())) throw new AssertionError("Table owned by two modules: " + table.asText());
+            }));
+            return tables;
+        } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
     }
     @Test @Transactional void revisionTriggersUseTheirOwnSchema() {
         assertEquals(27L, ((Number) entityManager.createNativeQuery("select count(distinct name) from inventory_baseline_test.source_revisions").getSingleResult()).longValue());

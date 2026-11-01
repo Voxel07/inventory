@@ -26,9 +26,9 @@ class InventoryFlowApiTest {
         if (lot != null) body.put("lotId", lot);
         return request().body(body).post("/api/transactions").then().statusCode(200).extract().path("id");
     }
-    private String lot(String item, String dateField, long date) {
-        return request().body(Map.of("itemId", item, "lotNumber", UUID.randomUUID().toString(), dateField, date))
-                .post("/api/inventory-lots").then().statusCode(201).extract().path("id");
+    /** Receives {@code quantity} units into a new lot expiring at {@code expiry}; lots never exist without stock. */
+    private String lot(String item, int quantity, String place, long expiry) {
+        return TestLots.receive(this::request, item, quantity, place, UUID.randomUUID().toString(), expiry, null);
     }
     private String order(String item, int quantity) {
         String id = request().body(Map.of("name", "Workshop", "purpose", "Inventory regression", "requestedQuantities", Map.of(item, quantity)))
@@ -56,8 +56,7 @@ class InventoryFlowApiTest {
 
     @Test void fefoCheckoutAndPartialRestockPreserveBothLots() {
         String place = location(), item = item(0, place, "lot_tracked", true);
-        String early = lot(item, "bestBeforeDate", 1893456000000L), late = lot(item, "expiryDate", 1956528000000L);
-        movement(item, "added", 3, place, late); movement(item, "added", 2, place, early);
+        String late = lot(item, 3, place, 1956528000000L), early = lot(item, 2, place, 1893456000000L);
         String checkout = movement(item, "checkout", 4, place, null);
         request().queryParam("itemId", item).get("/api/inventory-positions").then()
                 .body("find { it.lotId == '" + early + "' }.quantityOnHand", equalTo(0));
@@ -72,8 +71,7 @@ class InventoryFlowApiTest {
     @Test void lotOrderReturnAndConsumableRestockNeverCreateLotlessStock() {
         for (boolean consumable : List.of(false, true)) {
             String place = location(), item = item(0, place, "lot_tracked", consumable);
-            String first = lot(item, "expiryDate", 1893456000000L), second = lot(item, "expiryDate", 1956528000000L);
-            movement(item, "added", 2, place, first); movement(item, "added", 3, place, second);
+            lot(item, 2, place, 1893456000000L); lot(item, 3, place, 1956528000000L);
             String order = order(item, 5);
             if (consumable) request().body(Map.of("quantities", Map.of(item, 4))).post("/api/orders/general/" + order + "/restock").then().statusCode(200);
             else request().body(Map.of("lines", Map.of(item, Map.of("returned", 4)))).post("/api/orders/general/" + order + "/return").then().statusCode(200);
@@ -136,8 +134,7 @@ class InventoryFlowApiTest {
 
     @Test void acceptedLotSubmissionRestoresOnlyTheIssuedLot() {
         String place = location(), item = item(0, place, "lot_tracked", false);
-        String issued = lot(item, "expiryDate", 1893456000000L), other = lot(item, "expiryDate", 1956528000000L);
-        movement(item, "added", 2, place, issued);
+        String issued = lot(item, 2, place, 1893456000000L), other = lot(item, 1, place, 1956528000000L);
         movement(item, "checkout", 2, place, issued);
         request().body(Map.of("itemId", item, "transactionType", "checkin", "quantityChanged", 1, "lotId", other))
                 .post("/api/transactions").then().statusCode(409);
@@ -147,7 +144,8 @@ class InventoryFlowApiTest {
                 .patch("/api/items/" + item).then().statusCode(409);
         request().body(Map.of()).post("/api/returns/" + returned + "/acknowledge").then().statusCode(200);
         request().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200)
-                .body("size()", equalTo(1)).body("[0].lotId", equalTo(issued)).body("[0].quantityOnHand", equalTo(2));
+                .body("size()", equalTo(2)).body("find { it.lotId == '" + issued + "' }.quantityOnHand", equalTo(2))
+                .body("find { it.lotId == '" + other + "' }.quantityOnHand", equalTo(1));
     }
 
     @Test void transitAndPendingReturnAssetsCannotBeWrittenOff() {

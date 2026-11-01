@@ -49,8 +49,8 @@ class DocsRemediationApiTest {
 
     @Test void privateInboxTasksRetainTypedAuthorizationAndOfferedItemsCannotBecomeFreelyAvailable(){
         String id=admin().body(Map.of("sku","REV-LOT-"+UUID.randomUUID(),"name","Secret expiring review material","category","Review","value",0,"amount",0,"trackingMode","lot_tracked","privateResource",true)).post("/api/items").then().statusCode(200).extract().path("id");
-        admin().body(Map.of("itemId",id,"lotNumber","SECRET-REV-LOT","expiryDate",1792540800000L,"status","available"))
-                .post("/api/inventory-lots").then().statusCode(201);
+        String shelf=TestLocations.section(()->admin(),Map.of("name","Secret lot shelf "+UUID.randomUUID(),"privateResource",true));
+        TestLots.receive(()->admin(),id,1,shelf,"SECRET-REV-LOT",1792540800000L,"available");
         actor("review-warehouse","warehouse_crew").get("/api/action-inbox").then().statusCode(200)
                 .body("title",not(hasItem("Secret expiring review material"))).body("detail",not(hasItem("SECRET-REV-LOT")));
         admin().get("/api/action-inbox").then().statusCode(200).body("title",hasItem("Secret expiring review material"));

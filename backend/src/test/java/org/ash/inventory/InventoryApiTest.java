@@ -628,16 +628,21 @@ class InventoryApiTest {
     }
 
     @Test
-    void devAuthRoleChangesAreAppliedToExistingUsers() {
+    void devAuthRoleHeadersSeedNewAccountsButNeverEscalateExistingOnes() {
+        // Development headers only seed a new identity; stored roles change through the audited access editor.
         given().contentType(ContentType.JSON)
-                .header("X-Actor-Id", "role-refresh-user")
-                .header("X-Actor-Role", "admin")
-                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("admin"));
-
-        given().contentType(ContentType.JSON)
-                .header("X-Actor-Id", "role-refresh-user")
+                .header("X-Actor-Id", "role-seed-user")
                 .header("X-Actor-Role", "ash")
                 .get("/api/auth/me").then().statusCode(200).body("role", equalTo("ash"));
+
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "role-seed-user")
+                .header("X-Actor-Role", "admin")
+                .get("/api/auth/me").then().statusCode(200).body("role", equalTo("ash"));
+        given().contentType(ContentType.JSON)
+                .header("X-Actor-Id", "role-seed-user")
+                .header("X-Actor-Role", "admin")
+                .get("/api/users").then().statusCode(403);
     }
 
     @Test
@@ -1086,9 +1091,9 @@ class InventoryApiTest {
     void lotCheckoutUsesFefoAndBlocksHeldStock() {
         String location = TestLocations.section(() -> request(), Map.of("name", "FEFO source"));
         String item = request().body(Map.of("sku", "FEFO-NEW-01", "name", "FEFO stock", "category", "Test", "amount", 0, "trackingMode", "lot_tracked", "storageLocation", location)).post("/api/items").then().statusCode(200).extract().path("id");
-        String early = request().body(Map.of("itemId", item, "lotNumber", "EARLY", "expiryDate", 2208988800000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
-        String late = request().body(Map.of("itemId", item, "lotNumber", "LATE", "expiryDate", 2240611200000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
-        for (var lot : java.util.List.of(late, early)) request().body(Map.of("itemId", item, "transactionType", "added", "quantityChanged", 3, "lotId", lot, "locationId", location)).post("/api/transactions").then().statusCode(200);
+        // Received late-expiring first so FEFO must not simply follow receipt order.
+        String late = TestLots.receive(() -> request(), item, 3, location, "LATE", 2240611200000L, null);
+        String early = TestLots.receive(() -> request(), item, 3, location, "EARLY", 2208988800000L, null);
         request().body(Map.of("itemId", item, "transactionType", "checkout", "quantityChanged", 2, "eventType", "DE", "faction", "KGG")).post("/api/transactions").then().statusCode(200);
         request().queryParam("itemId", item).get("/api/inventory-positions").then().statusCode(200).body("find { it.lotId == '" + early + "' }.quantityOnHand", equalTo(1)).body("find { it.lotId == '" + late + "' }.quantityOnHand", equalTo(3));
         request().body(Map.of("lotNumber", "LATE", "expiryDate", 2240611200000L, "status", "hold")).put("/api/inventory-lots/" + late).then().statusCode(200);

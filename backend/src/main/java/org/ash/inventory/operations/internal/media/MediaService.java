@@ -48,10 +48,25 @@ public class MediaService {
 
     @Inject org.ash.inventory.operations.internal.application.MediaCleanupService cleanup;
 
-    @Transactional(Transactional.TxType.MANDATORY)
+    /**
+     * Stages an upload. Runs outside any caller transaction and uses short transactions of its own, so a request
+     * never holds a pooled connection during the object-storage call and never needs a second connection while
+     * holding one (concurrent uploads would otherwise exhaust a small pool and stall every request).
+     */
+    @Transactional(Transactional.TxType.NEVER)
     public BlobStore.StoredMedia upload(String original,String type,java.nio.file.Path source) {
-        String key=blobs.allocateKey(original);cleanup.protectDestination(key);
-        var stored=blobs.put(key,type,source);permissions.register(key);cleanup.retain(key);deleteUnlessCommitted(key);return stored;
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(permissions::requireUploadQuota);
+        String key=blobs.allocateKey(original);
+        // Committed before the put: even a crash between put and registration leaves cleanup work.
+        cleanup.protectDestination(key);
+        var stored=blobs.put(key,type,source);
+        try {
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(()->{permissions.register(key);cleanup.retain(key);});
+        } catch (RuntimeException failure) {
+            try { blobs.delete(key); } catch (RuntimeException ignored) { LOG.warn("Could not delete unregistered upload; its cleanup job remains"); }
+            throw failure;
+        }
+        return stored;
     }
     public String attachToItem(String reference, UUID itemId) {
 
@@ -161,27 +176,6 @@ public class MediaService {
 
     }
 
-    /** An upload whose registry row is not committed would never be purged; remove its object instead. */
-
-    public void deleteUnlessCommitted(String key) {
-
-        transactions.registerInterposedSynchronization(new Synchronization() {
-
-            public void beforeCompletion() {}
-
-            public void afterCompletion(int status) {
-
-                if (status == Status.STATUS_COMMITTED) return;
-
-                try { blobs.delete(key); }
-
-                catch (RuntimeException exception) { LOG.warn("Could not delete uncommitted upload", exception); }
-
-            }
-
-        });
-
-    }
 
     @Transactional
     public void deleteStaged(String reference) {

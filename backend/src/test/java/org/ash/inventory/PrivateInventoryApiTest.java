@@ -19,8 +19,10 @@ class PrivateInventoryApiTest {
     private RequestSpecification owner() { return actor("owner", "faction_leader"); }
     private RequestSpecification reader() { return actor("reader", "read_only"); }
     private RequestSpecification admin() { return actor("admin", "admin"); }
-    private String person(String name) {
-        actor(name, "read_only").get("/api/access/people").then().statusCode(200);
+    private String person(String name) { return person(name, "read_only"); }
+    /** Provisions the account with {@code role}: development headers only seed new accounts. */
+    private String person(String name, String role) {
+        actor(name, role).get("/api/access/people").then().statusCode(200);
         return admin().get("/api/access/people").then().statusCode(200).extract().jsonPath()
                 .getString("find { it.name == 'privacy-" + name + "' }.id");
     }
@@ -34,6 +36,20 @@ class PrivateInventoryApiTest {
     private String item() { return owner().body(itemInput()).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true)).extract().path("id"); }
     private Map<String, Object> shares(int revision, List<?> grants) { return Map.of("revision", revision, "grants", grants); }
     private String policy(String kind, String id) { return "/api/access/" + kind + "/" + id; }
+
+    /** Non-administrator summaries are cached per account: never served to another account, refreshed by stock changes. */
+    @Test void cachedSummariesStayPerAccountAndFollowOwnStockChanges() {
+        String suffix = UUID.randomUUID().toString();
+        var owner = (java.util.function.Supplier<RequestSpecification>) () -> actor("summary-owner-" + suffix, "faction_leader");
+        var outsider = (java.util.function.Supplier<RequestSpecification>) () -> actor("summary-outsider-" + suffix, "read_only");
+        var before = owner.get().get("/api/inventory-summary").then().statusCode(200).extract().jsonPath();
+        long outsiderItems = outsider.get().get("/api/inventory-summary").then().statusCode(200).extract().jsonPath().getLong("items");
+        owner.get().body(itemInput()).post("/api/items").then().statusCode(200).body("access.privateResource", equalTo(true));
+        owner.get().get("/api/inventory-summary").then().statusCode(200)
+                .body("items", equalTo(before.getInt("items") + 1))
+                .body("totalUnits", equalTo(before.getInt("totalUnits") + 2));
+        outsider.get().get("/api/inventory-summary").then().statusCode(200).body("items", equalTo((int) outsiderItems));
+    }
 
     @Test void privateDefaultsHideCatalogHistoryAndCategoriesFromOutsidersAndWarehouseStaff() {
         var publicInput = itemInput(); publicInput.put("privateResource", false);
@@ -205,7 +221,7 @@ class PrivateInventoryApiTest {
     }
 
     @Test void buildingOwnersManageWhatOthersStoreInTheirBuildingButNotItsSharing() {
-        String lodgerId = person("lodger");
+        String lodgerId = person("lodger", "faction_leader");
         // Stock is kept in a section of the building, never in the top-level location itself.
         String hall = building(tenant("host"), building(tenant("host"), null));
         tenant("host").body(shares(0, List.of(Map.of("userId", lodgerId, "canEdit", true)))).put(policy("storage-locations", hall)).then().statusCode(200);
@@ -229,7 +245,8 @@ class PrivateInventoryApiTest {
                 .body("responsiblePersonName", equalTo("privacy-lender"));
         var edit = editInput(); edit.put("storageLocation", location); edit.put("publicUse", false);
         tenant("lender").body(edit).patch("/api/items/" + item).then().statusCode(200).body("access.publicUse", equalTo(false));
-        actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(404);
+        // The borrower's first request provisions the account, so it carries the faction membership used below.
+        actor("borrower", "faction_leader").header("X-Actor-Factions", "DE:offer-test").get("/api/items/" + item).then().statusCode(404);
         tenant("lender").body(Map.of("revision", 2, "grants", List.of(), "publicUse", true))
                 .put(policy("items", item)).then().statusCode(200).body("publicUse", equalTo(true));
         actor("borrower", "faction_leader").get("/api/items/" + item).then().statusCode(200)

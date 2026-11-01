@@ -32,6 +32,17 @@ python tests/tools/endpoint_coverage.py --markdown backend/target/endpoint-cover
 docker stop inventory-test-review
 ```
 
+Optional checks in the same run:
+
+- `-Dinventory.test.actor-drift=target/actor-drift.tsv` lists requests whose `X-Actor-Role`/`X-Actor-Factions`
+  differ from the stored account. Development headers only seed new accounts, so such a request silently runs with
+  the stored role. Review every row.
+- `S3MediaIntegrationTest` runs media storage against a real bucket when `TEST_S3_ENDPOINT`, `TEST_S3_BUCKET`,
+  `TEST_S3_ACCESS_KEY` and `TEST_S3_SECRET_KEY` are set (for example a throwaway `dxflrs/garage:v2.3.0` with
+  `garage.toml`). It checks every object in the bucket itself, not only through the API.
+
+The production stress test is separate: see [load/README.md](load/README.md).
+
 Always reset the dispatch trace before the full suite. The optional test-only
 response filter records the resource method, HTTP verb and response status of
 actual HTTP dispatches. The standard-library Python auditor inventories current
@@ -160,9 +171,10 @@ Backend class names below use the inventory table above; frontend names refer to
 ## Limits of local verification
 
 The browser previews mock their APIs; they complement the PostgreSQL REST/MCP
-tests rather than proving browser-to-backend integration. S3 request signing uses
-a local HTTP stub, not a real bucket. Real Authentik token revocation and multi-tab
+tests rather than proving browser-to-backend integration. `MediaServiceTest` signs S3
+requests against a stub that does not validate signatures; only the opt-in
+`S3MediaIntegrationTest` proves real bucket compatibility. Real Authentik token revocation and multi-tab
 logout, physical camera/mobile workflows, CSV/PDF rendering across browsers,
 clustered outbox delivery and sustained load/lock contention require separate
-environment acceptance. Architecture features marked partially implemented retain
+environment acceptance (`load/stress.k6.js` covers load against a deployment). Architecture features marked partially implemented retain
 those limitations. No performance benchmark or line/branch percentage is claimed.

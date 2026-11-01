@@ -100,9 +100,8 @@ class PreparationReviewApiTest {
         String hidden = place(owner), usable = place(this::admin), item = item(this::admin, 0, usable, "lot_tracked");
         owner.get().body(Map.of("revision", 0, "grants", List.of(Map.of("userId", person, "canEdit", false))))
                 .put("/api/access/storage-locations/" + hidden).then().statusCode(200);
-        String early = admin().body(Map.of("itemId", item, "lotNumber", "Early", "expiryDate", 1893456000000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
-        String late = admin().body(Map.of("itemId", item, "lotNumber", "Late", "expiryDate", 1956528000000L)).post("/api/inventory-lots").then().statusCode(201).extract().path("id");
-        add(item, 4, hidden, early); add(item, 2, usable, late);
+        TestLots.receive(this::admin, item, 4, hidden, "Early", 1893456000000L, null);
+        TestLots.receive(this::admin, item, 2, usable, "Late", 1956528000000L, null);
         String position = admin().queryParam("itemId", item).queryParam("locationId", hidden).get("/api/inventory-positions").then().extract().path("[0].id");
         String order = general(item, 2, null), path = "/api/orders/general/" + order + "/prepare";
         worker.get().body(Map.of("preparedQuantities", Map.of(item, 2), "sourceAllocations", Map.of(item, Map.of(position, 2))))
