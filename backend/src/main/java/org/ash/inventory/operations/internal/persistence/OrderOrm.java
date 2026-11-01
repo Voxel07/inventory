@@ -38,7 +38,7 @@ public class OrderOrm extends EntityOrm {
         if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
         if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
         if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
-        jpql.append(InventoryAccessOrm.scope("order", "o")).append(" order by o.eventOccurrence.startDate desc");
+        jpql.append(InventoryAccessOrm.scope("order", "o", accessActor.current())).append(" order by o.eventOccurrence.startDate desc");
         var query = entityManager.createQuery(jpql.toString(), InventoryOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
@@ -55,7 +55,7 @@ public class OrderOrm extends EntityOrm {
                 + " where o.kind = faction and event.eventType = :eventType and f.name = :faction"
                 + " and event.startDate < :before and o.status <> cancelled"
                 + (excludeId == null ? "" : " and o.id <> :excludeId")
-                + InventoryAccessOrm.scope("order", "o") + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
+                + InventoryAccessOrm.scope("order", "o", accessActor.current()) + " order by event.startDate desc, o.createdAt desc, o.id", InventoryOrder.class)
                 .setParameter("eventType", eventType).setParameter("faction", faction).setParameter("before", before.withDayOfYear(1));
         if (excludeId != null) query.setParameter("excludeId", excludeId);
         return InventoryAccessOrm.bind(query, accessActor.current()).setMaxResults(1).getResultStream().findFirst().orElse(null);
@@ -91,7 +91,7 @@ public class OrderOrm extends EntityOrm {
         else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
         boolean searching = filter.search() != null && !filter.search().isBlank();
         if (searching) jpql.append(" and (lower(o.name) like :search escape '!' or lower(o.purpose) like :search escape '!')");
-        var query = entityManager.createQuery(jpql + InventoryAccessOrm.scope("order", "o") + " order by o.createdAt desc, o.id", InventoryOrder.class);
+        var query = entityManager.createQuery(jpql + InventoryAccessOrm.scope("order", "o", accessActor.current()) + " order by o.createdAt desc, o.id", InventoryOrder.class);
         if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
         if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());
         else if (filter.eventType() != null && !filter.eventType().isBlank()) query.setParameter("eventType", filter.eventType());

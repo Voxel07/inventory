@@ -27,7 +27,7 @@ public class OperationsOrm extends EntityOrm {
     /** Start is inclusive, end is exclusive; search also covers the related order and event. */
     public List<StockTransaction> transactions(UUID itemId, UUID assetInstanceId, UUID userId, UUID eventOccurrenceId, String type, Instant start, Instant end,
             String search, int offset, int limit) {
-        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.reversedBy left join tx.sourceLocation source left join tx.destinationLocation destination left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.eventOccurrence e left join fetch tx.order o left join fetch o.eventOccurrence oe left join fetch o.faction where 1=1" + InventoryAccessOrm.transactionScope("tx", "source", "destination"));
+        var jpql = new StringBuilder("select tx from StockTransaction tx join fetch tx.item join fetch tx.user left join fetch tx.reversedBy left join tx.sourceLocation source left join tx.destinationLocation destination left join fetch tx.assetInstance a left join fetch a.currentLocation left join fetch a.currentCustodian left join fetch tx.eventOccurrence e left join fetch tx.order o left join fetch o.eventOccurrence oe left join fetch o.faction where 1=1" + InventoryAccessOrm.transactionScope("tx", "source", "destination", accessActor.current()));
         if (itemId != null) jpql.append(" and tx.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and tx.assetInstance.id = :assetInstanceId");
         if (userId != null) jpql.append(" and tx.user.id = :userId");
@@ -209,13 +209,13 @@ public class OperationsOrm extends EntityOrm {
     public long visibleTransactionsSince(UserAccount actor, java.time.Instant since) {
 
         return InventoryAccessOrm.bind(entityManager.createQuery("select count(t) from StockTransaction t where t.occurredAt >= :since"
-                + InventoryAccessOrm.scope("transaction", "t"), Long.class), actor).setParameter("since", since).getSingleResult();
+                + InventoryAccessOrm.scope("transaction", "t", actor), Long.class), actor).setParameter("since", since).getSingleResult();
     }
 
     public long visibleOpenDamageReports(UserAccount actor) {
 
         return InventoryAccessOrm.bind(entityManager.createQuery("select count(d) from DamageReport d where d.status in :statuses"
-                + InventoryAccessOrm.scope("damage", "d"), Long.class), actor)
+                + InventoryAccessOrm.scope("damage", "d", actor), Long.class), actor)
                 .setParameter("statuses", List.of(DomainEnums.DamageStatus.reported, DomainEnums.DamageStatus.triaged,
                         DomainEnums.DamageStatus.awaiting_repair, DomainEnums.DamageStatus.in_review, DomainEnums.DamageStatus.in_repair))
                 .getSingleResult();

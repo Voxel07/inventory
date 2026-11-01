@@ -60,6 +60,7 @@ public class ApiQueryService {
     @jakarta.inject.Inject com.fasterxml.jackson.databind.ObjectMapper json;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.persistence.SourceRevisionOrm revisions;
     @jakarta.inject.Inject @io.quarkus.cache.CacheName("inventory-summary") io.quarkus.cache.Cache summaries;
+    @jakarta.inject.Inject @io.quarkus.cache.CacheName("inventory-summary-movements") io.quarkus.cache.Cache movementCounts;
     @jakarta.inject.Inject StockHistoryService stockHistory;
 
     public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
@@ -91,22 +92,25 @@ public class ApiQueryService {
     }
 
     /**
-     * Overview counts over the caller's visible catalog, ledger and damage, without sending the catalog. Administrators
-     * see everything, so their counts are shared under the commit-ordered stock revision; the minute bucket bounds the
-     * sliding seven-day movement window. Every dashboard refetches after a change, which would otherwise repeat the
-     * whole-catalog read once per administrator.
+     * Overview counts over the caller's visible catalog, ledger and damage, without sending the catalog. Every dashboard
+     * refetches after a change, so results are cached under the commit-ordered stock revision and the minute: shared by
+     * all administrators (they see everything), per account for everyone else (visibility differs per account).
+     * The seven-day movement count is the expensive part for non-administrators (privacy check per movement), so it is
+     * also cached per account and minute regardless of the revision; a burst of stock changes then reuses it.
      */
     @Transactional
     public ApiResponses.InventorySummaryResponse summary() {
         var actor = actors.current();
         actors.requireReader();
-        if (actor.role != DomainEnums.UserRole.admin) return computeSummary(actor);
-        String key = revisions.reportToken("availability") + "|" + Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
-        return summaries.<String, ApiResponses.InventorySummaryResponse>get(key, ignored -> computeSummary(actor))
+        var minute = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        String scope = actor.role == DomainEnums.UserRole.admin ? "admin" : "user:" + actor.id + ":" + actor.role;
+        String key = scope + "|" + revisions.reportToken("availability") + "|" + minute;
+        return summaries.<String, ApiResponses.InventorySummaryResponse>get(key, ignored -> computeSummary(actor, scope, minute))
                 .await().atMost(java.time.Duration.ofSeconds(30));
     }
 
-    private ApiResponses.InventorySummaryResponse computeSummary(org.ash.inventory.operations.internal.model.UserAccount actor) {
+    private ApiResponses.InventorySummaryResponse computeSummary(org.ash.inventory.operations.internal.model.UserAccount actor,
+            String scope, Instant minute) {
         var ids = catalog.getVisibleItemIds();
         long units = 0, low = 0;
         for (int from = 0; from < ids.size(); from += 500) {
@@ -119,8 +123,12 @@ public class ApiQueryService {
                 if (state.available() <= item.minStock) low++;
             }
         }
-        return new ApiResponses.InventorySummaryResponse(ids.size(), units, low,
-                operations.visibleTransactionsSince(actor, java.time.Instant.now().minus(java.time.Duration.ofDays(7))),
+        var since = minute.minus(java.time.Duration.ofDays(7));
+        long movements = actor.role == DomainEnums.UserRole.admin
+                ? operations.visibleTransactionsSince(actor, since)
+                : movementCounts.<String, Long>get(scope + "|" + minute, ignored -> operations.visibleTransactionsSince(actor, since))
+                        .await().atMost(java.time.Duration.ofSeconds(30));
+        return new ApiResponses.InventorySummaryResponse(ids.size(), units, low, movements,
                 operations.visibleOpenDamageReports(actor));
     }
 

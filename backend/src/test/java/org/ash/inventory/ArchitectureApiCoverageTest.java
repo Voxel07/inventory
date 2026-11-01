@@ -119,9 +119,8 @@ class ArchitectureApiCoverageTest {
     }
 
     @Test void lotAndScheduleListsRetainTheirStateAndPolicy() {
-        String id = item(location(), 0, "lot_tracked");
-        String lot = admin().body(Map.of("itemId", id, "lotNumber", "ARC-LOT", "status", "hold"))
-                .post("/api/inventory-lots").then().statusCode(201).extract().path("id");
+        String place = location(), id = item(place, 0, "lot_tracked");
+        String lot = TestLots.receive(this::admin, id, 2, place, "ARC-LOT", null, "hold");
         reader().queryParam("itemId", id).get("/api/inventory-lots").then().statusCode(200)
                 .body("find { it.id == '" + lot + "' }.status", equalTo("hold"));
         var input = new HashMap<String, Object>(Map.of("itemId", id, "maintenanceType", "battery_test", "intervalType", "date",

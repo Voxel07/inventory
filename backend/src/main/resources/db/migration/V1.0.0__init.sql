@@ -1091,6 +1091,17 @@ create index ix_tx_source_location on stock_transactions (source_location_id) wh
 create index ix_tx_destination_location on stock_transactions (destination_location_id) where destination_location_id is not null;
 create index ix_asset_current_location on asset_instances (current_location_id) where current_location_id is not null;
 create index ix_reservation_location on stock_reservations (location_id) where location_id is not null;
+-- Reference lookups for the member privacy filter (InventoryAccessOrm.scope with an actor) and order lists.
+create index ix_order_lines_source_location on order_lines (source_location_id) where source_location_id is not null;
+create index ix_order_lines_source_assembly on order_lines (source_assembly_id) where source_assembly_id is not null;
+create index ix_assembly_items_item on assembly_items (item_id);
+create index ix_damage_assembly on damage_reports (assembly_id) where assembly_id is not null;
+create index ix_tx_order on stock_transactions (order_id) where order_id is not null;
+create index ix_tx_damage_report on stock_transactions (damage_report_id) where damage_report_id is not null;
+create index ix_reservation_position on stock_reservations (position_id) where position_id is not null;
+create index ix_orders_pickup_location on orders (pickup_location_id) where pickup_location_id is not null;
+create index ix_orders_event_occurrence on orders (event_occurrence_id);
+create index ix_orders_kind_created on orders (kind, created_at desc, id);
 create index ix_handover_lines_item on custody_handover_lines (item_id);
 -- Case-insensitive exact code lookups (non-unique: uniqueness stays on the stored values).
 create index ix_asset_code_lower on asset_instances (lower(asset_code));
@@ -1338,8 +1349,9 @@ select case when policy_id is null then sees_public when is_admin then true else
 $policy$;
 
 -- Scope each aggregate before pagination; no organization-wide denied-reference enumeration.
+-- Declared expensive (it walks orders, lines and assemblies) so the planner applies cheap filters first.
 create function inventory_resource_visible(kind text, resource_id uuid, actor_id uuid, is_admin boolean, sees_public boolean)
-returns boolean language plpgsql stable as $resource$
+returns boolean language plpgsql stable cost 10000 as $resource$
 begin
  if resource_id is null or is_admin then return true; end if;
  case kind

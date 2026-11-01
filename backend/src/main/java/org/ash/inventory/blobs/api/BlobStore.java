@@ -10,6 +10,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -190,7 +192,8 @@ public class BlobStore {
                 if (exception.statusCode() == 401 || exception.statusCode() == 403)
                     throw new ApiException(502, "Object storage access denied. Ask an administrator to check storage credentials and bucket permissions");
                 throw new ApiException(502, "Object storage is unavailable");
-            } catch (SdkException exception) {
+            } catch (SdkException | java.io.UncheckedIOException exception) {
+                // The SDK surfaces a connection dropped mid-upload as UncheckedIOException, not SdkException.
                 activity.failure(exception);
                 throw new ApiException(502, "Object storage is unavailable");
             } catch (RuntimeException exception) { activity.failure(exception); throw exception; }
@@ -260,7 +263,13 @@ public class BlobStore {
                     .httpClientBuilder(UrlConnectionHttpClient.builder())
                     .credentialsProvider(StaticCredentialsProvider.create(
                             AwsBasicCredentials.create(configuredAccessKey, configuredSecretKey)))
-                    .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                    // Without "Expect: 100-continue" a rejected request (e.g. wrong credentials) returns a readable
+                    // 403 instead of a dropped connection, so it maps to the access-denied message below.
+                    .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).expectContinueEnabled(false).build())
+                    // SDK 2.30+ streams aws-chunked uploads with trailing checksums by default; Garage and other
+                    // S3-compatible stores reject them ("Invalid payload signature"). Use plain signed requests.
+                    .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+                    .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
                     .build();
             return s3Client;
         }

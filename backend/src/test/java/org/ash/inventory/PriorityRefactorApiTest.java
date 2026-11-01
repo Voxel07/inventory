@@ -101,11 +101,12 @@ class PriorityRefactorApiTest {
         String assembly = admin().body(Map.of("name", "Private assembly", "itemQuantities", Map.of(person, 1, group, 1)))
                 .post("/api/assemblies").then().statusCode(200).extract().path("id");
         for (int pass = 0; pass < 2; pass++) {
+            // Visibility follows the item grants, not the role: the grantee sees the private assembly.
             admin().get("/api/assemblies").then().statusCode(200).body("id", hasItem(assembly));
-            actor("priority-owner", "read_only").get("/api/assemblies").then().statusCode(200).body("id", hasItem(assembly));
+            actor("priority-owner", "faction_leader").get("/api/assemblies").then().statusCode(200).body("id", hasItem(assembly));
             actor("priority-unrelated", "read_only").get("/api/assemblies").then().statusCode(200).body("id", not(hasItem(assembly)));
             actor("priority-unrelated", "read_only").get("/api/assemblies/" + assembly).then().statusCode(404);
-            actor("priority-owner", "read_only").get("/api/assemblies/" + assembly).then().statusCode(200)
+            actor("priority-owner", "faction_leader").get("/api/assemblies/" + assembly).then().statusCode(200)
                     .body("expand.itemIds.id", hasItems(person, group));
         }
         var orderBody = Map.of("eventType", "DE", "faction", "Priority",

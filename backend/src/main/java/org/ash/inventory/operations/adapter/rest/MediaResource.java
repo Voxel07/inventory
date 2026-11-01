@@ -42,7 +42,7 @@ public class MediaResource {
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
-    @jakarta.transaction.Transactional
+    // Deliberately not @Transactional: MediaService.upload manages short transactions around the storage call.
     public ApiResponses.MediaResponse upload(@RestForm("file") FileUpload upload) {
         return telemetry.call("media", "upload", "api", () -> {
             actors.current();
@@ -50,7 +50,6 @@ public class MediaResource {
             if (upload.size() > maxUploadBytes) throw new ApiException(413, "The file is too large");
             String contentType = MediaTypes.sniff(upload.uploadedFile());
             if (contentType == null) throw new ApiException(415, "Only WebP, PNG and JPEG images and PDF documents can be uploaded");
-            permissions.requireUploadQuota();
             var stored = media.upload(MediaTypes.fileName(upload.fileName(), contentType), contentType, upload.uploadedFile());
             return new ApiResponses.MediaResponse(stored.key(), stored.url());
         });

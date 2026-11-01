@@ -35,7 +35,10 @@ def main():
 
     routes = []
     verbs = "GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS"
-    for path in sorted((root / "backend/src/main/java/org/ash/inventory/resource").rglob("*Resource.java")):
+    sources = sorted((root / "backend/src/main/java/org/ash/inventory").rglob("*Resource.java"))
+    if not sources:
+        sys.exit("No *Resource.java handlers found; the source layout changed")
+    for path in sources:
         source = path.read_text(encoding="utf-8")
         base = re.search(r'@Path\("([^\"]+)"\)', source).group(1)
         for match in re.finditer(rf"@({verbs})\b(.*?)(?=@(?:{verbs})\b|\Z)", source, re.S):
