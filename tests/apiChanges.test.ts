@@ -161,3 +161,17 @@ test('runtime bookings and item responsibility changes refresh their readers onl
   expect(client.getQueryState(['operations', 'vendors'])?.isInvalidated).toBe(false);
   client.clear();
 });
+
+test('maintenance meters refresh schedules and purchasing transitions refresh requesting orders', () => {
+  const client = new QueryClient();
+  const keys = [['operations', 'schedules:inspection:item-a'], ['procurement-deficits'], ['faction-orders'], ['general-orders']];
+  keys.forEach(key => client.setQueryData(key, []));
+  invalidateForApiChange(client, { type: 'runtime.changed' });
+  expect(client.getQueryState(keys[0])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(keys[1])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(keys[2])?.isInvalidated).toBe(false);
+  invalidateForApiChange(client, { type: 'purchase_order.ordered' });
+  expect(client.getQueryState(keys[2])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(keys[3])?.isInvalidated).toBe(true);
+  client.clear();
+});

@@ -37,7 +37,8 @@ public final class StockPolicy {
     /** State after a repair is released: only warehouse-held damage/repair states return to availability. */
     public static DomainEnums.AssetState releasedState(AssetInstance asset) {
         return switch (asset.availabilityStatus) {
-            case damaged, in_repair, in_maintenance -> DomainEnums.AssetState.available;
+            case damaged, in_repair, in_maintenance -> asset.outOfService
+                    ? DomainEnums.AssetState.in_maintenance : returnedState(asset);
             default -> asset.availabilityStatus;
         };
     }

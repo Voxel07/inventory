@@ -105,6 +105,7 @@ public class LifecycleResource {
                 report.item == null ? null : report.item.id, report.item == null ? null : report.item.name,
                 report.assembly == null ? null : report.assembly.name,
                 value.assetInstance == null ? null : value.assetInstance.assetCode, report.description,
+                report.quantity - report.repairedQuantity - report.writtenOffQuantity, value.repairedPendingQuantity,
                 value.assetInstance == null ? null : value.assetInstance.id,
                 value.handover == null ? null : value.handover.id, value.status.name(),
                 value.repairOwner == null ? null : value.repairOwner.id,

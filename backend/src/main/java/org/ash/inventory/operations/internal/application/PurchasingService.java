@@ -121,7 +121,7 @@ public class PurchasingService {
         order.createdBy = actor;
         order.notes = input.notes();
         orm.persist(order);
-        var lines = replaceLines(order, input.lines());
+        var lines = replaceLines(order, input.lines(), input.itemRequestIds());
         events.record("purchase_order.created", "purchase_order", order.id, actor.id, null,
                 Map.of("orderNumber", order.orderNumber));
         return purchaseOrder(order, lines);
@@ -147,7 +147,7 @@ public class PurchasingService {
                 : orm.require(EventOccurrence.class, input.eventOccurrenceId(), "Event occurrence");
         order.notes = input.notes();
         orm.removePurchaseOrderLines(order);
-        var lines = replaceLines(order, input.lines());
+        var lines = replaceLines(order, input.lines(), input.itemRequestIds());
         events.record("purchase_order.updated", "purchase_order", order.id, actors.current().id, null,
                 Map.of("orderNumber", order.orderNumber));
         return purchaseOrder(order, lines);
@@ -214,6 +214,7 @@ public class PurchasingService {
         var stock = new ArrayList<InventoryReceiptService.ReceiptStock>();
         var assetCodes = new HashSet<String>();
         var newLots = new HashMap<String, InventoryLot>();
+        var itemRequests = orm.itemRequests(order);
         long acceptedTotal = 0;
         long damagedTotal = 0;
         long rejectedTotal = 0;
@@ -252,6 +253,14 @@ public class PurchasingService {
                     line.purchaseOrderLine.id, line.item.id, line.lot == null ? null : line.lot.id, location.id,
                     line.receivedQuantity, line.damagedQuantity, inputLine.assetCodes()));
             orderLine.receivedQuantity += stockReceived;
+            int toAssign = stockReceived;
+            for (var request : itemRequests) {
+                if (!request.item.id.equals(line.item.id) || request.declinedAt != null) continue;
+                int assigned = Math.min(toAssign, request.quantity - request.receivedQuantity);
+                request.receivedQuantity += assigned;
+                toAssign -= assigned;
+                if (toAssign == 0) break;
+            }
             acceptedTotal += inputLine.acceptedQuantity();
             damagedTotal += inputLine.damagedQuantity();
             rejectedTotal += inputLine.rejectedQuantity();
@@ -378,7 +387,7 @@ public class PurchasingService {
     }
 
     private List<PurchaseOrderLine> replaceLines(PurchaseOrder order,
-            List<PurchasingDtos.PurchaseOrderLineInput> inputs) {
+            List<PurchasingDtos.PurchaseOrderLineInput> inputs, List<UUID> requestIds) {
         var itemIds = new HashSet<UUID>();
         var result = new ArrayList<PurchaseOrderLine>();
         for (var input : inputs) {
@@ -393,19 +402,36 @@ public class PurchasingService {
             orm.persist(line);
             result.add(line);
         }
-        linkItemRequests(order, itemIds);
+        linkItemRequests(order, result, requestIds);
         return result;
     }
 
     /**
-     * Requests whose item is on this purchase order count as ordered: a line dropped by an edit releases its
-     * requests, and requests still waiting for their item are taken up, whichever screen drafted the order.
+     * Reserve draft quantities against waiting requests, oldest first. A request is linked only when the
+     * line covers its outstanding quantity; confirming the order, not drafting it, marks it ordered.
      */
-    private void linkItemRequests(PurchaseOrder order, Set<UUID> itemIds) {
-        for (var request : orm.itemRequests(order))
-            if (!itemIds.contains(request.item.id)) request.purchaseOrder = null;
+    private void linkItemRequests(PurchaseOrder order, List<PurchaseOrderLine> lines, List<UUID> requestIds) {
+        var remaining = new HashMap<UUID, Integer>();
+        lines.forEach(line -> remaining.put(line.item.id, line.orderedQuantity));
+        for (var request : orm.itemRequests(order)) {
+            int needed = request.quantity - request.receivedQuantity;
+            int available = remaining.getOrDefault(request.item.id, 0);
+            if (request.declinedAt != null || needed > available) request.purchaseOrder = null;
+            else remaining.put(request.item.id, available - needed);
+        }
         var eventId = order.eventOccurrence == null ? null : order.eventOccurrence.id;
-        for (var request : orm.itemRequestsAwaitingPurchase(itemIds, eventId)) request.purchaseOrder = order;
+        for (var request : orm.itemRequestsAwaitingPurchase(remaining.keySet(), eventId)) {
+            if (requestIds != null && !requestIds.contains(request.id)) continue;
+            int needed = request.quantity - request.receivedQuantity;
+            int available = remaining.getOrDefault(request.item.id, 0);
+            if (needed > available) continue;
+            request.purchaseOrder = order;
+            remaining.put(request.item.id, available - needed);
+        }
+        if (requestIds != null) {
+            var assigned = orm.itemRequests(order).stream().map(request -> request.id).collect(java.util.stream.Collectors.toSet());
+            if (!assigned.containsAll(requestIds)) throw ApiException.conflict("The draft must cover the selected requests' outstanding quantities and event scope");
+        }
     }
 
     private List<PurchasingDtos.PurchaseOrderResponse> purchaseOrderResponses(List<PurchaseOrder> values) {

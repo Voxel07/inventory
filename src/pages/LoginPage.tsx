@@ -13,7 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useUIStore } from '../store/uiStore';
 import { LanguageSelector } from '../components/shared/LanguageSelector';
 import { translate, useT } from '../utils/naming';
-import { AUTH_CONFIGURATION_ERROR } from '../config/runtimeConfig';
+import { AUTH_CONFIGURATION_ERROR, DEV_LOGIN_AVAILABLE } from '../config/runtimeConfig';
 import { InstallAppCard } from '../components/shared/InstallAppCard';
 
 export function LoginPage() {
@@ -81,7 +81,7 @@ export function LoginPage() {
                     {AUTH_CONFIGURATION_ERROR && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{AUTH_CONFIGURATION_ERROR}</Alert>}
                     {authError && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{authError}</Alert>}
 
-                    <Button title={translate('pages.loginPage.signInThroughAuthentik')}
+                    <Button title={DEV_LOGIN_AVAILABLE ? t('operations.review.developmentSignIn') : translate('pages.loginPage.signInThroughAuthentik')}
                         variant="contained"
                         fullWidth
                         size="large"
@@ -93,7 +93,7 @@ export function LoginPage() {
                             fontWeight: 600,
                         }}
                     >
-                        {isLoading ? t('pages.loginPage.connecting') : t('pages.loginPage.signInWithAuthentik')}
+                        {isLoading ? t('pages.loginPage.connecting') : DEV_LOGIN_AVAILABLE ? t('operations.review.developmentSignIn') : t('pages.loginPage.signInWithAuthentik')}
                     </Button>
                     <Box sx={{ mt: 3 }}><LanguageSelector compact /></Box>
                 </Paper>

@@ -4,7 +4,6 @@ import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.persistence.OperationsOrm;
-import org.ash.inventory.platform.api.BusinessTime;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
@@ -51,7 +50,7 @@ public class MaintenanceEvaluationService {
     }
 
     public boolean itemUsable(Item item, Instant now) {
-        return !MaintenancePolicy.blocksItem(item, BusinessTime.date(now))
+        return !MaintenancePolicy.blocksItem(item)
                 && operations.blockingSchedules(item, null).stream().noneMatch(s -> MaintenancePolicy.blocksCheckout(status(s, now)));
     }
 }

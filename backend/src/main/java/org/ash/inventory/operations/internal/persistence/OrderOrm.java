@@ -68,7 +68,7 @@ public class OrderOrm extends EntityOrm {
                 + " left join fetch request.item left join fetch request.purchaseOrder purchase left join fetch request.resolvedBy"
                 + " where o.status <> cancelled"
                 + (eventId == null ? "" : " and event.id = :eventId")
-                + (includeResolved ? "" : " and request.declinedAt is null and (purchase is null or purchase.status = cancelled)")
+                + (includeResolved ? "" : " and request.declinedAt is null and request.receivedQuantity < request.quantity and (purchase is null or purchase.status in (draft, cancelled))")
                 + " order by request.createdAt, request.lineNumber, request.id", OrderItemRequest.class);
         if (eventId != null) query.setParameter("eventId", eventId);
         return query.getResultList();

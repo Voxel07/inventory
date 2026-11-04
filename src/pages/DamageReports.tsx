@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { RepairsPanel } from '../components/operations/RepairsPanel';
 import { Box, Tabs, TextField } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { Tab } from '../components/shared/ActionButtons';
@@ -77,7 +79,9 @@ function DamageReportResults({ view, search }: { view: 'open' | 'history'; searc
 export function DamageReportsPage() {
     const t = useT();
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
+    const [params, setParams] = useSearchParams();
+    const requestedTab = params.get('tab');
+    const activeTab = requestedTab === 'repairs' || requestedTab === 'history' ? requestedTab : 'open';
     const [search, setSearch] = useState('');
     const debouncedSearch = useDebouncedValue(search.trim());
     const { data: assemblies } = useAssemblies();
@@ -92,13 +96,16 @@ export function DamageReportsPage() {
                     disabled={!canPerformCustody(user)} onClick={() => setFormOpen(true)}
                 />
             } />
-            <Tabs value={activeTab} onChange={(_, value: 'open' | 'history') => setActiveTab(value)} sx={{ mb: 2 }}>
+            <Tabs value={activeTab} onChange={(_, value: string) => setParams({ tab: value })} sx={{ mb: 2 }}>
                 <Tab title={translate('pages.damageReports.displayOpenDamageReports')} value="open" label={t('pages.damageReports.open')} />
                 <Tab title={translate('pages.damageReports.displayResolvedDamageReports')} value="history" label={t('common.history')} />
+                <Tab value="repairs" label={t('pages.operations.repairs')} />
             </Tabs>
+            {activeTab === 'repairs' ? <RepairsPanel /> : <>
             <TextField type="search" label={t('lists.damageReportsList.searchDamageReports')} value={search}
                 onChange={(event) => setSearch(event.target.value)} size="small" fullWidth sx={{ mb: 1.5 }} />
             <DamageReportResults key={`${activeTab}:${debouncedSearch}`} view={activeTab} search={debouncedSearch} />
+            </>}
             <DamageReportDialog open={formOpen} onClose={() => setFormOpen(false)} title={t('common.reportDamage')}
                 assemblies={assemblies ?? []} />
         </Box>

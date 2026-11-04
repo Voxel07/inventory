@@ -8,7 +8,6 @@ import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 
 /** One schedule evaluation for checkout eligibility and report projections. */
@@ -51,14 +50,12 @@ public final class MaintenancePolicy {
 
     public static boolean blocksCheckout(Status status) { return status == Status.due || status == Status.unknown; }
 
-    /** Days before a calendar due date in which item and asset calendars report {@code due_soon}. */
-    public static final int CALENDAR_WARNING_DAYS = 30;
-    public static DomainEnums.MaintenanceStatus itemStatus(Item item, LocalDate today) {
-        return item.outOfService ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
+    public static DomainEnums.MaintenanceStatus itemStatus(Item item) {
+        return item.outOfService ? DomainEnums.MaintenanceStatus.out_of_service : DomainEnums.MaintenanceStatus.certified;
     }
-    public static DomainEnums.MaintenanceStatus assetStatus(AssetInstance asset, LocalDate today) {
-        return asset.outOfService ? DomainEnums.MaintenanceStatus.in_service : DomainEnums.MaintenanceStatus.certified;
+    public static DomainEnums.MaintenanceStatus assetStatus(AssetInstance asset) {
+        return asset.outOfService ? DomainEnums.MaintenanceStatus.out_of_service : DomainEnums.MaintenanceStatus.certified;
     }
-    public static boolean blocksItem(Item item, LocalDate today) { return !item.active || item.outOfService; }
-    public static boolean blocksAsset(AssetInstance asset, LocalDate today) { return asset.outOfService; }
+    public static boolean blocksItem(Item item) { return !item.active || item.outOfService; }
+    public static boolean blocksAsset(AssetInstance asset) { return asset.outOfService; }
 }

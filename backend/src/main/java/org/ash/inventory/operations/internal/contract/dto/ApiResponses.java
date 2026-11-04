@@ -377,7 +377,7 @@ public final class ApiResponses {
     ) implements OrderDetail {}
 
     /** Something an order asks for outside the inventory; {@code status} follows from the item and purchase order links. */
-    public record OrderItemRequestResponse(UUID id, String name, int quantity, String link, String note, String status,
+    public record OrderItemRequestResponse(UUID id, String name, int quantity, int receivedQuantity, String link, String note, String status,
             UUID itemId, String itemName, UUID purchaseOrderId, String purchaseOrderNumber, String purchaseOrderStatus,
             String declineReason, String resolvedBy, Instant declinedAt) {}
 
@@ -446,6 +446,8 @@ public final class ApiResponses {
             String handoverId,
             boolean safetyImpact,
             String resolutionNotes,
+            UUID repairCaseId,
+            String repairStatus,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> expand
     ) {}
 
@@ -482,6 +484,7 @@ public final class ApiResponses {
             String conditionStatus,
             String availabilityStatus,
             String serviceStatus,
+            boolean maintenanceBlocked,
             LocalDate nextMaintenanceDue,
             BigDecimal operatingHours,
             String currentLocationId,

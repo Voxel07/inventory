@@ -77,9 +77,10 @@ class AuditFixesApiTest {
         admin().body(Map.of("itemId", item, "assetInstanceId", first, "scheduleId", firstSchedule, "type", "dguv_v3", "result", "failed",
                 "notes", "Insulation fault")).post("/api/maintenance").then().statusCode(200);
         admin().get("/api/items/" + item).then().statusCode(200)
-                .body("maintenanceStatus", equalTo("certified")).body("nextMaintenanceDue", equalTo(due));
+                .body("maintenanceStatus", equalTo("out_of_service")).body("nextMaintenanceDue", equalTo(due))
+                .body("stock.available", equalTo(1)).body("stock.maintenance", equalTo(1));
         admin().get("/api/items/" + item + "/assets").then()
-                .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("in_service"))
+                .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("out_of_service"))
                 .body("find { it.id == '" + first + "' }.availabilityStatus", equalTo("in_maintenance"))
                 .body("find { it.id == '" + second + "' }.serviceStatus", equalTo("certified"));
         admin().body(checkout(item, first)).post("/api/transactions").then().statusCode(409);
@@ -90,7 +91,7 @@ class AuditFixesApiTest {
                 .post("/api/maintenance").then().statusCode(200);
         admin().get("/api/items/" + item).then().body("nextMaintenanceDue", equalTo(due));
         admin().get("/api/items/" + item + "/assets").then()
-                .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("in_service"))
+                .body("find { it.id == '" + first + "' }.serviceStatus", equalTo("out_of_service"))
                 .body("find { it.id == '" + second + "' }.availabilityStatus", equalTo("in_field"))
                 .body("find { it.id == '" + second + "' }.nextMaintenanceDue",
                         equalTo(org.ash.inventory.platform.api.EpochTime.millis(LocalDate.now().plusDays(365))));

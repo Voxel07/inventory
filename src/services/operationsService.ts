@@ -3,7 +3,7 @@ import { apiPage, apiRequest, apiFileUrl, fetchMedia, uploadMedia, type ApiQuery
 import { assertAuthSession, captureAuthSession } from './authManager';
 import { fieldCommand } from './fieldCommand';
 
-import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, OutboxEvent, SyncAudit, LotInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
+import type { Position, Lot, Transfer, Count, Schedule, Repair, Receipt, VendorDocument, LotInput, TransferInput, TransferCommands, CountInput, CountCommands, ScheduleInput, RepairInput, RepairTransitionInput, ReceiptInput, VendorDocumentInput } from '../types/operations';
 
 const list = <T>(path: string, query: ApiQuery = {}) => (page: number, size: number) => apiPage<T>(`/api/${path}`, page, size, { query });
 const save = <T>(path: string, data: unknown, id?: string) => apiRequest<T>(`/api/${path}${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: data });
@@ -45,8 +45,4 @@ export const operationsApi = {
     link.href = url; link.download = document.originalFilename; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
-  outboxStatus: () => apiRequest<{ counts: Record<string, number> }>('/api/outbox/status'),
-  deadLetters: list<OutboxEvent>('outbox/dead-letters'),
-  retryEvent: (id: string) => save<OutboxEvent>(`outbox/dead-letters/${id}/retry`, {}),
-  syncAudit: list<SyncAudit>('sync/audit'),
 };

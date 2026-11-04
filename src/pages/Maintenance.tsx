@@ -1,8 +1,8 @@
 import { calendarDate, dateFieldValue, formatDate } from '../utils/dateFormat';
-import { Button } from '../components/shared/ActionButtons';
+import { Button, Tab } from '../components/shared/ActionButtons';
 import { useAuth } from '../hooks/useAuth';
 import { canEditCatalog, canPerformMaintenance } from '../utils/access';
-import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
@@ -16,6 +16,7 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tabs,
   Typography,
   useMediaQuery,
   useTheme,
@@ -45,10 +46,10 @@ import { translate, useT } from '../utils/naming';
 import type { Item } from '../types';
 import { MAINTENANCE_RESULTS, MAINTENANCE_TYPES, type MaintenanceResult, type MaintenanceType, type Schedule } from '../types/operations';
 import { oneOf } from '../utils/operationForm';
-import { useOperationList } from '../hooks/useOperations';
+import { useCompleteList } from '../hooks/usePagedList';
 import { operationsApi } from '../services/operationsService';
-import { IndividualSchedules } from '../components/maintenance/IndividualSchedules';
-import { CALENDAR_WARNING_DAYS, isDateSchedule, matchingSchedule, scheduleIsOverdue, maintenanceTypeLabel } from '../components/maintenance/maintenanceSchedules';
+import { SchedulesPanel } from '../components/operations/SchedulesPanel';
+import { maintenanceTypeLabel } from '../components/maintenance/maintenanceSchedules';
 import { formatStatus } from '../utils/formatters';
 
 function dateInputValue(date: Date): number {
@@ -69,6 +70,8 @@ function addYears(years: number): number {
 
 export function Maintenance() {
   const t = useT();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'schedules' ? 'schedules' : 'inspections';
   const { user } = useAuth();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const theme = useTheme();
@@ -82,20 +85,22 @@ export function Maintenance() {
   const attentionItems = usePagedItems({ maintenanceAttention: true, sort: 'name' });
   const { data: categories = [] } = useItemCategories();
   const { data: categoryPolicies = [] } = useQuery({ queryKey: ['category-maintenance'], queryFn: getCategoryMaintenancePolicies });
-  const { data: records = [], isLoading: recordsLoading } = useQuery({
+  const { data: records = [], isLoading: recordsLoading, error: recordsError } = useQuery({
     queryKey: ['maintenance'],
     queryFn: () => getMaintenanceRecords(),
   });
 
   const [itemId, setItemId] = useState('');
   const [assetId, setAssetId] = useState('');
-  const { data: assets = [] } = useItemAssets(itemId || undefined);
+  const { data: assets = [], isComplete: assetsComplete } = useItemAssets(itemId || undefined);
   const selectedItem = useItemsByIds(itemId ? [itemId] : []).data?.[0];
   const serialized = selectedItem?.trackingMode === 'serialized';
   const [policyCategory, setPolicyCategory] = useState('');
   const [policyInterval, setPolicyInterval] = useState('');
-  const schedules = useOperationList<Schedule>('schedules', operationsApi.schedules());
-  const dateSchedules = (schedules.data ?? []).filter(isDateSchedule);
+  const [scheduleId, setScheduleId] = useState('');
+  const schedules = useCompleteList<Schedule>(['operations', `schedules:inspection:${itemId}`], operationsApi.schedules({ itemId }), { enabled: Boolean(itemId) });
+  const activeSchedule = schedules.data?.find((schedule) => schedule.id === scheduleId && schedule.active);
+  const requiresAsset = serialized && (!activeSchedule || Boolean(activeSchedule.assetInstanceId));
   const policyMutation = useMutation({
     mutationFn: () => saveCategoryMaintenancePolicy(policyCategory, Number(policyInterval) || 0),
     onSuccess: () => {
@@ -114,12 +119,12 @@ export function Maintenance() {
     mutationFn: (performedAt: number) =>
       createMaintenanceRecord({
         itemId,
-        assetInstanceId: serialized ? assetId : undefined,
-        scheduleId: matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type)?.id,
-        type,
+        assetInstanceId: requiresAsset ? activeSchedule?.assetInstanceId || assetId : undefined,
+        scheduleId: activeSchedule?.id,
+        type: activeSchedule?.maintenanceType ?? type,
         result,
         performedAt,
-        nextDueAt: nextDueAt === '' ? undefined : nextDueAt,
+        nextDueAt: result === 'failed' || nextDueAt === '' ? undefined : nextDueAt,
         certificateNumber: certificateNumber || undefined,
         operatingHours: operatingHours ? Number(operatingHours) : undefined,
         notes: notes || undefined,
@@ -128,6 +133,8 @@ export function Maintenance() {
       showSnackbar(t('pages.maintenance.inspectionRecordedSuccessfully'), 'success');
       setFormOpen(false);
       setItemId('');
+      setAssetId('');
+      setScheduleId('');
       setNotes('');
       setCertificateNumber('');
       setOperatingHours('');
@@ -138,13 +145,8 @@ export function Maintenance() {
     },
   });
 
-  const warningDate = new Date();
-  warningDate.setDate(warningDate.getDate() + CALENDAR_WARNING_DAYS);
-  const today = dateInputValue(new Date());
   const attention = attentionItems.data ?? [];
-  const attentionSchedules = dateSchedules.filter((schedule) => schedule.nextDueAt == null || new Date(schedule.nextDueAt) <= warningDate);
-  const attentionCount = attention.length + attentionSchedules.length;
-  const activeSchedule = itemId ? matchingSchedule(dateSchedules, itemId, serialized ? assetId : undefined, type) : undefined;
+  const attentionCount = attention.length;
 
   function scheduleDue(schedule: Schedule) {
     const due = new Date();
@@ -152,29 +154,16 @@ export function Maintenance() {
     return dateInputValue(due);
   }
 
-  function prefillSchedule(schedule: Schedule) {
-    setItemId(schedule.itemId);
-    setAssetId(schedule.assetInstanceId ?? '');
-    setType(schedule.maintenanceType);
-    setNextDueAt(scheduleDue(schedule));
-    setFormOpen(true);
-  }
-
   function prefillInspection(item: Item) {
     setItemId(item.id);
-    const lowerName = item.name.toLowerCase();
-    const lowerCat = (item.category || '').toLowerCase();
-    if (lowerCat.includes('generator') || lowerName.includes('strom') || lowerName.includes('aggregat')) {
-      setType('generator_service');
-    } else if (lowerCat.includes('funk') || lowerName.includes('akku') || lowerName.includes('batterie')) {
-      setType('battery_test');
-    } else if (lowerCat.includes('softair') || lowerName.includes('waffe') || lowerName.includes('markierer')) {
-      setType('chrono_fps');
-    } else {
-      setType('dguv_v3');
-    }
-    const schedule = dateSchedules.find((candidate) => candidate.itemId === item.id);
-    setNextDueAt(schedule ? scheduleDue(schedule) : '');
+    setAssetId('');
+    setScheduleId(item.blockingMaintenance.length === 1 ? item.blockingMaintenance[0].scheduleId : '');
+    setType('dguv_v3');
+    setResult('passed');
+    setNotes('');
+    setCertificateNumber('');
+    setOperatingHours('');
+    setNextDueAt('');
     setFormOpen(true);
   }
 
@@ -184,7 +173,7 @@ export function Maintenance() {
         inlineActions={compact} actions={<ActionBar iconOnly={compact} actions={[
           { key: 'intervals', label: t('pages.maintenance.maintenanceByCategory'), icon: <TuneIcon />, onClick: () => setPolicyOpen(true) },
           canPerformMaintenance(user) && { key: 'record', label: t('pages.maintenance.recordInspection'), icon: <AddIcon />, variant: 'contained', pinned: true,
-            onClick: () => setFormOpen(true) },
+            onClick: () => { setItemId(''); setAssetId(''); setScheduleId(''); setResult('passed'); setNotes(''); setCertificateNumber(''); setOperatingHours(''); setNextDueAt(''); setFormOpen(true); } },
         ]} />} />
 
       <Dialog open={policyOpen} onClose={() => setPolicyOpen(false)} fullWidth maxWidth="sm">
@@ -210,6 +199,12 @@ export function Maintenance() {
         </DialogContent>
       </Dialog>
 
+      <Tabs value={tab} onChange={(_, value: string) => setParams({ tab: value })} sx={{ mb: 2 }}>
+        <Tab value="inspections" label={t('operations.review.inspections')} />
+        <Tab value="schedules" label={t('pages.operations.schedules')} />
+      </Tabs>
+      {tab === 'schedules' ? <SchedulesPanel /> : <>
+      {attentionItems.error && <Alert severity="error">{attentionItems.error.message}</Alert>}
       {/* Attention / Overdue Section */}
       {!!attentionCount && (
         <Paper sx={{ p: { xs: 1.5, sm: 2 }, mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
@@ -230,15 +225,9 @@ export function Maintenance() {
                         <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
                         <Chip
                           size="small"
-                          icon={item.nextMaintenanceDue != null && item.nextMaintenanceDue < today ? <ErrorIcon /> : <WarningAmberIcon />}
-                          color={item.maintenanceStatus === 'in_service' ? 'info' : item.nextMaintenanceDue != null && item.nextMaintenanceDue < today ? 'error' : 'warning'}
-                          label={
-                            item.maintenanceStatus === 'in_service'
-                              ? t('pages.maintenance.inService')
-                              : item.nextMaintenanceDue != null && item.nextMaintenanceDue < today
-                              ? t('enum.value.overdue')
-                              : t('enum.value.due_soon')
-                          }
+                          icon={item.maintenanceStatus === 'overdue' || item.maintenanceStatus === 'out_of_service' ? <ErrorIcon /> : <WarningAmberIcon />}
+                          color={item.maintenanceStatus === 'overdue' || item.maintenanceStatus === 'out_of_service' ? 'error' : 'warning'}
+                          label={formatStatus(item.maintenanceStatus)}
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary">
@@ -253,35 +242,13 @@ export function Maintenance() {
                 </CardContent>
               </Card>
             ))}
-            {attentionSchedules.map((schedule) => (
-              <Card key={schedule.id} variant="outlined">
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
-                        <Typography sx={{ fontWeight: 700 }}>{schedule.itemName}</Typography>
-                        {schedule.assetCode && <Chip size="small" variant="outlined" label={schedule.assetCode} />}
-                        <Chip size="small" icon={scheduleIsOverdue(schedule) ? <ErrorIcon /> : <WarningAmberIcon />}
-                          color={scheduleIsOverdue(schedule) ? 'error' : 'warning'}
-                          label={scheduleIsOverdue(schedule) ? t('enum.value.overdue') : t('enum.value.due_soon')} />
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary">
-                        {maintenanceTypeLabel(schedule.maintenanceType)} · {t('pages.maintenance.dueOn')}: {formatDate(schedule.nextDueAt)}
-                      </Typography>
-                    </Box>
-                    <InspectButton phone={phone} title={translate('pages.maintenance.fillInTheInspectionFormForThisDevice')}
-                      label={t('pages.maintenance.inspectNow')} onClick={() => prefillSchedule(schedule)} />
-                  </Stack>
-                </CardContent>
-              </Card>
-            ))}
+
           </Stack>
           <LoadMore list={attentionItems} />
         </Paper>
       )}
-      {!attentionCount && !attentionItems.isLoading && <Alert severity="success" sx={{ mb: 3 }}>{t('pages.maintenance.noMaintenanceDue')}</Alert>}
+      {!attentionCount && !attentionItems.isLoading && !attentionItems.error && <Alert severity="success" sx={{ mb: 3 }}>{t('pages.maintenance.noMaintenanceDue')}</Alert>}
 
-      <IndividualSchedules schedules={schedules.data ?? []} canEdit={canPerformMaintenance(user)} onInspect={prefillSchedule} />
 
       {/* Record Inspection Form */}
       <Dialog open={formOpen} onClose={() => { if (!mutation.isPending) setFormOpen(false); }} fullScreen={phone} fullWidth maxWidth="md">
@@ -298,27 +265,35 @@ export function Maintenance() {
             onChange={(item) => {
               setItemId(item?.id || '');
               setAssetId('');
-              const schedule = item && dateSchedules.find((candidate) => candidate.itemId === item.id);
-              if (schedule) {
-                setType(schedule.maintenanceType);
-                setNextDueAt(scheduleDue(schedule));
-              } else setNextDueAt('');
+              setScheduleId('');
+              setNextDueAt('');
             }}
           />
-          {serialized && <TextField select label={t('common.asset')} value={assetId} onChange={(event) => {
-            setAssetId(event.target.value);
-            const schedule = dateSchedules.find((candidate) => candidate.itemId === itemId && candidate.assetInstanceId === event.target.value);
-            if (schedule) { setType(schedule.maintenanceType); setNextDueAt(scheduleDue(schedule)); }
-          }} required>
-            {assets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
+          <TextField select label={t('operations.review.inspectionSchedule')} value={scheduleId} disabled={!itemId || !schedules.isComplete}
+            onChange={(event) => {
+              const schedule = schedules.data?.find((entry) => entry.id === event.target.value);
+              setScheduleId(schedule?.id ?? '');
+              setAssetId(schedule?.assetInstanceId ?? '');
+              if (schedule) setType(schedule.maintenanceType);
+              setNextDueAt(schedule?.intervalType === 'date' ? scheduleDue(schedule) : '');
+            }}>
+            <MenuItem value="">{t('operations.review.unscheduledInspection')}</MenuItem>
+            {(schedules.data ?? []).filter((schedule) => schedule.active).map((schedule) => <MenuItem key={schedule.id} value={schedule.id}>
+              {maintenanceTypeLabel(schedule.maintenanceType)} · {schedule.assetCode || t('operations.review.entireItem')} · {schedule.intervalType === 'date' ? formatDate(schedule.nextDueAt) : schedule.nextDueValue}
+            </MenuItem>)}
+          </TextField>
+          {schedules.error && <Alert severity="error">{schedules.error.message}</Alert>}
+          {requiresAsset && <TextField select label={t('common.asset')} value={activeSchedule?.assetInstanceId || assetId} disabled={Boolean(activeSchedule)} onChange={(event) => setAssetId(event.target.value)} required>
+            {assets.filter((asset) => asset.active).map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.assetCode}</MenuItem>)}
           </TextField>}
-          {canPerformMaintenance(user) && <Button title={translate('pages.maintenance.displayMaintenanceSchedulesAndChecklists')} component={Link} to="/operations?tab=schedules">{t('pages.maintenance.openSchedulesAndChecklists')}</Button>}
+          {!activeSchedule && <Alert severity="info">{t('operations.review.unscheduledHelp')}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               select
               fullWidth
               label={t('common.inspectionType')}
-              value={type}
+              value={activeSchedule?.maintenanceType ?? type}
+              disabled={Boolean(activeSchedule)}
               onChange={(event) => setType(oneOf(event.target.value, MAINTENANCE_TYPES))}
             >
               <MenuItem value="dguv_v3">DGUV V3 ({t('pages.maintenance.electricalEquipment')})</MenuItem>
@@ -339,11 +314,11 @@ export function Maintenance() {
             </TextField>
           </Stack>
 
-          {activeSchedule && <Alert severity="info">
+          {activeSchedule?.intervalType === 'date' && result !== 'failed' && <Alert severity="info">
             {t('pages.maintenance.thisInspectionAdvancesTheMaintenanceScheduleEveryIntervalValueDays', { intervalValue: String(activeSchedule.intervalValue) })}
             {activeSchedule.requiredChecklist ? ` ${t('pages.maintenance.documentTheRequiredChecklistInTheNotes')} ${activeSchedule.requiredChecklist}` : ''}
           </Alert>}
-          <Box>
+          {activeSchedule?.intervalType === 'date' && result !== 'failed' && <Box>
             <TextField
               fullWidth
               type="date"
@@ -366,7 +341,7 @@ export function Maintenance() {
                 +2 {t('pages.maintenance.years')}
               </Button>
             </Stack>
-          </Box>
+          </Box>}
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
@@ -379,6 +354,7 @@ export function Maintenance() {
             <TextField
               fullWidth
               type="number"
+              required={activeSchedule?.intervalType === 'operating_hours'}
               label={t('enum.value.operating_hours')}
               value={operatingHours}
               onChange={(event) => setOperatingHours(event.target.value)}
@@ -389,6 +365,7 @@ export function Maintenance() {
             multiline
             minRows={2}
             label={t('pages.maintenance.notesRemarks')}
+            required={Boolean(activeSchedule?.requiredChecklist)}
             placeholder={t('pages.maintenance.eGProtectiveEarthResistance008OhmVisualCheck')}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
@@ -400,7 +377,7 @@ export function Maintenance() {
             variant="contained"
             size="large"
             color={result === 'failed' ? 'error' : result === 'advisory' ? 'warning' : 'primary'}
-            disabled={!canPerformMaintenance(user) || !itemId || (serialized && !assets.some((asset) => asset.id === assetId)) || mutation.isPending}
+            disabled={!canPerformMaintenance(user) || !selectedItem || !schedules.isComplete || (scheduleId !== '' && !activeSchedule) || (requiresAsset && (!assetsComplete || !assets.some((asset) => asset.active && asset.id === (activeSchedule?.assetInstanceId || assetId)))) || (activeSchedule?.intervalType === 'operating_hours' && !operatingHours) || (Boolean(activeSchedule?.requiredChecklist) && !notes.trim()) || mutation.isPending}
             onClick={() => mutation.mutate(Date.now())}
             sx={{ minHeight: 44 }}
           >
@@ -420,6 +397,7 @@ export function Maintenance() {
         <Typography variant="h6">{t('pages.maintenance.recentInspectionsProtocols')}</Typography>
       </Stack>
 
+      {recordsError && <Alert severity="error">{recordsError.message}</Alert>}
       {recordsLoading ? (
         <Typography color="text.secondary">{t('pages.maintenance.loadingInspections')}</Typography>
       ) : !records.length ? (
@@ -469,6 +447,7 @@ export function Maintenance() {
           })}
         </Stack>
       )}
+      </>}
     </Box>
   );
 }

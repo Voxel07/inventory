@@ -3,7 +3,6 @@ package org.ash.inventory.operations.internal.application;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.Item;
-import org.ash.inventory.platform.api.BusinessTime;
 
 import java.time.Instant;
 import java.util.List;
@@ -25,14 +24,14 @@ public record AvailabilityEligibility(Item item, Instant now, List<MaintenancePo
             DomainEnums.ConditionStatus.damaged, DomainEnums.ConditionStatus.unsafe, DomainEnums.ConditionStatus.lost);
 
     public boolean itemUsable() {
-        return !MaintenancePolicy.blocksItem(item, BusinessTime.date(now))
+        return !MaintenancePolicy.blocksItem(item)
                 && blockingSchedules.stream().filter(s -> s.assetId() == null).noneMatch(s -> blocks(s, null));
     }
 
     /** Item-wide schedules block every asset; asset schedules block only their asset. */
     public boolean usable(AssetInstance asset) {
         return asset.active && !UNUSABLE_CONDITIONS.contains(asset.conditionStatus)
-                && !MaintenancePolicy.blocksAsset(asset, BusinessTime.date(now))
+                && !MaintenancePolicy.blocksAsset(asset)
                 && blockingSchedules.stream().filter(s -> s.assetId() == null || s.assetId().equals(asset.id))
                 .noneMatch(s -> blocks(s, asset));
     }

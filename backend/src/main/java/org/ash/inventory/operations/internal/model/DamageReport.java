@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "damage_reports")
 public class DamageReport extends BaseEntity {
+    @jakarta.persistence.OneToOne(mappedBy = "damageReport", fetch = FetchType.LAZY) public RepairCase repairCase;
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "position_quantities", columnDefinition = "jsonb")
     public java.util.Map<String, Integer> positionQuantities = new java.util.LinkedHashMap<>();

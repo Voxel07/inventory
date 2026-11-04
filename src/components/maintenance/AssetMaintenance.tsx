@@ -30,8 +30,7 @@ function daysFromToday(days: number): number {
 }
 
 /**
- * Maintenance plans of one serialized asset. An asset's own plan replaces the item-wide plan of the same
- * type, so each unit keeps its own interval, due date and operating-hour counter.
+ * Maintenance plans of one serialized asset. Item-wide requirements and device-specific plans both apply.
  */
 export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: AssetInstance; canEdit: boolean }) {
   const t = useT();
@@ -39,7 +38,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
   const schedules = useCompleteList<Schedule>(['operations', `schedules:item:${item.id}`], operationsApi.schedules({ itemId: item.id }));
   const active = (schedules.data ?? []).filter((schedule) => schedule.active);
   const own = active.filter((schedule) => schedule.assetInstanceId === asset.id);
-  const inherited = active.filter((schedule) => !schedule.assetInstanceId && !own.some((mine) => mine.maintenanceType === schedule.maintenanceType));
+  const inherited = active.filter((schedule) => !schedule.assetInstanceId);
   const hours = Number(asset.operatingHours ?? 0);
   const [draft, setDraft] = useState<Draft | null>(null);
 
@@ -123,7 +122,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
 
   return (
     <DetailPanel title={t('maintenance.assetMaintenance.maintenanceOfThisAsset')} actions={<Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
-      <InfoTip>{t('maintenance.assetMaintenance.ownIntervalsApplyToThisAssetOnlyAndReplaceThe')}</InfoTip>
+      <InfoTip>{t('operations.review.scheduleRequirements')}</InfoTip>
       {canEdit && !draft && <Button title={translate('maintenance.assetMaintenance.createAMaintenanceIntervalForThisAsset')} size="small" onClick={() => startDraft()}
         sx={{ minHeight: { xs: 44, sm: 28 }, py: 0 }}>
         {t('maintenance.assetMaintenance.addInterval')}
@@ -152,7 +151,7 @@ export function AssetMaintenance({ item, asset, canEdit }: { item: Item; asset: 
               <Typography>{describe(schedule)}</Typography>
               <Typography variant="caption" color="text.secondary">{t('maintenance.assetMaintenance.itemWidePlanForAllUnits')}</Typography>
             </Box>
-            {canEdit && <Button title={translate('maintenance.assetMaintenance.setAnOwnIntervalForThisAssetInsteadOfThe')} size="small" onClick={() => startDraft(schedule)}>
+            {canEdit && <Button title={translate('operations.review.scheduleRequirements')} size="small" onClick={() => startDraft(schedule)}>
               {t('maintenance.assetMaintenance.ownInterval')}
             </Button>}
           </Box>

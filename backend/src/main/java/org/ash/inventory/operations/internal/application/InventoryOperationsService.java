@@ -498,6 +498,13 @@ public class InventoryOperationsService {
     @Transactional
     public DamageReport resolveDamageReport(UUID id, ApiModels.DamageResolutionInput input) {
         actors.requireWarehouse();
+        var report = orm.findLockedDamage(id);
+        if (report == null) throw ApiException.notFound("Damage report not found");
+        if (input.status() != null && report.repairCase != null
+                && report.repairCase.status != DomainEnums.RepairStatus.returned_to_service
+                && report.repairCase.status != DomainEnums.RepairStatus.written_off) {
+            throw ApiException.conflict("Resolve this damage through its active repair case");
+        }
         return resolveDamage(id, input);
     }
 
@@ -517,6 +524,10 @@ public class InventoryOperationsService {
         var report = orm.findLockedDamage(id);
         if (report == null)
             throw ApiException.notFound("Damage report not found");
+        if (report.item != null) report.item = lockedItem(report.item.id);
+        if (report.assetInstance != null) {
+            report.assetInstance = orm.requireLockedFresh(AssetInstance.class, report.assetInstance.id, "Asset");
+        }
         if (occurredAt.isBefore(report.createdAt)) throw ApiException.badRequest("Resolution date precedes damage report");
         if (input.description() != null) {
             if (input.description().isBlank()) throw ApiException.badRequest("Damage description must not be blank");
@@ -596,7 +607,7 @@ public class InventoryOperationsService {
                 report.assetInstance.availabilityStatus = DomainEnums.AssetState.written_off;
                 report.assetInstance.active = false;
             } else {
-                report.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
+                report.assetInstance.conditionStatus = orm.damageCondition(report.assetInstance);
                 report.assetInstance.availabilityStatus = StockPolicy.conditionedState(report.assetInstance);
             }
         }
@@ -629,12 +640,17 @@ public class InventoryOperationsService {
                 throw ApiException.badRequest("Asset does not belong to the maintenance item");
             }
             record.assetInstance = asset;
-        } else if (item.trackingMode == DomainEnums.TrackingMode.serialized) {
+        } else if (item.trackingMode == DomainEnums.TrackingMode.serialized && input.scheduleId() == null) {
             throw ApiException.badRequest("assetInstanceId is required for serialized item maintenance");
         }
         if (input.scheduleId() != null) {
-            var schedule = orm.require(MaintenanceSchedule.class, input.scheduleId(), "Maintenance schedule");
+            var schedule = orm.requireLocked(MaintenanceSchedule.class, input.scheduleId(), "Maintenance schedule");
+            if (!schedule.active || schedule.maintenanceType != input.type()) {
+                throw ApiException.badRequest("Inspection must match an active schedule's maintenance type");
+            }
             if (!schedule.item.id.equals(item.id)
+                    || (item.trackingMode == DomainEnums.TrackingMode.serialized
+                            && schedule.assetInstance == null && record.assetInstance != null)
                     || (schedule.assetInstance != null && (record.assetInstance == null
                             || !record.assetInstance.id.equals(schedule.assetInstance.id)))) {
                 throw ApiException.badRequest("Maintenance schedule does not apply to this item or asset");
@@ -657,9 +673,9 @@ public class InventoryOperationsService {
         orm.persist(record);
         if (input.certificateObjectKey() != null)
             record.certificateObjectKey = media.attachToMaintenance(input.certificateObjectKey(), record.id);
-        boolean failed = input.result() == DomainEnums.MaintenanceResult.failed;
-        var calendarDue = record.nextDueAt == null ? null : BusinessTime.date(record.nextDueAt);
         var asset = record.assetInstance;
+        boolean failed = input.result() == DomainEnums.MaintenanceResult.advisory
+                ? (asset == null ? item.outOfService : asset.outOfService) : orm.failedInspection(item, asset);
         if (asset == null) {
             if (input.operatingHours() != null && input.operatingHours().compareTo(item.currentOperatingHours) > 0)
                 runtime.record(item, null, input.operatingHours(), null, null, RuntimeEntry.Source.maintenance, "Maintenance " + record.type.name());
@@ -709,9 +725,8 @@ public class InventoryOperationsService {
     }
 
     private Item lockedItem(UUID id) {
-        var item = orm.findLockedItem(id);
-        actors.protect(item, true);
-        if (item == null || !item.active)
+        var item = orm.requireLockedFresh(Item.class, id, "Item");
+        if (!item.active)
             throw ApiException.notFound("Item not found");
         return item;
     }

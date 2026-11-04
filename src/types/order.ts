@@ -7,6 +7,7 @@ export type ItemRequestStatus = 'open' | 'item_created' | 'ordered' | 'received'
 
 /** Something an order asks for that the inventory does not hold yet. */
 export interface OrderItemRequest {
+  receivedQuantity: number;
   id: string;
   name: string;
   quantity: number;

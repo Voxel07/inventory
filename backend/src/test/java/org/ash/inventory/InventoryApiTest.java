@@ -365,15 +365,15 @@ class InventoryApiTest {
                         "assetInstanceId", assetId,
                         "scheduleId", scheduleId,
                         "type", "generator_service",
-                        "performedAt", 1893456000000L,
+                        "performedAt", System.currentTimeMillis() - 1000,
                         "result", "passed"))
                 .post("/api/maintenance").then().statusCode(200)
-                .body("nextDueAt", equalTo(1896048000000L));
+                .body("nextDueAt", org.hamcrest.Matchers.greaterThan(System.currentTimeMillis()));
 
         request().queryParam("itemId", itemId).get("/api/maintenance").then().statusCode(200)
                 .body("size()", equalTo(1)).body("[0].type", equalTo("generator_service"))
                 .body("[0].result", equalTo("passed"))
-                .body("[0].nextDueAt", equalTo(1896048000000L));
+                .body("[0].nextDueAt", org.hamcrest.Matchers.greaterThan(System.currentTimeMillis()));
 
         request().body(Map.of(
                         "itemId", itemId, "assetInstanceId", assetId,

@@ -72,7 +72,7 @@ const stock = ['handover-evidence', 'items', 'assemblies', 'transactions', 'dama
   'event-reports', 'procurement-deficits', 'procurement-item-requests', 'loans', 'action-inbox', 'reports', 'notifications', ...custody,
   'operations:positions', 'operations:storage-positions', 'operations:assets', 'operations:storage-assets',
   'operations:counts', 'operations:lots', 'operations:transaction-lots', 'operations:stock-lot-labels', 'operations:schedules', 'operations:repairs'];
-const purchasing = ['purchase-orders', 'procurement-deficits', 'procurement-item-requests', 'reports', 'action-inbox', 'operations:purchases', 'operations:receipts', 'operations:document-receipts'];
+const purchasing = ['purchase-orders', 'procurement-deficits', 'procurement-item-requests', 'reports', 'action-inbox', 'operations:purchases', 'operations:receipts', 'operations:document-receipts', 'faction-orders', 'general-orders', 'notifications'];
 
 /** Permission changes, and events possibly missed while the stream was disconnected, can revoke private views. */
 export function revokesAccess(detail?: ApiChangeDetail): boolean {
@@ -117,7 +117,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type.startsWith('goods_receipt.')) return new Set([...stock, ...purchasing]);
   if (type.startsWith('location.')) return new Set(['storageLocations', 'member-storage', 'action-inbox']);
   // Meter bookings change item/asset hours and maintenance due dates, not quantities.
-  if (type.startsWith('runtime.')) return new Set(['items', 'maintenance', 'operations:assets', 'operations:storage-assets', 'reports', 'action-inbox']);
+  if (type.startsWith('runtime.')) return new Set(['items', 'maintenance', 'operations:assets', 'operations:storage-assets', 'reports', 'action-inbox', 'procurement-deficits', 'operations:schedules']);
   if (type.startsWith('item.')) return new Set(['item-responsibility', 'order-pickup-groups', 'faction-orders', 'general-orders', 'action-inbox']);
   if (type.startsWith('outbox.')) return new Set(['operations:outbox', 'operations:dead-letters']);
   if (type === 'sync.completed') return new Set([...stock, 'operations:sync-audit', 'operations:my-sync-audit', 'offline-cache-freshness']);

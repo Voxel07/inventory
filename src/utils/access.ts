@@ -71,11 +71,6 @@ export function canManagePurchasing(user: User | null | undefined): boolean {
   return atLeast(user, 'warehouse_crew');
 }
 
-/** Procurement planning (event deficits) belongs to the inventory admin. */
-export function canAccessProcurement(user: User | null | undefined): boolean {
-  return effectiveAccess(user) === 'admin';
-}
-
 /** Editing events, participants and event timing. */
 export function canEditEvents(user: User | null | undefined): boolean {
   return effectiveAccess(user) === 'admin';

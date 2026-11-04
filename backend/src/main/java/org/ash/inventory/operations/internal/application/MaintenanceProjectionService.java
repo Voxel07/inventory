@@ -50,10 +50,18 @@ public class MaintenanceProjectionService {
                 .toList();
     }
     public String status(Item item,AssetInstance asset) {
-        if(item.outOfService || asset!=null && asset.outOfService)return "in_service";
+        prepare(List.of(item));
+        if(item.outOfService || asset!=null && asset.outOfService
+                || asset==null && assets.getOrDefault(item.id,List.of()).stream().anyMatch(a->a.outOfService))return "out_of_service";
         var values=applicable(item,asset).stream().map(s->statuses.get(s.id)).toList();
         if(values.contains(MaintenancePolicy.Status.due)||values.contains(MaintenancePolicy.Status.unknown))return "overdue";
         return values.contains(MaintenancePolicy.Status.warning)?"due_soon":"certified";
+    }
+
+    public boolean blocked(Item item, AssetInstance asset) {
+        if (item.outOfService || asset.outOfService) return true;
+        return applicable(item, asset).stream().anyMatch(s -> s.checkoutBlocking
+                && MaintenancePolicy.blocksCheckout(statuses.get(s.id)));
     }
 
     /** Count affected stock, once per unit, rather than counting overlapping maintenance plans. */

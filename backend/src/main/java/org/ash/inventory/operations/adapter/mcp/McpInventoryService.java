@@ -277,7 +277,6 @@ public class McpInventoryService {
     private List<InventoryMcpDtos.MaintenanceAlertDto> maintenanceAlerts(List<Item> items,
             Map<UUID, StockReadService.ReadStock> stock) {
         var alerts = new ArrayList<InventoryMcpDtos.MaintenanceAlertDto>();
-        var today = BusinessTime.today();
         for (var item : items) {
             var policy = stock.get(item.id).policy();
             for (var schedule : policy.schedules()) {
@@ -289,19 +288,19 @@ public class McpInventoryService {
                         schedule.maintenanceType + " (" + schedule.intervalType + ")", status.name(),
                         schedule.nextDueAt == null ? null : schedule.nextDueAt.toEpochMilli()));
             }
-            var itemStatus = MaintenancePolicy.itemStatus(item, today);
-            boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.in_service;
+            var itemStatus = MaintenancePolicy.itemStatus(item);
+            boolean flagged = itemStatus == DomainEnums.MaintenanceStatus.out_of_service;
             if (flagged) {
                 alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("item", item.id, item.sku, item.name,
                         "Item maintenance", itemStatus.name(), null));
             }
             for (var asset : policy.assets()) {
                 // Schedule alerts above carry due dates; a condition/safety hold has no independent due date.
-                var serviceStatus = MaintenancePolicy.assetStatus(asset, today);
+                var serviceStatus = MaintenancePolicy.assetStatus(asset);
                 if (asset.conditionStatus == DomainEnums.ConditionStatus.damaged || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe
                         || serviceStatus != DomainEnums.MaintenanceStatus.certified) {
                     alerts.add(new InventoryMcpDtos.MaintenanceAlertDto("asset", asset.id, asset.assetCode, item.name,
-                            "Condition: " + asset.conditionStatus + "; service: " + serviceStatus, serviceStatus.name(),
+                            "Condition: " + asset.conditionStatus + "; service: " + serviceStatus, (asset.conditionStatus == DomainEnums.ConditionStatus.damaged || asset.conditionStatus == DomainEnums.ConditionStatus.unsafe) ? asset.conditionStatus.name() : serviceStatus.name(),
                             null));
                 }
             }

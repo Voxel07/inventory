@@ -181,34 +181,25 @@ public class OperationalReportSource implements ReportSource {
                     "responsible", s.responsiblePerson == null ? null : s.responsiblePerson.name);
             item(row, s.item); if (s.assetInstance != null) location(row, s.assetInstance.currentLocation); rows.add(row);
         }
-        var today = BusinessTime.today();
         for (var item : items) {
             if (!item.active) continue;
             if (item.outOfService) {
-                var row = row("id", item.id + ":calendar", "date", null,
-                        "status", calendarReportStatus(MaintenancePolicy.itemStatus(item, today)), "type", "item_calendar",
-                        "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true);
+                var row = row("id", item.id + ":safety", "date", null,
+                        "status", "out_of_service", "type", "safety_hold",
+                        "interval", "condition", "blocking", true);
                 item(row, item); location(row, item.storageLocation); rows.add(row);
             }
             if (item.trackingMode != DomainEnums.TrackingMode.serialized) continue;
             for (var asset : facts.get(item.id).policy().assets()) {
                 if (!asset.outOfService) continue;
-                var row = row("id", asset.id + ":calendar", "date", null,
-                        "status", calendarReportStatus(MaintenancePolicy.assetStatus(asset, today)), "type", "asset_calendar",
-                        "interval", "date", "warningWindow", MaintenancePolicy.CALENDAR_WARNING_DAYS, "blocking", true,
+                var row = row("id", asset.id + ":safety", "date", null,
+                        "status", "out_of_service", "type", "safety_hold",
+                        "interval", "condition", "blocking", true,
                         "asset", asset.assetCode);
                 item(row, item); location(row, asset.currentLocation); rows.add(row);
             }
         }
         return rows;
-    }
-    private static String calendarReportStatus(DomainEnums.MaintenanceStatus status) {
-        return switch (status) {
-            case in_service -> "in_service";
-            case overdue -> "due";
-            case due_soon -> "warning";
-            case certified -> "healthy";
-        };
     }
     private List<Map<String, Object>> purchases() {
         var rows = new BoundedRows(maxOutputRows);

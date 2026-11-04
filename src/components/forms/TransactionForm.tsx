@@ -174,7 +174,7 @@ export function TransactionForm({ items, preselectedItemId, onSubmit, isLoading,
             return asset.availabilityStatus === 'available'
                 && (!commitment || (commitment.pickupAllowed && commitment.assetIds.includes(asset.id)))
                 && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus)
-                && !['overdue', 'in_service'].includes(asset.serviceStatus);
+                && !asset.maintenanceBlocked;
         }
         if (isCheckin) {
             return ['in_field', 'in_custody'].includes(asset.availabilityStatus)

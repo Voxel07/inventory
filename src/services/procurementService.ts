@@ -44,7 +44,7 @@ export function createVendor(name: string): Promise<Vendor> {
 }
 export function createPurchaseOrder(input: {
   vendorId: string; orderDate: number; expectedDeliveryDate?: number; orderNumber?: string;
-  eventOccurrenceId?: string; notes?: string; lines: { itemId: string; orderedQuantity: number; unitPriceCents: number }[];
+  eventOccurrenceId?: string; notes?: string; itemRequestIds?: string[]; lines: { itemId: string; orderedQuantity: number; unitPriceCents: number }[];
 }): Promise<PurchaseOrder> {
   return apiRequest('/api/purchase-orders', { method: 'POST', body: input });
 }

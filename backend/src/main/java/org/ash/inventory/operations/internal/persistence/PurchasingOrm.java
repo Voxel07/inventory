@@ -76,8 +76,8 @@ public class PurchasingOrm extends EntityOrm {
                 .setParameter("order", order).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     }
     public List<OrderItemRequest> itemRequests(PurchaseOrder order) {
-        return entityManager.createQuery("from OrderItemRequest request where request.purchaseOrder = :order", OrderItemRequest.class)
-                .setParameter("order", order).getResultList();
+        return entityManager.createQuery("from OrderItemRequest request where request.purchaseOrder = :order order by request.createdAt, request.lineNumber, request.id", OrderItemRequest.class)
+                .setParameter("order", order).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     }
 
     /** Linked, undeclined requests without a live purchase order; {@code eventId} skips orders of other events. */
@@ -85,11 +85,12 @@ public class PurchasingOrm extends EntityOrm {
         if (itemIds.isEmpty()) return List.of();
         var query = entityManager.createQuery("select request from OrderItemRequest request join request.order o"
                 + " left join request.purchaseOrder purchase where request.item.id in :itemIds and request.declinedAt is null"
-                + " and o.status <> cancelled and (purchase is null or purchase.status = cancelled)"
-                + (eventId == null ? "" : " and (o.eventOccurrence is null or o.eventOccurrence.id = :eventId)"), OrderItemRequest.class)
+                + " and request.receivedQuantity < request.quantity and o.status <> cancelled and (purchase is null or purchase.status = cancelled)"
+                + (eventId == null ? "" : " and (o.eventOccurrence is null or o.eventOccurrence.id = :eventId)")
+                + " order by request.createdAt, request.lineNumber, request.id", OrderItemRequest.class)
                 .setParameter("itemIds", itemIds);
         if (eventId != null) query.setParameter("eventId", eventId);
-        return query.getResultList();
+        return query.setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     }
 
     public void removePurchaseOrderLines(PurchaseOrder order) {

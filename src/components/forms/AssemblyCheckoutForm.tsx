@@ -50,7 +50,7 @@ export function AssemblyCheckoutForm({ assembly, items, onClose }: { assembly: A
         const needed = (assembly.itemQuantities[item.id] ?? 1) * Number(values.amount || 0);
         const help = `${t('enum.value.requested')}: ${formatQuantity(item, needed)}`;
         if (item.trackingMode === 'serialized') return assets.filter(asset => asset.active && asset.availabilityStatus === 'available'
-          && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus) && !['overdue', 'in_service'].includes(asset.serviceStatus))
+          && !['damaged', 'unsafe', 'lost'].includes(asset.conditionStatus) && !asset.maintenanceBlocked)
           .map(asset => ({ key: `asset:${asset.id}`, label: `${item.name} · ${asset.assetCode} · ${asset.currentLocationName ?? ''}`, type: 'checkbox', help }));
         if (!positions.length) return [{ key: `unlocated:${item.id}`, label: item.name, type: 'quantity', measure: item, min: 0, help }];
         return positions.filter(position => position.availableQuantity > 0).map(position => ({ key: `position:${position.id}`,

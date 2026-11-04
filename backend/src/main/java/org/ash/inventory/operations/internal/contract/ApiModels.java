@@ -146,8 +146,8 @@ public final class ApiModels {
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
 
     public record MaintenanceInput(
-            @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, Instant performedAt,
-            Instant nextDueAt, BigDecimal operatingHours, @NotNull DomainEnums.MaintenanceResult result,
+            @NotNull UUID itemId, @NotNull DomainEnums.MaintenanceType type, @jakarta.validation.constraints.PastOrPresent Instant performedAt,
+            Instant nextDueAt, @jakarta.validation.constraints.DecimalMin("0") BigDecimal operatingHours, @NotNull DomainEnums.MaintenanceResult result,
             String certificateNumber, String notes, UUID assetInstanceId, UUID scheduleId,
             String certificateObjectKey) {}
 

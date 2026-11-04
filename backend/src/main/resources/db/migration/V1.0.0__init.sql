@@ -269,6 +269,7 @@ create table order_lines (
 create table order_item_requests (
     line_number integer not null,
     quantity integer not null check (quantity > 0),
+    received_quantity integer not null default 0 check (received_quantity >= 0 and received_quantity <= quantity),
     created_at bigint not null,
     updated_at bigint not null,
     declined_at bigint,

@@ -25,6 +25,7 @@ public class OrderItemRequest extends BaseEntity {
     @Column(name = "line_number", nullable = false) public int lineNumber;
     @Column(nullable = false, length = 160) public String name;
     @Column(nullable = false) public int quantity;
+    @Column(name = "received_quantity", nullable = false) public int receivedQuantity;
     @Column(length = 2000) public String link;
     @Column(length = 2000) public String note;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "item_id") public Item item;
@@ -35,13 +36,14 @@ public class OrderItemRequest extends BaseEntity {
 
     /** A cancelled purchase order no longer counts, so the request waits for a new one. */
     public boolean ordered() {
-        return purchaseOrder != null && purchaseOrder.status != DomainEnums.PurchaseOrderStatus.cancelled;
+        return purchaseOrder != null && purchaseOrder.status != DomainEnums.PurchaseOrderStatus.draft
+                && purchaseOrder.status != DomainEnums.PurchaseOrderStatus.cancelled;
     }
 
     public Status status() {
         if (declinedAt != null) return Status.declined;
-        if (ordered()) return purchaseOrder.status == DomainEnums.PurchaseOrderStatus.received
-                || purchaseOrder.status == DomainEnums.PurchaseOrderStatus.closed ? Status.received : Status.ordered;
+        if (receivedQuantity >= quantity) return Status.received;
+        if (ordered()) return Status.ordered;
         if (item != null) return Status.item_created;
         return Status.open;
     }

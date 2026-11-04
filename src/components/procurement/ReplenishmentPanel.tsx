@@ -1,9 +1,8 @@
-import { Button } from '../components/shared/ActionButtons';
-import { ActionBar } from '../components/shared/ActionBar';
-import { PageHeader } from '../components/shared/PageHeader';
-import { StatStrip } from '../components/shared/StatStrip';
-import { useFactionCatalog } from '../hooks/useFactionCatalog';
-import { SupplierDraft } from '../components/procurement/SupplierDraft';
+import { Button } from '../shared/ActionButtons';
+import { ActionBar } from '../shared/ActionBar';
+import { StatStrip } from '../shared/StatStrip';
+import { useFactionCatalog } from '../../hooks/useFactionCatalog';
+import { SupplierDraft } from './SupplierDraft';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -38,18 +37,18 @@ import CategoryIcon from '@mui/icons-material/Category';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
-import { getProcurementDeficits, shortageLine, type ProcurementDeficit } from '../services/procurementService';
-import { PurchaseDraft } from '../components/operations/PurchasingOperations';
-import { PlanningDetails } from '../components/procurement/PlanningDetails';
-import { ItemRequestQueue } from '../components/procurement/ItemRequestQueue';
-import { useItemRequestQueue } from '../hooks/useItemRequestQueue';
-import { useEventReports } from '../hooks/useEvents';
-import { translate, useT } from '../utils/naming';
-import { formatDate } from '../utils/dateFormat';
+import { getProcurementDeficits, shortageLine, type ProcurementDeficit } from '../../services/procurementService';
+import { PurchaseDraft } from '../operations/PurchasingOperations';
+import { PlanningDetails } from './PlanningDetails';
+import { ItemRequestQueue } from './ItemRequestQueue';
+import { useItemRequestQueue } from '../../hooks/useItemRequestQueue';
+import { useEventReports } from '../../hooks/useEvents';
+import { translate, useT } from '../../utils/naming';
+import { formatDate } from '../../utils/dateFormat';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
 
-export function Procurement() {
+export function ReplenishmentPanel() {
   const t = useT();
   const { eventTypes } = useFactionCatalog();
   const theme = useTheme();
@@ -68,7 +67,7 @@ export function Procurement() {
   const groups = (() => {
     const result = new Map<string, typeof deficits>();
     for (const row of deficits) {
-      const supplier = row.supplier || 'Unassigned';
+      const supplier = row.supplier || t('common.unassigned');
       const rows = result.get(supplier);
       if (rows) rows.push(row);
       else result.set(supplier, [row]);
@@ -99,7 +98,7 @@ export function Procurement() {
       row.recommendedAction,
     ]);
     const requestRows = openRequests.map(({ request, orderLabel }) => [
-      '', '', request.name, 'request', request.quantity, '', '', '', '', request.quantity, [orderLabel, request.link].filter(Boolean).join(' · '),
+      '', '', request.name, 'request', request.quantity, '', '', '', '', request.quantity - request.receivedQuantity, [orderLabel, request.link].filter(Boolean).join(' · '),
     ]);
     const csv = [header, ...rows, ...requestRows]
       .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
@@ -206,7 +205,7 @@ export function Procurement() {
           y = 18;
         }
         doc.setFont('helvetica', 'bold');
-        doc.text(`${request.quantity} × ${request.name}`, 14, y + 2);
+        doc.text(`${request.quantity - request.receivedQuantity} × ${request.name}`, 14, y + 2);
         doc.setFont('helvetica', 'normal');
         const detail = doc.splitTextToSize([orderLabel, request.link, request.note].filter(Boolean).join(' · '), 110);
         doc.text(detail, 86, y + 2);
@@ -219,16 +218,15 @@ export function Procurement() {
 
   return (
     <Box aria-busy={isPending || isFetching}>
-      <PageHeader
-        title={t('pages.procurement.procurementShortages')}
-        description={t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}
-        actions={<ActionBar actions={[
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2 }}>
+        <Typography color="text.secondary">{t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}</Typography>
+        <ActionBar actions={[
           { key: 'csv', label: t('pages.procurement.cSV'), title: translate('pages.procurement.downloadTheCurrentShortagesAsCSV'), icon: <DownloadIcon />,
             disabled: !deficits.length && !openRequests.length, onClick: exportCsv },
           { key: 'pdf', label: t('pages.procurement.purchaseOrderPDF'), title: translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF'), icon: <PrintIcon />,
             variant: 'contained', pinned: true, disabled: !deficits.length && !openRequests.length, onClick: exportPdf },
-        ]} />}
-      />
+        ]} />
+      </Stack>
 
       <StatStrip sx={{ mb: { xs: 2, md: 3 } }} stats={[
         { label: t('pages.procurement.totalDeficit'), detail: t('pages.procurement.missingUnits'), value: kpiValue(totalDeficitUnits),
@@ -242,8 +240,8 @@ export function Procurement() {
       ]} />
 
       <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 260 }, mb: { xs: 2, md: 3 } }}>
-        <InputLabel>{t('pages.procurement.eventScope')}</InputLabel>
-        <Select value={eventId} label={t('pages.procurement.eventScope')} onChange={(event) => setEventId(event.target.value)}>
+        <InputLabel shrink>{t('pages.procurement.eventScope')}</InputLabel>
+        <Select displayEmpty value={eventId} label={t('pages.procurement.eventScope')} onChange={(event) => setEventId(event.target.value)}>
           <MenuItem value="">{t('pages.procurement.allPlannedEvents')}</MenuItem>
           {eventTypes.flatMap((type) => {
             const occurrences = events.filter((event) => event.eventType === type);

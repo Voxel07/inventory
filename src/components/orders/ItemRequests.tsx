@@ -53,8 +53,8 @@ export function ItemRequestOutcome({ request }: { request: OrderItemRequest }) {
   if (request.status === 'declined') return <Typography variant="caption" color="error.main" sx={{ display: 'block', fontWeight: 600 }}>
     {t('itemRequests.declinedBecause', { reason: request.declineReason ?? '' })}
   </Typography>;
-  const parts = [request.itemName && t('itemRequests.linkedItem', { name: request.itemName }),
-    request.purchaseOrderNumber && (request.status === 'ordered' || request.status === 'received')
+  const parts = [request.receivedQuantity > 0 && t('operations.review.requestReceived', { received: request.receivedQuantity, total: request.quantity }), request.itemName && t('itemRequests.linkedItem', { name: request.itemName }),
+    request.purchaseOrderNumber && request.purchaseOrderStatus !== 'cancelled'
       && t('itemRequests.purchaseOrder', { number: request.purchaseOrderNumber })].filter(Boolean);
   return parts.length ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{parts.join(' · ')}</Typography> : null;
 }

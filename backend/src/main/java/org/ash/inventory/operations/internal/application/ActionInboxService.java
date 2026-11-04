@@ -75,7 +75,7 @@ public class ActionInboxService {
             if (!maintenance && (s.responsiblePerson == null || !s.responsiblePerson.id.equals(actor.id))) continue;
             LocalDate due = s.nextDueAt == null ? null : BusinessTime.date(s.nextDueAt);
             if (statuses.get(s.id) != MaintenancePolicy.Status.healthy)
-                add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/operations?tab=schedules"
+                add(out, "maintenance:" + s.id, "maintenance", s.item.name, s.maintenanceType.name() + (s.assetInstance == null ? "" : " · " + s.assetInstance.assetCode), due, maintenance ? "/maintenance?tab=schedules"
                         : s.assetInstance == null ? "/items/" + s.item.id : "/items/" + s.item.id + "/assets/" + s.assetInstance.id, s.id, s.item.id);
         }
         for (var r : orm.openMemberRequests(warehouse ? null : actor.id))

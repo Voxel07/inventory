@@ -54,7 +54,7 @@ public class OperationsOrm extends EntityOrm {
 
     public List<DamageReport> damageReports(UUID itemId, UUID assetInstanceId, UUID assemblyId,
             Collection<DomainEnums.DamageStatus> statuses, String search, int offset, int limit) {
-        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly da left join fetch d.assetInstance asset where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
+        var jpql = new StringBuilder("select d from DamageReport d left join fetch d.item di join fetch d.reporter left join fetch d.handler left join fetch d.assembly da left join fetch d.assetInstance asset left join fetch d.repairCase where (di is null or " + InventoryAccessOrm.visible("di.accessPolicy") + ")");
         if (itemId != null) jpql.append(" and d.item.id = :itemId");
         if (assetInstanceId != null) jpql.append(" and d.assetInstance.id = :assetInstanceId");
         if (assemblyId != null) jpql.append(" and d.assembly.id = :assemblyId");
@@ -78,18 +78,15 @@ public class OperationsOrm extends EntityOrm {
                 .setParameter("itemId", itemId).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    /** An asset's own schedule replaces the item-wide schedule of the same maintenance type. */
+    /** Item-wide and device-specific requirements are additive, matching stock and planning eligibility. */
     public List<MaintenanceSchedule> blockingSchedules(Item item, AssetInstance asset) {
         var jpql = asset == null
                 ? "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and schedule.checkoutBlocking = true and schedule.assetInstance is null"
                 : "from MaintenanceSchedule schedule where schedule.item = :item and schedule.active = true and (schedule.assetInstance is null or schedule.assetInstance = :asset)";
         var query = entityManager.createQuery(jpql, MaintenanceSchedule.class).setParameter("item", item);
         if (asset == null) return query.getResultList();
-        var schedules = query.setParameter("asset", asset).getResultList();
-        var overridden = schedules.stream().filter(schedule -> schedule.assetInstance != null)
-                .map(schedule -> schedule.maintenanceType).collect(java.util.stream.Collectors.toSet());
-        return schedules.stream().filter(schedule -> schedule.checkoutBlocking
-                && (schedule.assetInstance != null || !overridden.contains(schedule.maintenanceType))).toList();
+        return query.setParameter("asset", asset).getResultList().stream()
+                .filter(schedule -> schedule.checkoutBlocking).toList();
     }
 
     public List<MaintenanceSchedule> schedules(Collection<UUID> itemIds) {
@@ -190,6 +187,26 @@ public class OperationsOrm extends EntityOrm {
                         DomainEnums.DamageStatus.verified))
                 .getSingleResult();
         return Math.toIntExact(quantity);
+    }
+
+    public DomainEnums.ConditionStatus damageCondition(AssetInstance asset) {
+        var open = entityManager.createQuery("from DamageReport d where d.assetInstance = :asset"
+                + " and d.quantity > d.repairedQuantity + d.writtenOffQuantity", DamageReport.class)
+                .setParameter("asset", asset).getResultList();
+        return open.stream().anyMatch(d -> d.safetyImpact) ? DomainEnums.ConditionStatus.unsafe
+                : open.isEmpty() ? DomainEnums.ConditionStatus.good : DomainEnums.ConditionStatus.damaged;
+    }
+
+    /** Advisory results never clear a failed inspection; a pass clears only its own inspection type and scope. */
+    public boolean failedInspection(Item item, AssetInstance asset) {
+        var query = entityManager.createQuery("from MaintenanceRecord m where m.item = :item"
+                + (asset == null ? " and m.assetInstance is null" : " and m.assetInstance = :asset")
+                + " and m.result <> :advisory order by m.performedAt desc, m.createdAt desc, m.id desc", MaintenanceRecord.class)
+                .setParameter("item", item).setParameter("advisory", DomainEnums.MaintenanceResult.advisory);
+        if (asset != null) query.setParameter("asset", asset);
+        var latest = new EnumMap<DomainEnums.MaintenanceType, DomainEnums.MaintenanceResult>(DomainEnums.MaintenanceType.class);
+        query.getResultList().forEach(record -> latest.putIfAbsent(record.type, record.result));
+        return latest.containsValue(DomainEnums.MaintenanceResult.failed);
     }
 
     public int activeReservationQuantity(Item item) {

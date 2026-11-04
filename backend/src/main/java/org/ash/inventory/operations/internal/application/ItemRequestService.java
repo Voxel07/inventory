@@ -66,8 +66,8 @@ public class ItemRequestService {
         if (reason == null || reason.isBlank()) throw ApiException.badRequest("A reason is required to decline a request");
         var request = lockedRequest(id);
         var status = request.status();
-        if (status != OrderItemRequest.Status.open && status != OrderItemRequest.Status.item_created)
-            throw ApiException.conflict("Only requests that are not ordered yet can be declined");
+        if (status != OrderItemRequest.Status.open)
+            throw ApiException.conflict("Only unlinked requests can be declined; linked items are managed through the order lines");
         request.declineReason = reason.trim();
         request.declinedAt = Instant.now();
         request.resolvedBy = actors.current();

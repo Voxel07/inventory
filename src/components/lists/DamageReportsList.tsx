@@ -7,6 +7,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import BuildIcon from '@mui/icons-material/Build';
+import { Link as RouterLink } from 'react-router-dom';
 import { Button, IconButton } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
 import { DamageResolutionDialog } from '../forms/DamageResolutionDialog';
@@ -72,9 +73,10 @@ export function DamageReportsList({ reports, isLoading, loadError, onRetry, sear
         }
     }
     const actions = (report: DamageReport) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-        {view === 'open' && canMaintain && getUnresolvedAmount(report) > 0 && <Button
+        {view === 'open' && canMaintain && report.repairCaseId && <Button component={RouterLink} to="/damage-reports?tab=repairs" size="small" variant="contained">{t('operations.review.manageRepair')}</Button>}
+        {view === 'open' && canMaintain && !report.repairCaseId && getUnresolvedAmount(report) > 0 && <Button
             size="small" variant="contained" startIcon={<BuildIcon />} disabled={isUpdating}
-            onClick={() => setResolution(report)}>{t('lists.damageReportsList.startRepair')}</Button>}
+            onClick={() => setResolution(report)}>{t('operations.review.resolveDamage')}</Button>}
         <IconButton title={t('lists.damageReportsList.damageReportDetails')} size="small" onClick={() => setInfo(report)}>
             <InfoOutlinedIcon fontSize="small" />
         </IconButton>

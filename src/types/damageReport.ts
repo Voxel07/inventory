@@ -23,6 +23,8 @@ export interface DamageReport {
   handledBy?: string;
   handledAt?: number;
   resolutionNotes?: string;
+  repairCaseId?: string;
+  repairStatus?: string;
   statusHistory?: DamageStatusHistoryEntry[];
   description: string;
   severity: DamageSeverity;

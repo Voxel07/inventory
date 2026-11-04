@@ -339,10 +339,10 @@ export function ItemDetail() {
                     <Box sx={{ flex: '1 1 280px', minWidth: 0 }}>
                         <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
                             <Typography variant="h5" component="h1" sx={{ overflowWrap: 'anywhere', mr: 0.25 }}>{item.name}</Typography>
-                            <Chip label={formatStatus(item.status)} color={statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
+                            <Chip label={(item.stock?.maintenance ?? 0) > 0 ? t('operations.review.maintenanceUnits', { quantity: formatQuantity(item, item.stock!.maintenance) }) : formatStatus(item.status)} color={(item.stock?.maintenance ?? 0) > 0 ? 'warning' : statusColors[item.status] ?? 'default'} size="small" variant="outlined" sx={tinyChip} />
                             {profile && <Chip size="small" variant="outlined" sx={tinyChip} label={item.access?.privateResource
                                 ? item.access.publicUse ? t('items.inventorySharing.publiclyAvailable') : t('items.inventorySharing.private')
-                                : `${ownershipLabels[profile.ownershipType]} · ${policyLabels[profile.availabilityPolicy]}`} />}
+                                : `${ownershipLabels[profile.ownershipType]}${profile.availabilityPolicy === 'available' ? '' : ` · ${policyLabels[profile.availabilityPolicy]}`}`} />}
                         </Stack>
                     </Box>
                     <ActionBar size="small" stretch buttonSx={compactButton} sx={{ flex: '1 0 auto' }} actions={[
@@ -382,6 +382,15 @@ export function ItemDetail() {
                             <Metric label={t('pages.itemDetail.openedContainer')}>{t('pages.itemDetail.itemsRemainingInOpenedBox', { count: item.containerRemainingCount ?? 0 })}</Metric>
                         </>}
                     </MetricList>
+                    {((item.stock?.maintenance ?? 0) > 0 || item.blockingMaintenance.length > 0 || item.maintenanceStatus === 'out_of_service') && <Alert severity="warning" sx={{ my: 1.5 }}>
+                        <Typography variant="subtitle2">{t('operations.review.blockedMaintenance')}</Typography>
+                        {item.maintenanceStatus === 'out_of_service' && <Typography variant="body2">{t('operations.review.inspectionFailed')}</Typography>}
+                        {item.blockingMaintenance.map((block) => <Typography key={block.scheduleId} variant="body2">
+                            {formatStatus(block.maintenanceType)} · {block.assetCode || t('operations.review.entireItem')} · {block.status === 'due' ? t('common.due') : t('operations.review.unknownDue')}
+                            {block.nextDueAt != null ? ` · ${formatDate(block.nextDueAt)}` : block.nextDueValue != null ? ` · ${block.nextDueValue}` : ''}
+                        </Typography>)}
+                        <Button component={RouterLink} to={`/maintenance?tab=schedules&itemId=${item.id}`} size="small">{t('pages.operations.schedules')}</Button>
+                    </Alert>}
                     <ItemStockLocations key={item.id} item={item} />
                     {item.trackingMode === 'serialized' && (
                         <Box sx={{ mt: 1.5 }}>

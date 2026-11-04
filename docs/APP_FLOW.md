@@ -51,8 +51,7 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/print-qr` | Label/QR printing | InventoryManagerGuard |
 | `/damage-reports` | Damage reports | InventoryManagerGuard; finer action permissions |
 | `/maintenance` | Maintenance work | InventoryManagerGuard; finer action permissions |
-| `/procurement` | Demand/supply deficits and purchasing preparation | Inventory admin |
-| `/operations` | Grouped warehouse, purchasing, maintenance and system tasks | InventoryManagerGuard; permitted tabs only |
+| `/operations` | Grouped warehouse, purchasing and reporting tasks | WarehouseTasksGuard; permitted tabs only |
 | `/users` | Account directory: set role and factions per user (Authentik only grants access); all share groups | Inventory admin |
 | `/profile` | Own profile | Any signed-in user |
 | Unmatched path | Redirect to `/` | Signed-in app shell |
@@ -85,9 +84,9 @@ The timeline defaults to **In game**; **Setup & preparation** covers constructio
 5. Receipt posting increases actual stock. Unreceived purchase quantities remain ordered supply and do not become owned or available stock.
 6. Authorized staff attach vendor documents and review the purchase/receipt history.
 
-Orders can also ask for things the inventory does not hold yet: the faction and general order forms take a name, quantity, buy link and note per request, and an order may consist of requests only. Requests show on the order lists and the faction order detail, and at the top of the procurement screen for the selected event scope. Procurement either creates the item from the request (prefilled item form) or links an existing item; while the order is draft, submitted or preparing, the item is added to it as a line. A purchase order containing the linked item marks the request ordered (received once the purchase order is received; a cancelled purchase order puts it back). Declining needs a reason, which reaches the requester as an in-app notice. Open requests stay editable on the order as long as the order is; handled ones are read-only.
+Orders can also ask for things the inventory does not hold yet: the faction and general order forms take a name, quantity, buy link and note per request, and an order may consist of requests only. Requests show on the order lists and the faction order detail, and in Tasks → Purchasing → Replenishment for the selected event scope. Procurement either creates the item from the request (prefilled item form) or links an existing item; while the order is draft, submitted or preparing, the item is added to it as a line. A purchase draft reserves only requests whose outstanding quantity it can fully cover; confirming it marks those requests ordered (received as its own quantity arrives; a cancelled purchase order returns only the outstanding quantity to the queue). Declining needs a reason, which reaches the requester as an in-app notice. Open requests stay editable on the order as long as the order is; handled ones are read-only.
 
-The procurement screen is narrower than access to purchasing tabs: HQ/planners access procurement, while warehouse crew also work on purchase orders and receiving through Operations.
+Replenishment is an inventory-admin tab within Tasks → Purchasing. Warehouse crew use the adjacent purchase-order, receiving and supplier tabs. There is no standalone Procurement page.
 
 ## 5. Orders, preparation, handover and reconciliation
 
@@ -148,10 +147,8 @@ The inbox collects recipient-scoped pickup, return, damage and other required ac
 |---|---|---|
 | Picking | `order-preparation` | Review submitted orders → prepare → ready |
 | Stock | `transfers`, `counts`, `lots`, `loans` | Dispatch/receive; blind count/recount/approve/post; expiry/quarantine; collect/return loans |
-| Purchasing | `purchases`, `receipts`, `vendors` | Order → receive → attach/review supplier evidence |
-| Maintenance | `repairs`, `schedules` | Triage → repair → verify → release; maintain date/hour/usage schedules |
+| Purchasing | `replenishment`, `purchases`, `receipts`, `vendors` | Identify shortages/requests → draft → confirm → receive → supplier evidence |
 | Reporting | `reports` | Choose snapshot → rebuild → inspect freshness/filter → CSV/PDF |
-| System | `system` | Inspect outbox/dead letters/sync audit → authorized retry |
 
 Transfers keep goods in transit until receipt, including partial receipt/discrepancy handling; they are not custody handovers. Material count variance requires approval by a different admin before ledger adjustment. Lot selection follows usable FEFO supply. Maintenance or damage holds block allocation/checkout; repair changes condition, while authorized write-off reduces stock.
 
@@ -161,9 +158,9 @@ Transfers keep goods in transit until receipt, including partial receipt/discrep
 
 Open contains `reported`, `triaged`, `awaiting_repair`, `in_review` and `in_repair`. History contains only `repaired`, `verified`, `returned_to_service`, `written_off` and `resolved`. Both desktop and mobile lists omit descriptions, resolution comments and activity; History also omits severity and edit/repair actions. The info icon opens the description, recorded action comments and available activity details.
 
-Warehouse staff select **Start repair** to open a modal with the description, repair/write-off choice, unresolved quantity and a required comment describing what was done. Only admins may choose write-off. Opening the modal does not change the report. Saving records the selected quantity and comment; failed saves keep the input for retry. There is no item-hint update in this workflow.
+Warehouse staff select **Record resolution** to open a modal with the description, repair/write-off choice, unresolved quantity and a required comment describing what was done. Only admins may choose write-off. Opening the modal does not change the report. Saving records the selected quantity and comment; failed saves keep the input for retry. There is no item-hint update in this workflow.
 
-Partial resolution keeps the report Open with its remaining quantity. Resolving all units moves it to History: all repaired → `repaired`, all written off → `written_off`, mixed outcomes → `resolved`. Resolving the last row on a later page returns to the preceding page. The separate Operations repair-case workflow still supports verification and release. See the [API and quantity-resolution contract](WORKFLOW_CONTRACTS.md#damage-reports-and-quantity-resolution).
+Partial resolution keeps the report Open with its remaining quantity. Resolving all units moves it to History: all repaired → `repaired`, all written off → `written_off`, mixed outcomes → `resolved`. Resolving the last row on a later page returns to the preceding page. The Repairs tab on Damage Reports owns tracked repair cases, verification and release. A case with unresolved units returns to the repair queue after partial completion; active cases cannot be bypassed through quick resolution. See the [API and quantity-resolution contract](WORKFLOW_CONTRACTS.md#damage-reports-and-quantity-resolution).
 
 Account-owned items are private or publicly available, selected during creation or changed later by the owner/admin. Publicly available items can be ordered through faction and general orders using normal usable stock, with no commitments. The named Access & sharing list is below Overview; Manage sharing requires no reason and lists people/groups once instead of repeating location access. Sharing/Users group tables show member names to their peers. New storage location dialogs provide an explicit Create new location button before typing. External-provider lending remains a separate workflow with consent windows, loan/rental agreement, collection evidence, extensions and return evidence. Possession, legal ownership, privacy owner and keeper are separate concepts.
 
@@ -179,3 +176,5 @@ Account-owned items are private or publicly available, selected during creation 
 See [Offline Mode](OFFLINE_MODE.md) for command names and [Implementation Plan](IMPLEMENTATION_PLAN.md) for cold-start, account-switch and field acceptance.
 
 See [workflow contracts](WORKFLOW_CONTRACTS.md) for offboarding, personal-data requests, explicit handover evidence, reversals, deadlines and draft copying.
+
+Maintenance uses `/maintenance?tab=inspections` for due work and records, and `/maintenance?tab=schedules` for date/hour/usage plans and checklists. Item-wide and device plans apply together. An explicitly selected whole-item inspection covers all units; inspecting one unit cannot advance a whole-item plan. Advisory inspections do not clear failures, and a pass clears only that inspection type and scope. Items show blocked maintenance quantities and schedule reasons.

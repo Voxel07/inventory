@@ -72,7 +72,7 @@ const returns: ReturnSubmission[] = [{ id: 'return-1', itemId: 'item-1', itemNam
   submittedById: 'preview', submittedByName: 'Preview user', expectedReturnLocationName: 'Shelf A', status: 'pending', created: now, updated: now, reportedDamage: [], tracksRuntime: false,
   notes: 'Left on the labelled return shelf; warehouse acknowledgement outstanding.' }];
 const asset = (id: string, itemId: string, availabilityStatus: AssetInstance['availabilityStatus'], extra: Partial<AssetInstance> = {}): AssetInstance => ({
-  id, itemId, assetCode: id.toUpperCase(), availabilityStatus, conditionStatus: 'good', serviceStatus: 'certified', active: true, version: 0,
+  id, itemId, assetCode: id.toUpperCase(), availabilityStatus, conditionStatus: 'good', serviceStatus: 'certified', maintenanceBlocked: false, active: true, version: 0,
   currentLocationId: 'location-a', createdAt: now, updatedAt: now, ...extra,
 });
 const assets: AssetInstance[] = [];
@@ -105,7 +105,7 @@ if (query.has('damagePreview')) {
     expand: { reportedBy: { id: 'preview', name: 'Preview user' }, handledBy: { id: 'preview', name: 'Preview user' } },
   })));
 }
-const repairs: Repair[] = [{ id: 'repair-1', damageReportId: 'damage-1', itemId: 'item-1', itemName: 'Radio', damageDescription: 'Battery connector damaged',
+const repairs: Repair[] = [{ id: 'repair-1', damageReportId: 'damage-1', itemId: 'item-1', itemName: 'Radio', unresolvedQuantity: 2, repairedPendingQuantity: 0, damageDescription: 'Battery connector damaged',
   status: 'awaiting_repair', safetyImpact: true, partsAndCostNotes: 'Replacement connector', notes: 'Awaiting workshop' }];
 const loans: Loan[] = [{ id: 'loan-1', itemId: 'rental-1', item: 'My checked-out rental', commitmentId: 'commitment-1', providerLocationId: 'location-b', provider: 'Preview supplier',
   contact: 'preview@example.test', kind: 'rental', quantity: 4, collected: 4, returned: 1, collectionDate: 1790812800000, availableUntil: 1791590400000, returnDue: 1791763200000,

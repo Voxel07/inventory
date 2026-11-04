@@ -127,14 +127,14 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/orders/general' && method === 'POST') {
     const input = body as GeneralOrderFormData;
     const order = generalOrder(crypto.randomUUID(), input.name, input.purpose, input.eventOccurrenceId ?? '', 'draft',
-      { requestedQuantities: input.requestedQuantities, itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), status: 'open' })) });
+      { requestedQuantities: input.requestedQuantities, itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), receivedQuantity: 0, status: 'open' })) });
     generalOrders.push(order);
     return order;
   }
   if (path === '/api/orders/faction' && method === 'POST') {
     const input = body as FactionOrderFormData;
     const order = factionOrder(crypto.randomUUID(), input.faction, 'draft', { ...input, eventOccurrenceId: input.eventOccurrenceId,
-      itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), status: 'open' })) });
+      itemRequests: (input.itemRequests ?? []).map(request => ({ ...request, id: request.id ?? crypto.randomUUID(), receivedQuantity: 0, status: 'open' })) });
     factionOrders.push(order);
     return order;
   }

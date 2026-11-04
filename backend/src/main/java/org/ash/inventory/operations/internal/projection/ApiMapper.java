@@ -559,7 +559,7 @@ public class ApiMapper {
     public ApiResponses.OrderItemRequestResponse itemRequest(OrderItemRequest value) {
         boolean itemVisible = value.item != null && accessPolicies.projectionAllows(value.item.accessPolicy);
         var purchase = value.purchaseOrder;
-        return new ApiResponses.OrderItemRequestResponse(value.id, value.name, value.quantity, value.link, value.note,
+        return new ApiResponses.OrderItemRequestResponse(value.id, value.name, value.quantity, value.receivedQuantity, value.link, value.note,
                 value.status().name(), itemVisible ? value.item.id : null, itemVisible ? value.item.name : null,
                 purchase == null ? null : purchase.id, purchase == null ? null : purchase.orderNumber,
                 purchase == null ? null : purchase.status.name(), value.declineReason,
@@ -604,6 +604,8 @@ public class ApiMapper {
                 value.handover == null ? null : value.handover.id.toString(),
                 value.safetyImpact,
                 value.resolutionNotes,
+                value.repairCase == null ? null : value.repairCase.id,
+                value.repairCase == null ? null : value.repairCase.status.name(),
                 expand
         );
     }
@@ -698,6 +700,7 @@ public class ApiMapper {
                 value.conditionStatus == null ? "good" : value.conditionStatus.name(),
                 value.availabilityStatus == null ? "available" : value.availabilityStatus.name(),
                 maintenance.status(value.item, value),
+                maintenance.blocked(value.item, value),
                 maintenance.due(value.item, value),
                 value.operatingHours,
                 canViewLocation(value.currentLocation) ? value.currentLocation.id.toString() : null,

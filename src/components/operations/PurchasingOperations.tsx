@@ -67,7 +67,7 @@ export function PurchasingPanel() {
   </Stack>;
 }
 
-export function PurchaseDraft({ order, initialLines, eventId, onClose }: { order?: PurchaseOrder; initialLines?: PurchaseDraftLine[]; eventId: string; onClose: () => void }) {
+export function PurchaseDraft({ order, initialLines, itemRequestIds, eventId, onClose }: { order?: PurchaseOrder; initialLines?: PurchaseDraftLine[]; itemRequestIds?: string[]; eventId: string; onClose: () => void }) {
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? (initialLines?.length ? initialLines : [{ itemId: '', orderedQuantity: 1 }]).map((line) => ({ ...line, price: 0 })));
@@ -75,7 +75,7 @@ export function PurchaseDraft({ order, initialLines, eventId, onClose }: { order
   const [newVendor, setNewVendor] = useState(false);
   return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" onSubmit={(event) => {
     event.preventDefault();
-    const data = { ...optionalValues(header), vendorId: String(header.vendorId), orderDate: Number(header.orderDate), lines: lines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
+    const data = { ...optionalValues(header), itemRequestIds, vendorId: String(header.vendorId), orderDate: Number(header.orderDate), lines: lines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
     command.mutate(() => order ? updatePurchaseOrder(order.id, data) : createPurchaseOrder(data), { onSuccess: onClose });
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
@@ -182,7 +182,7 @@ export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string })
 
 export function VendorsPanel() {
   const t = useT(); const vendors = useOperationList('vendors', getVendors); const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
-  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={vendor.name} status={vendor.active ? t('enum.value.active') : t('common.inactive')}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
+  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={vendor.name} status={vendor.active ? 'active' : 'inactive'}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
 }
 
 function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: () => void; onSaved?: (vendor: Vendor) => void }) {

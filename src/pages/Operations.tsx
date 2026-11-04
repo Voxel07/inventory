@@ -1,23 +1,18 @@
-import { formatDateTime } from '../utils/dateFormat';
-import { OperationListEntry } from '../components/operations/OperationListEntry';
-import { Tab, Button } from '../components/shared/ActionButtons';
+import { Tab } from '../components/shared/ActionButtons';
 import { LoansPanel } from '../components/operations/LoansPanel';
 import { OrderPreparationPanel } from '../components/operations/OrderPreparationPanel';
-import { useQuery } from '@tanstack/react-query';
 import { ReportsPanel } from '../components/operations/ReportsPanel';
-import { Alert, Box, Chip, LinearProgress, Stack, Tabs, Typography } from '@mui/material';
+import { Box, Stack, Tabs } from '@mui/material';
 import type { ReactNode } from 'react';
 import { PageHeader } from '../components/shared/PageHeader';
 import { StateMessage } from '../components/common/StateMessage';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { canCreateInventory, canManagePurchasing, canManageUsers, canOperateWarehouse, canPerformMaintenance } from '../utils/access';
-import { translate, useT } from '../utils/naming';
+import { canCreateInventory, canManagePurchasing, canManageUsers, canOperateWarehouse } from '../utils/access';
+import { useT } from '../utils/naming';
 import { TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
-import { RepairsPanel, SchedulesPanel } from '../components/operations/LifecycleOperations';
+import { ReplenishmentPanel } from '../components/procurement/ReplenishmentPanel';
 import { PurchasingPanel, ReceiptsPanel, VendorsPanel } from '../components/operations/PurchasingOperations';
-import { operationsApi } from '../services/operationsService';
-import { useOperationCommand, useOperationList } from '../hooks/useOperations';
 
 type Section = { key: string; label: string; component: ReactNode };
 type Group = { key: string; label: string; sections: Section[] };
@@ -37,19 +32,13 @@ export function Operations() {
       ...(warehouse ? [{ key: 'loans', label: t('pages.operations.borrowingRental'), component: <LoansPanel /> }] : []),
     ] : [] },
     { key: 'purchasing', label: t('pages.operations.purchasing'), sections: [
+      ...(canManageUsers(user) ? [{ key: 'replenishment', label: t('operations.review.replenishment'), component: <ReplenishmentPanel /> }] : []),
       ...(purchasing ? [{ key: 'purchases', label: t('pages.operations.purchaseOrders'), component: <PurchasingPanel /> }] : []),
       ...(warehouse ? [{ key: 'receipts', label: t('pages.operations.receiving'), component: <ReceiptsPanel /> }] : []),
       ...(purchasing ? [{ key: 'vendors', label: t('pages.operations.suppliers'), component: <VendorsPanel /> }] : []),
     ] },
-    { key: 'maintenance', label: t('enum.reason.maintenance'), sections: canPerformMaintenance(user) ? [
-      { key: 'repairs', label: t('pages.operations.repairs'), component: <RepairsPanel /> },
-      { key: 'schedules', label: t('pages.operations.schedules'), component: <SchedulesPanel /> },
-    ] : [] },
     { key: 'reporting', label: t('pages.operations.reports'), sections: warehouse ? [
       { key: 'reports', label: t('pages.operations.operationalReports'), component: <ReportsPanel /> },
-    ] : [] },
-    { key: 'system', label: t('pages.operations.system'), sections: canManageUsers(user) ? [
-      { key: 'system', label: t('pages.operations.systemHealth'), component: <SystemPanel /> },
     ] : [] },
   ] satisfies Group[]).filter((group) => group.sections.length > 0);
   const requested = params.get('tab');
@@ -82,21 +71,3 @@ export function Operations() {
     </Box>
   </Box>;
 }
-
-function SystemPanel() {
-  const t = useT(); const status = useQuery({ queryKey: ['operations', 'outbox'], queryFn: operationsApi.outboxStatus });
-  const dead = useOperationList('dead-letters', operationsApi.deadLetters); const sync = useOperationList('sync-audit', operationsApi.syncAudit); const command = useOperationCommand();
-  return <Stack spacing={2}>
-    <Typography variant="h6">{t('pages.operations.eventDelivery')}</Typography>
-    {(status.isLoading || dead.isLoading || sync.isLoading) && <LinearProgress />}
-    {(status.error || dead.error || sync.error || command.error) && <Alert severity="error">{(status.error || dead.error || sync.error || command.error)?.message}</Alert>}
-    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{Object.entries(status.data?.counts ?? {}).map(([key, value]) => <Chip key={key} label={`${key}: ${value}`} />)}</Stack>
-    <Typography variant="body2">{t('pages.operations.updated')}: {status.dataUpdatedAt ? formatDateTime(status.dataUpdatedAt) : '—'}</Typography>
-    <Button title={translate('pages.operations.refreshSystemStatusAndFailedDeliveries')} onClick={() => { void status.refetch(); void dead.refetch(); void sync.refetch(); }}>{t('pages.operations.refresh')}</Button>
-    {dead.data?.map((event) => <OperationListEntry key={event.id} actions={[{ key: 'retry', label: t('pages.operations.retryDelivery'), title: translate('pages.operations.retryDeliveryOfThisFailedEvent'), pinned: true, disabled: command.isPending, onClick: () => command.mutate(() => operationsApi.retryEvent(event.id)) }]} title={<>{event.eventType}</>}><Typography>{event.aggregateType} · {event.aggregateId} · {event.attemptCount} {t('pages.operations.attempts')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{event.lastError}</Typography></OperationListEntry>)}
-    {!dead.isLoading && !dead.data?.length && <Alert severity="success">{t('pages.operations.noDeadLetterEvents')}</Alert>}
-    <Typography variant="h6">{t('pages.operations.syncAudit')}</Typography>
-    {sync.data?.map((entry) => <OperationListEntry key={entry.id} status={entry.syncStatus} title={<>{entry.operationType} · {formatDateTime(entry.createdAt)}</>}><Typography sx={{ overflowWrap: 'anywhere' }}>{entry.commandId}</Typography>{entry.conflictMessage && <Alert severity="warning">{entry.conflictMessage}</Alert>}</OperationListEntry>)}
-  </Stack>;
-}
-

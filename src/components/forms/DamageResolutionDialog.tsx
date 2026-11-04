@@ -35,7 +35,7 @@ export function DamageResolutionDialog({ report, targetName, canWriteOff, isUpda
     }
 
     return <Dialog open onClose={isUpdating ? undefined : onClose} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('lists.damageReportsList.startRepair')}</DialogTitle>
+        <DialogTitle>{t('operations.review.resolveDamage')}</DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>
             <Stack spacing={2}>
                 <Typography sx={{ fontWeight: 600 }}>{targetName}</Typography>

@@ -27,7 +27,7 @@ public final class PurchasingDtos {
             @Min(0) int unitPriceCents, String notes) {}
     public record PurchaseOrderInput(String orderNumber, @NotNull UUID vendorId, LocalDate orderDate,
             LocalDate expectedDeliveryDate, UUID eventOccurrenceId, String notes,
-            @NotEmpty List<@Valid PurchaseOrderLineInput> lines) {}
+            @NotEmpty List<@Valid PurchaseOrderLineInput> lines, List<@NotNull UUID> itemRequestIds) {}
     public record PurchaseOrderLineResponse(UUID id, UUID itemId, String sku, String itemName,
             int orderedQuantity, int unitPriceCents, int receivedQuantity, int remainingQuantity,
             String notes) {}

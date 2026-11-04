@@ -16,7 +16,7 @@ public final class LifecycleDtos {
             @NotNull DomainEnums.MaintenanceType maintenanceType,
             @NotNull DomainEnums.MaintenanceIntervalType intervalType,
             @NotNull @DecimalMin("0.01") BigDecimal intervalValue,
-            Instant nextDueAt, BigDecimal nextDueValue, BigDecimal warningWindow,
+            Instant nextDueAt, @DecimalMin("0") BigDecimal nextDueValue, @DecimalMin("0") BigDecimal warningWindow,
             UUID responsiblePersonId, String requiredChecklist, boolean checkoutBlocking, Boolean active) {}
     public record ScheduleResponse(UUID id, UUID itemId, String itemName, String itemSku, UUID assetInstanceId, String assetCode, String maintenanceType,
             String intervalType, BigDecimal intervalValue, Instant nextDueAt, BigDecimal nextDueValue,
@@ -30,7 +30,7 @@ public final class LifecycleDtos {
             @jakarta.validation.constraints.PastOrPresent Instant occurredAt) {}
     /** Carries the damaged item/assembly identity so lists need no catalog or damage-report lookups. */
     public record RepairResponse(UUID id, UUID damageReportId, UUID itemId, String itemName, String assemblyName, String assetCode,
-            String damageDescription, UUID assetInstanceId, UUID handoverId,
+            String damageDescription, int unresolvedQuantity, int repairedPendingQuantity, UUID assetInstanceId, UUID handoverId,
             String status, UUID repairOwnerId, UUID vendorId, boolean safetyImpact,
             String partsAndCostNotes, Instant startedAt, Instant completedAt,
             String verificationResult, UUID approvedById, String notes, Instant createdAt, Instant updatedAt) {}

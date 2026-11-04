@@ -104,9 +104,16 @@ public class LifecycleService {
         if (schedule.assetInstance != null && !schedule.assetInstance.item.id.equals(schedule.item.id)) {
             throw ApiException.badRequest("Maintenance asset does not belong to item");
         }
+        if (!schedule.item.active || schedule.assetInstance != null && !schedule.assetInstance.active) {
+            throw ApiException.conflict("Cannot schedule maintenance for retired equipment");
+        }
         schedule.maintenanceType = input.maintenanceType();
         schedule.intervalType = input.intervalType();
         schedule.intervalValue = input.intervalValue();
+        if (schedule.intervalType == DomainEnums.MaintenanceIntervalType.date) {
+            try { schedule.intervalValue.longValueExact(); }
+            catch (ArithmeticException exception) { throw ApiException.badRequest("Date maintenance intervals must be whole days"); }
+        }
         schedule.nextDueAt = input.nextDueAt();
         schedule.nextDueValue = input.nextDueValue();
         if (schedule.intervalType == DomainEnums.MaintenanceIntervalType.date && schedule.nextDueAt == null) {
@@ -133,9 +140,10 @@ public class LifecycleService {
     public RepairCase createRepair(LifecycleDtos.RepairInput input) {
         actors.requireWarehouse();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
-        var damage = orm.require(DamageReport.class, input.damageReportId(), "Damage report");
+        var damage = orm.requireLockedFresh(DamageReport.class, input.damageReportId(), "Damage report");
         var existing = orm.repairForDamage(damage.id);
         if (existing != null) return existing;
+        if (unresolved(damage) < 1) throw ApiException.conflict("Damage report is already resolved");
         if (occurredAt.isBefore(damage.createdAt)) throw ApiException.badRequest("Repair date precedes damage report");
         var repair = new RepairCase();
         repair.createdAt = occurredAt;
@@ -148,6 +156,7 @@ public class LifecycleService {
         repair.partsAndCostNotes = input.partsAndCostNotes();
         repair.notes = input.notes();
         orm.persist(repair);
+        damage.repairCase = repair;
         events.record("repair.created", "repair_case", repair.id, actors.current().id, null,
                 Map.of("damageReportId", damage.id.toString()));
         return repair;
@@ -158,7 +167,10 @@ public class LifecycleService {
     public RepairCase transitionRepair(UUID id, LifecycleDtos.RepairTransitionInput input) {
         actors.requireWarehouse();
         var occurredAt = inventory.historicalTimestamp(input.occurredAt());
-        var repair = orm.requireLocked(RepairCase.class, id, "Repair case");
+        var repair = orm.require(RepairCase.class, id, "Repair case");
+        // All damage commands take the report lock first, including quick resolution and case creation.
+        orm.requireLockedFresh(DamageReport.class, repair.damageReport.id, "Damage report");
+        orm.refreshLocked(repair);
         if (occurredAt.isBefore(repair.createdAt)
                 || (repair.startedAt != null && occurredAt.isBefore(repair.startedAt))
                 || (repair.completedAt != null && occurredAt.isBefore(repair.completedAt))) {
@@ -171,6 +183,11 @@ public class LifecycleService {
         if (input.repairOwnerId() != null) repair.repairOwner = orm.require(UserAccount.class, input.repairOwnerId(), "User");
         if (input.vendorId() != null) repair.repairVendor = orm.require(Vendor.class, input.vendorId(), "Vendor");
         if (input.status() == DomainEnums.RepairStatus.in_repair && repair.startedAt == null) repair.startedAt = occurredAt;
+        if (input.status() == DomainEnums.RepairStatus.in_repair) {
+            repair.verificationResult = null;
+            repair.approvedBy = null;
+            repair.completedAt = null;
+        }
         if (input.status() == DomainEnums.RepairStatus.repaired || input.status() == DomainEnums.RepairStatus.written_off) {
             int amount = input.amount() == null && repair.assetInstance != null ? 1
                     : input.amount() == null ? 0 : input.amount();
@@ -198,15 +215,32 @@ public class LifecycleService {
             repair.repairedPendingQuantity = 0;
         }
         if (input.status() == DomainEnums.RepairStatus.returned_to_service && repair.assetInstance != null) {
-            // Custody, reservation and transit states stay owned by their workflows.
-            repair.assetInstance.conditionStatus = DomainEnums.ConditionStatus.good;
+            // Damage resolution owns condition; inspection blocks and physical custody remain independent.
             repair.assetInstance.availabilityStatus = StockPolicy.releasedState(repair.assetInstance);
         }
-        repair.status = input.status();
-        repair.notes = input.notes() == null ? repair.notes : input.notes();
+        boolean partial = (input.status() == DomainEnums.RepairStatus.returned_to_service
+                || input.status() == DomainEnums.RepairStatus.written_off) && unresolved(repair.damageReport) > 0;
+        repair.status = partial ? DomainEnums.RepairStatus.awaiting_repair : input.status();
+        if (partial) repair.completedAt = null;
+        if (unresolved(repair.damageReport) > 0) {
+            repair.damageReport.status = switch (repair.status) {
+                case reported -> DomainEnums.DamageStatus.reported;
+                case triaged -> DomainEnums.DamageStatus.triaged;
+                case awaiting_repair -> DomainEnums.DamageStatus.awaiting_repair;
+                default -> DomainEnums.DamageStatus.in_repair;
+            };
+            repair.damageReport.handler = actors.current();
+        }
+        if (input.notes() != null && !input.notes().isBlank()) repair.notes = repair.notes == null || repair.notes.isBlank()
+                ? input.notes().trim() : repair.notes + "\n" + input.notes().trim();
         events.record("repair." + input.status().name(), "repair_case", repair.id, actors.current().id,
-                input.idempotencyKey(), Map.of("damageReportId", repair.damageReport.id.toString()));
+                input.idempotencyKey(), Map.of("damageReportId", repair.damageReport.id.toString(),
+                        "status", repair.status.name(), "unresolvedQuantity", unresolved(repair.damageReport)));
         return repair;
+    }
+
+    private static int unresolved(DamageReport report) {
+        return report.quantity - report.repairedQuantity - report.writtenOffQuantity;
     }
 
 }

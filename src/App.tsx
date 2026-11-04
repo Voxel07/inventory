@@ -8,7 +8,7 @@ import { Header } from './components/shared/Header';
 import { Navigation, DRAWER_WIDTH } from './components/shared/Navigation';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { KeyboardShortcuts } from './components/shared/KeyboardShortcuts';
-import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, ProcurementGuard, SharingGroupsGuard, WarehouseTasksGuard } from './components/shared/AccessGuard';
+import { AdminGuard, CatalogAccessGuard, InventoryManagerGuard, OrganizationGuard, SharingGroupsGuard, WarehouseTasksGuard } from './components/shared/AccessGuard';
 import { useAuth } from './hooks/useAuth';
 import { useUIStore } from './store/uiStore';
 import { useAppLanguage, translate, useT } from './utils/naming';
@@ -44,7 +44,6 @@ const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Ord
 const FactionOrderDetail = lazy(() => import('./pages/FactionOrderDetail').then((m) => ({ default: m.FactionOrderDetail })));
 const UserManagement = lazy(() => import('./pages/UserManagement').then((m) => ({ default: m.UserManagement })));
 const TransactionHistoryPage = lazy(() => import('./pages/TransactionHistory').then((m) => ({ default: m.TransactionHistoryPage })));
-const Procurement = lazy(() => import('./pages/Procurement').then((m) => ({ default: m.Procurement })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then((m) => ({ default: m.Maintenance })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
 const LocationScan = lazy(() => import('./pages/LocationScan').then(m => ({ default: m.LocationScan })));
@@ -149,7 +148,6 @@ function AppContent() {
               <Route path="/transactions" element={<InventoryManagerGuard><TransactionHistoryPage /></InventoryManagerGuard>} />
               <Route path="/print-qr" element={<InventoryManagerGuard><PrintQRCodesPage /></InventoryManagerGuard>} />
               <Route path="/damage-reports" element={<InventoryManagerGuard><DamageReportsPage /></InventoryManagerGuard>} />
-              <Route path="/procurement" element={<ProcurementGuard><Procurement /></ProcurementGuard>} />
               <Route path="/maintenance" element={<InventoryManagerGuard><Maintenance /></InventoryManagerGuard>} />
               <Route path="/locations/:locationId" element={<LocationScan />} />
               <Route path="/profile" element={<Profile />} />

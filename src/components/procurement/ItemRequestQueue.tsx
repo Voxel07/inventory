@@ -86,9 +86,10 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
         <Button title={translate('itemRequests.createItemTitle')} size="small" variant="contained" onClick={() => setDialog({ kind: 'create', entry })}>{t('itemRequests.createItem')}</Button>
         <Button title={translate('itemRequests.linkItemTitle')} size="small" onClick={() => setDialog({ kind: 'link', entry })}>{t('itemRequests.linkItem')}</Button>
       </>}
-      {status === 'item_created' && entry.request.itemId && <Button title={translate('itemRequests.orderFromSupplierTitle')} size="small" variant="contained"
+      {status === 'item_created' && entry.request.itemId && entry.request.purchaseOrderStatus !== 'draft' && <Button title={translate('itemRequests.orderFromSupplierTitle')} size="small" variant="contained"
         startIcon={<AddShoppingCartIcon />} onClick={() => setDialog({ kind: 'order', entry })}>{t('itemRequests.orderFromSupplier')}</Button>}
-      <Button title={translate('itemRequests.declineTitle')} size="small" color="error" onClick={() => setDialog({ kind: 'decline', entry })}>{t('itemRequests.decline')}</Button>
+      {entry.request.purchaseOrderStatus === 'draft' && <Button component={RouterLink} to="/operations?tab=purchases" size="small">{t('operations.purchasingOperations.purchaseDraft')}</Button>}
+      {status === 'open' && <Button title={translate('itemRequests.declineTitle')} size="small" color="error" onClick={() => setDialog({ kind: 'decline', entry })}>{t('itemRequests.decline')}</Button>}
     </Stack>;
   }
 
@@ -166,8 +167,8 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
     {dialog?.kind === 'decline' && <OperationForm title={t('itemRequests.declineDialog', { name: dialog.entry.request.name })} submitLabel={t('itemRequests.confirmDecline')}
       fields={[{ key: 'reason', label: t('itemRequests.reason'), multiline: true, required: true }]} onClose={() => setDialog(null)}
       onSave={(values) => declineItemRequest(dialog.entry.request.id, String(values.reason ?? ''))} />}
-    {dialog?.kind === 'order' && dialog.entry.request.itemId && <PurchaseDraft
-      initialLines={[{ itemId: dialog.entry.request.itemId, orderedQuantity: dialog.entry.request.quantity }]}
+    {dialog?.kind === 'order' && dialog.entry.request.itemId && <PurchaseDraft itemRequestIds={[dialog.entry.request.id]}
+      initialLines={[{ itemId: dialog.entry.request.itemId, orderedQuantity: dialog.entry.request.quantity - dialog.entry.request.receivedQuantity }]}
       eventId={dialog.entry.eventOccurrenceId ?? eventId} onClose={() => setDialog(null)} />}
   </Paper>;
 }

@@ -16,7 +16,6 @@ import MailOutlineIcon from '@mui/icons-material/MailOutlined';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import HistoryIcon from '@mui/icons-material/History';
-import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -26,7 +25,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useActionInboxDialog } from '../../hooks/useActionInboxDialog';
 import { useInboxCount } from '../../hooks/useInbox';
 import { useT } from '../../utils/naming';
-import { canCreateInventory, canAccessProcurement, canAccessSharingGroups, canAccessWarehouseTasks, canManageInventory, canManageUsers, canViewCatalog, canViewOrganization } from '../../utils/access';
+import { canCreateInventory, canAccessSharingGroups, canAccessWarehouseTasks, canManageInventory, canManageUsers, canViewCatalog, canViewOrganization } from '../../utils/access';
 import type { MobileNavLayout, MobileNavPlacement, User } from '../../types';
 
 export type NavItem = { label: string; path: string; icon: ReactNode };
@@ -65,7 +64,6 @@ export function useNavGroups(user: User | null | undefined): NavGroup[] {
         ] : [] },
         { label: t('shared.navigation.operations'), items: [
             ...(operations ? [{ label: t('shared.navigation.warehouseTasks'), path: '/operations', icon: <WarehouseOutlinedIcon /> }] : []),
-            ...(canAccessProcurement(user) ? [{ label: t('nav.procurement'), path: '/procurement', icon: <ShoppingCartOutlinedIcon /> }] : []),
             ...(manager ? [{ label: t('nav.maintenance'), path: '/maintenance', icon: <BuildOutlinedIcon /> }] : []),
             ...(manager ? [{ label: t('nav.damageReports'), path: '/damage-reports', icon: <ReportProblemOutlinedIcon /> }] : []),
         ] },

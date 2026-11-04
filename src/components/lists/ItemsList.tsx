@@ -157,6 +157,7 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
         return <>
             <Box component="span" sx={{ color: availabilityColor[row.availability] }}>{base + low}</Box>
             {row.damaged > 0 && <Box component="span" sx={{ color: 'error.main' }}> · {formatQuantity(row.item, row.damaged)} {t('lists.itemsList.damaged')}</Box>}
+            {!locationStock && (row.item.stock?.maintenance ?? 0) > 0 && <Box component="span" sx={{ color: 'warning.main' }}> · {t('operations.review.maintenanceUnits', { quantity: formatQuantity(row.item, row.item.stock!.maintenance) })}</Box>}
         </>;
     }
 

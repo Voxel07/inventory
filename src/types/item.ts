@@ -151,7 +151,7 @@ export interface Item {
 }
 
 export type ItemStatus = 'available' | 'checked_out' | 'damaged' | 'retired';
-type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'in_service';
+type MaintenanceStatus = 'certified' | 'due_soon' | 'overdue' | 'out_of_service';
 
 export interface ItemFormData {
   sku?: string;
@@ -279,9 +279,11 @@ export interface AssetInstance {
   replacementValue?: number;
   conditionStatus: AssetConditionStatus;
   availabilityStatus: AssetAvailabilityStatus;
-  /** Derived from the asset's out-of-service flag and its own or its item's calendar. */
+  /** Derived from active item/device schedules and inspection holds. */
   serviceStatus: MaintenanceStatus;
-  /** The asset's calendar date; it follows the item calendar until the asset is inspected individually. */
+  /** Authoritative hold; advisory or warning-only plans can be overdue without blocking checkout. */
+  maintenanceBlocked: boolean;
+  /** Earliest date from the active item-wide and device-specific schedules. */
   nextMaintenanceDue?: number;
   operatingHours?: number;
   currentLocationId?: string;

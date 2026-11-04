@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ROLE_LADDER, type User, type UserRole } from '../src/types';
 import {
-  atLeast, canAccessProcurement, canAccessSharingGroups, canAccessWarehouseTasks, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
+  atLeast, canAccessSharingGroups, canAccessWarehouseTasks, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
   canOrder, canPerformCustody, canPerformMaintenance, canTakeOut, canUseGeneralOrders, canViewCatalog, canViewFaction,
   canViewGeneralOrders, canViewOrganization, canWriteFaction, canWriteOff,
 } from '../src/utils/access';
@@ -22,7 +22,6 @@ const MINIMUM: [string, (u: User) => boolean, UserRole][] = [
   ['catalog edits', canEditCatalog, 'warehouse_crew'],
   ['maintenance', canPerformMaintenance, 'warehouse_crew'],
   ['purchasing', canManagePurchasing, 'warehouse_crew'],
-  ['procurement', canAccessProcurement, 'admin'],
   ['event planning', canEditEvents, 'admin'],
   ['users', canManageUsers, 'admin'],
   ['write-off', canWriteOff, 'admin'],
