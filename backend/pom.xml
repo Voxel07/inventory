@@ -47,7 +47,7 @@
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-openapi</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-health</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-oidc</artifactId></dependency>
-        <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-opentelemetry</artifactId></dependency>
+        <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-micrometer-opentelemetry</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-scheduler</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-cache</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-redis-client</artifactId></dependency>

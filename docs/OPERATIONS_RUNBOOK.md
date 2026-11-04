@@ -39,4 +39,6 @@ Review `deploy/observability/alerts.json` using `scripts/provision-observability
 
 Application OTEL metrics remain available for request duration/error rate, DB pool wait, outbox age and sync outcomes. Exclude SSE from ordinary request latency panels. An empty `pg_stat_replication` reports zero transport lag; it does **not** prove a required replica exists. Configure replica-presence/subscriber checks for the actual topology. Redis alerts and cluster acceptance are deferred.
 
+The Micrometer-to-OpenTelemetry bridge adds JVM/system, HTTP server, Redis client and Caffeine cache metrics through the same OTLP exporter. See [application metrics](TELEMETRY_METRICS.md) for enabled instrument families, retained custom metrics and export requirements.
+
 Local verification on 20 October 2026 passed an encrypted schema/media fixture backup and fresh-container restore in six seconds, plus collector database/backup-marker probes. This is script evidence, not a measured recovery time for application-scale data. See [validation](VALIDATION_2026_10_20.md).
