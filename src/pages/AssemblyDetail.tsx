@@ -23,7 +23,7 @@ import { Dialog } from '../components/shared/ClosableDialog';
 import { PageHeader } from '../components/shared/PageHeader';
 import { StatStrip } from '../components/shared/StatStrip';
 import { DetailSection } from '../components/items/DetailSection';
-import { Field, FieldGrid } from '../components/items/CompactDetail';
+import { Field } from '../components/items/CompactDetail';
 import { useCompactCatalog } from '../hooks/useCompactCatalog';
 import { TooltipButton } from '../components/shared/TooltipButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -46,6 +46,7 @@ import { useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
 import { canCheckoutItem, canEditCatalog, canOperateWarehouse } from '../utils/access';
 import { InventorySharing } from '../components/items/InventorySharing';
+import { addAssemblyComponent, removeAssemblyComponent } from '../utils/assemblyComponents';
 
 export function AssemblyDetail() {
     const { user } = useAuth();
@@ -83,20 +84,12 @@ export function AssemblyDetail() {
         );
     }
 
-    function handleAddItem(itemId: string) {
+    function handleAddItem(item: Item) {
         if (!assembly) return;
-        const updatedItemIds = [...(assembly.itemIds ?? []), itemId];
-        const updatedQuantities = {
-            ...(assembly.itemQuantities ?? {}),
-            [itemId]: 1, // Default quantity to 1
-        };
         updateAssembly.mutate(
             {
                 id: assembly.id,
-                data: {
-                    itemIds: updatedItemIds,
-                    itemQuantities: updatedQuantities,
-                },
+                data: addAssemblyComponent(assembly, item),
             },
             {
                 onSuccess: () => showSnackbar(t('pages.assemblyDetail.itemAddedToAssembly'), 'success'),
@@ -107,16 +100,10 @@ export function AssemblyDetail() {
 
     function handleRemoveItem(itemId: string) {
         if (!assembly) return;
-        const updatedItemIds = (assembly.itemIds ?? []).filter((id) => id !== itemId);
-        const updatedQuantities = { ...(assembly.itemQuantities ?? {}) };
-        delete updatedQuantities[itemId];
         updateAssembly.mutate(
             {
                 id: assembly.id,
-                data: {
-                    itemIds: updatedItemIds,
-                    itemQuantities: updatedQuantities,
-                },
+                data: removeAssemblyComponent(assembly, itemId),
             },
             {
                 onSuccess: () => showSnackbar(t('pages.assemblyDetail.itemRemovedFromAssembly'), 'success'),
@@ -222,20 +209,20 @@ export function AssemblyDetail() {
             <Box sx={{ mb: 2 }}>
                 <DetailSection title={t('common.details')} defaultExpanded={false}>
                     <Stack spacing={1.5}>
-                        <FieldGrid>
+                        <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, columnGap: 3, rowGap: 1 }}>
                             <Field label={t('common.category')}>{[assembly.category, assembly.subcategory].filter(Boolean).join(' · ') || '—'}</Field>
                             <Field label={t('pages.assemblyDetail.created')}>{formatDate(assembly.created)}</Field>
-                            <Field wide label={t('pages.assemblyDetail.eventUse')}>
+                            <Field label={t('pages.assemblyDetail.eventUse')}>
                                 {assembly.eventTypes?.length ? <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
                                     {assembly.eventTypes.map((eventType) => (
                                         <Chip key={eventType} label={eventType === 'LS' ? 'LightSim' : eventType} color="primary" variant="outlined" size="small" />
                                     ))}
                                 </Stack> : t('pages.assemblyDetail.notAssignedToAnEvent')}
                             </Field>
-                            {assembly.description && <Field wide label={t('common.description')}>
+                            {assembly.description && <Field label={t('common.description')}>
                                 <Box component="span" sx={{ whiteSpace: 'pre-wrap', fontWeight: 400 }}>{assembly.description}</Box>
                             </Field>}
-                        </FieldGrid>
+                        </Box>
                         <InventorySharing kind="assemblies" id={assembly.id} access={assembly.access} />
                     </Stack>
                 </DetailSection>
@@ -246,23 +233,23 @@ export function AssemblyDetail() {
                     {t('pages.assemblyDetail.itemsInThisAssembly')}
                 </Typography>
                 {canEdit && !compact && <Box sx={{ minWidth: 250, maxWidth: 350, flex: 1 }}>
-                    <ItemAutocomplete size="small" label={t('pages.assemblyDetail.quicklyAddItem')} value={null}
+                    <ItemAutocomplete size="small" label={t('pages.assemblyDetail.quicklyAddItem')} value={null} showMoreHint={false}
                         filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
-                        onChange={(newItem) => { if (newItem) handleAddItem(newItem.id); }} />
+                        onChange={(newItem) => { if (newItem) handleAddItem(newItem); }} />
                 </Box>}
             </Box>
 
             <ItemsList items={assemblyItems} isLoading={itemsQuery.isLoading && !assemblyItems.length}
-                requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit ? handleRemoveItem : undefined}
+                requiredQuantities={assembly.itemQuantities} onRemoveItem={canEdit && assemblyItems.length > 1 ? handleRemoveItem : undefined}
                 loadingMore={false} loadError={itemsQuery.isError} searchFrom={10}
                 onRetry={() => { void itemsQuery.refetch(); }} />
 
             <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
                 <DialogTitle>{t('pages.assemblyDetail.addItem')}</DialogTitle>
                 <DialogContent sx={{ pt: '8px !important' }}>
-                    <ItemAutocomplete label={t('pages.assemblyDetail.quicklyAddItem')} value={null}
+                    <ItemAutocomplete label={t('pages.assemblyDetail.quicklyAddItem')} value={null} showMoreHint={false}
                         filter={(item) => !(assembly.itemIds ?? []).includes(item.id)}
-                        onChange={(newItem) => { if (newItem) { handleAddItem(newItem.id); setAddOpen(false); } }} />
+                        onChange={(newItem) => { if (newItem) { handleAddItem(newItem); setAddOpen(false); } }} />
                 </DialogContent>
             </Dialog>
 

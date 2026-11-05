@@ -10,7 +10,7 @@ export const {
   useUpdate: useUpdateAssembly,
   useDelete: useDeleteAssembly,
   useDeleteMany: useDeleteAssemblies,
-} = createResourceHooks<Assembly, AssemblyFormData>(assemblyApi, 'assemblies');
+} = createResourceHooks<Assembly, AssemblyFormData, AssemblyFormData>(assemblyApi, 'assemblies');
 
 /** Explicit complete read for assembly pickers and component lookups (bounded reference data). */
 export function useAssemblies() {

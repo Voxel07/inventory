@@ -8,6 +8,32 @@ import { generateStoragePlaces, generatedCount } from '../src/utils/storageGener
 import { calculateImageCrop } from '../src/utils/prepareItemImage';
 import { parseCsv, parseInlineComponents } from '../src/utils/csv/core';
 import { buildCsvImportPlan } from '../src/utils/csv/importPlan';
+import { addAssemblyComponent, removeAssemblyComponent } from '../src/utils/assemblyComponents';
+import { fixtureAssembly, fixtureItem } from './fixtures/dto';
+
+test('assembly quick-add and remove preserve metadata and the existing component quantities', () => {
+  const assembly = fixtureAssembly({ id: 'kit', name: 'Camp kit', category: 'Camp', subcategory: 'Cleaning',
+    description: 'Keep this description', hint: 'Empty regularly', eventTypes: ['DE', 'TNO'],
+    image: 'assemblies/kit/image.webp', itemQuantities: { bucket: 3, broom: 2 } });
+  const added = addAssemblyComponent(assembly, fixtureItem({ id: 'bag', name: 'Bag' }));
+  const metadata = { name: assembly.name, category: assembly.category, subcategory: assembly.subcategory,
+    description: assembly.description, hint: assembly.hint, eventTypes: assembly.eventTypes };
+  expect(added).toMatchObject({ ...metadata, itemIds: ['bucket', 'broom', 'bag'], itemQuantities: { bucket: 3, broom: 2, bag: 1 } });
+  expect(added).not.toHaveProperty('removeImage');
+  expect(added).not.toHaveProperty('image');
+  const removed = removeAssemblyComponent(assembly, 'broom');
+  expect(removed).toMatchObject({ ...metadata, itemIds: ['bucket'], itemQuantities: { bucket: 3 } });
+  expect(assembly.itemQuantities).toEqual({ bucket: 3, broom: 2 });
+  expect(assembly.itemIds).toEqual(['bucket', 'broom']);
+});
+
+test('assembly quick-add starts percentage consumables at one full unit and keeps existing quantities', () => {
+  const fuel = fixtureItem({ id: 'fuel', name: 'Fuel', quantityDecimals: 2, unitCapacity: 10, unit: 'L' });
+  const assembly = fixtureAssembly({ id: 'kit', name: 'Fuel kit', itemQuantities: { canister: 1 } });
+  expect(addAssemblyComponent(assembly, fuel).itemQuantities).toEqual({ canister: 1, fuel: 100 });
+  const existing = { ...assembly, itemQuantities: { canister: 1, fuel: 75 } };
+  expect(addAssemblyComponent(existing, fuel).itemQuantities).toEqual({ canister: 1, fuel: 75 });
+});
 
 test('catalog and assemblies use server availability even when legacy amount disagrees', () => {
   const item = { amount: 999, stock: { totalOwned: 9, onHand: 6, checkedOut: 2, inTransit: 1, damaged: 1, reserved: 2, available: 3, ordered: 10 } } as Item;

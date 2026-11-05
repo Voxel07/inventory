@@ -5,6 +5,8 @@ import type { OidcTokenSet } from '../src/services/oidcClient';
 import { createInstance } from 'i18next';
 import en from '../src/i18n/en';
 import type { Translator } from '../src/utils/naming';
+import { addAssemblyComponent, removeAssemblyComponent } from '../src/utils/assemblyComponents';
+import { fixtureAssembly, fixtureItem } from './fixtures/dto';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -96,6 +98,7 @@ const privacy = await import('../src/services/privateInventoryCache');
 const pagination = await import('../src/services/apiPagination');
 const codes = await import('../src/utils/codeResolver');
 const reports = await import('../src/services/reportService');
+const assemblies = await import('../src/services/assemblyService');
 const user = (id: string, role: UserRole = 'read_only'): User => ({ id, role, roles: [role], name: id, email: `${id}@example.test`, created: 0, updated: 0, faction: [] });
 const tokens = (id: string): OidcTokenSet => ({ accessToken: id, refreshToken: `${id}-refresh`, idToken: id, expiresAt: Date.now() - 1000 });
 const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: undefined }), (error: unknown) => ({ value: undefined, error }));
@@ -115,6 +118,29 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => { connectivity.onLine = false; await auth.clearAuth(); api.stopRealtimeEvents(); });
+
+test('assembly component actions PATCH a complete assembly through the real service and transport', async () => {
+  signIn('assembly-editor');
+  connectivity.onLine = true;
+  const assembly = fixtureAssembly({ id: 'kit', name: 'Camp kit', category: 'Camp', description: 'Keep me',
+    hint: 'Empty regularly', eventTypes: ['DE'], image: 'assemblies/kit/image.webp', itemQuantities: { bucket: 3 } });
+  let calls = 0;
+  fetchRequest = async (input, options) => {
+    calls++;
+    expect(new URL(String(input)).pathname).toBe('/api/assemblies/kit');
+    expect(options?.method).toBe('PATCH');
+    const body = JSON.parse(String(options?.body));
+    expect(body).toMatchObject({ name: 'Camp kit', category: 'Camp', description: 'Keep me', hint: 'Empty regularly', eventTypes: ['DE'] });
+    expect(body.removeImage).not.toBe(true);
+    expect(body.itemQuantities).toEqual(calls === 1 ? { bucket: 3, bag: 1 } : { bag: 1 });
+    return Response.json({ ...assembly, ...body });
+  };
+  const updated = await assemblies.updateAssembly(assembly.id, addAssemblyComponent(assembly, fixtureItem({ id: 'bag', name: 'Bag' })));
+  expect(updated.image).toBe(assembly.image);
+  const removed = await assemblies.updateAssembly(updated.id, removeAssemblyComponent(updated, 'bucket'));
+  expect(removed.itemQuantities).toEqual({ bag: 1 });
+  expect(calls).toBe(2);
+});
 
 test('a server role-change event refreshes identity and clears organization views before token rotation', async () => {
   auth.setDevelopmentSession('dev:role-change', user('role-change', 'ash'));

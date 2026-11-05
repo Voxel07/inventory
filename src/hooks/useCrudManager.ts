@@ -9,7 +9,7 @@ interface MutationLike<TArgs> {
 
 interface CrudMutations<TForm> {
   create: MutationLike<TForm>;
-  update: MutationLike<{ id: string; data: Partial<TForm> }>;
+  update: MutationLike<{ id: string; data: TForm }>;
   delete: MutationLike<string>;
   deleteMany?: MutationLike<string[]>;
 }

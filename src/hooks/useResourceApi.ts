@@ -13,17 +13,17 @@ export function createCreateResourceHooks<T extends { id: string }, TForm>(api: 
   };
 }
 
-function createMutableResourceHooks<T extends { id: string }, TForm>(api: MutableResourceApi<T, TForm>, queryKey: string) {
+function createMutableResourceHooks<T extends { id: string }, TForm, TUpdate extends Partial<TForm>>(api: MutableResourceApi<T, TForm, TUpdate>, queryKey: string) {
   return {
     ...createCreateResourceHooks(api, queryKey),
     useDetail(id?: string) {
       return useQuery({ queryKey: [queryKey, id], queryFn: () => api.getById(id!), enabled: Boolean(id), networkMode: 'offlineFirst' });
     },
-    useUpdate() { return useMutation({ mutationFn: ({ id, data }: { id: string; data: Partial<TForm> }) => api.update(id, data) }); },
+    useUpdate() { return useMutation({ mutationFn: ({ id, data }: { id: string; data: TUpdate }) => api.update(id, data) }); },
   };
 }
 
-export function createResourceHooks<T extends { id: string }, TForm = Partial<T>>(api: CrudResourceApi<T, TForm>, queryKey: string) {
+export function createResourceHooks<T extends { id: string }, TForm = Partial<T>, TUpdate extends Partial<TForm> = Partial<TForm>>(api: CrudResourceApi<T, TForm, TUpdate>, queryKey: string) {
   return {
     ...createMutableResourceHooks(api, queryKey),
     useDelete() { return useMutation({ mutationFn: (id: string) => api.delete(id) }); },

@@ -9,7 +9,8 @@ async function transformAssemblyPayload(data: Partial<AssemblyFormData>) {
   return { ...fields, ...(image ? { image, removeImage: false } : {}) };
 }
 
-export const assemblyApi = createCrudResourceApi<Assembly, AssemblyFormData>('/api/assemblies', 'assemblies', {
+// Assembly writes replace the metadata and components; the endpoint requires a complete form.
+export const assemblyApi = createCrudResourceApi<Assembly, AssemblyFormData, AssemblyFormData>('/api/assemblies', 'assemblies', {
   transformPayload: transformAssemblyPayload,
 });
 

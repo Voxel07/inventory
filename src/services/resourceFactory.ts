@@ -27,11 +27,11 @@ export interface CreateResourceApi<T, TForm> extends CollectionResourceApi<T> {
   create: (data: TForm) => Promise<T>;
 }
 
-export interface MutableResourceApi<T, TForm> extends ReadResourceApi<T>, CreateResourceApi<T, TForm> {
-  update: (id: string, data: Partial<TForm>) => Promise<T>;
+export interface MutableResourceApi<T, TForm, TUpdate extends Partial<TForm> = Partial<TForm>> extends ReadResourceApi<T>, CreateResourceApi<T, TForm> {
+  update: (id: string, data: TUpdate) => Promise<T>;
 }
 
-export interface CrudResourceApi<T, TForm> extends MutableResourceApi<T, TForm> {
+export interface CrudResourceApi<T, TForm, TUpdate extends Partial<TForm> = Partial<TForm>> extends MutableResourceApi<T, TForm, TUpdate> {
   delete: (id: string) => Promise<boolean>;
   deleteMany: (ids: string[]) => Promise<string[]>;
 }
@@ -43,7 +43,7 @@ function queryCacheKey(base: string, query?: ApiQuery): string {
   return entries.length ? `${base}:${JSON.stringify(entries)}` : base;
 }
 
-function operations<T extends { id: string }, TForm>(
+function operations<T extends { id: string }, TForm, TUpdate extends Partial<TForm> = Partial<TForm>>(
   basePath: string,
   cacheKey?: string,
   options?: ResourceOptions<TForm, T>,
@@ -134,7 +134,7 @@ function operations<T extends { id: string }, TForm>(
       return cacheDetail(result, context);
     },
 
-    async update(id: string, data: Partial<TForm>) {
+    async update(id: string, data: TUpdate) {
       const context = captureAuthSession();
       if (options?.customUpdate) {
         const result = await options.customUpdate(id, data, basePath, context);
@@ -178,19 +178,19 @@ export function createCreateResourceApi<T extends { id: string }, TForm>(
   return { getPage: resource.getPage, getAll: resource.getAll, create: resource.create };
 }
 
-export function createMutableResourceApi<T extends { id: string }, TForm>(
+export function createMutableResourceApi<T extends { id: string }, TForm, TUpdate extends Partial<TForm> = Partial<TForm>>(
   basePath: string,
   cacheKey?: string,
   options?: ResourceOptions<TForm, T>,
-): MutableResourceApi<T, TForm> {
-  const resource = operations<T, TForm>(basePath, cacheKey, options);
+): MutableResourceApi<T, TForm, TUpdate> {
+  const resource = operations<T, TForm, TUpdate>(basePath, cacheKey, options);
   return { getPage: resource.getPage, getAll: resource.getAll, getById: resource.getById, create: resource.create, update: resource.update };
 }
 
-export function createCrudResourceApi<T extends { id: string }, TForm>(
+export function createCrudResourceApi<T extends { id: string }, TForm, TUpdate extends Partial<TForm> = Partial<TForm>>(
   basePath: string,
   cacheKey?: string,
   options?: ResourceOptions<TForm, T>,
-): CrudResourceApi<T, TForm> {
-  return operations<T, TForm>(basePath, cacheKey, options);
+): CrudResourceApi<T, TForm, TUpdate> {
+  return operations<T, TForm, TUpdate>(basePath, cacheKey, options);
 }
