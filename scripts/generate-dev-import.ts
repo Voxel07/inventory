@@ -118,8 +118,7 @@ const { apiRequest } = await import('../src/services/apiClient');
 if ((await apiRequest<unknown[]>('/api/items', { query: { size: 1 } })).length)
   throw new Error('The authoring database must be empty. Restart with a fresh Dev Services container and seed loading disabled.');
 const { buildCsvImportPlan } = await import('../src/utils/csv/importPlan');
-const { runCsvImport } = await import('../src/services/csvImportService');
-const { translate } = await import('../src/utils/naming');
+const { uploadCsvImport, getCsvImports, csvImportRunning } = await import('../src/services/csvImportService');
 const source = await Bun.file(resolve('sample_imports/sample_stock.csv')).text();
 const plan = buildCsvImportPlan({ csvContent: source, tabType: 'combined', items: [], assemblies: [], storageLocations: [],
   updateExistingItems: false, autoCreateReferences: true,
@@ -129,16 +128,25 @@ if (plan.totalErrorsCount) throw new Error(`Sample has ${plan.totalErrorsCount} 
   ...plan.parsedReturns, ...plan.parsedCheckouts, ...plan.parsedOperations,
 ].filter(row => row.status === 'error').map(row => ({ index: row.index, message: row.statusMessage })))}`);
 let lastProgress = -10;
-const result = await runCsvImport({ ...plan, storageLocations: [], autoCreateLocations: true, tabType: 'combined', items: [],
-  updateExistingItems: false, t: translate, setImportedCounts: () => {}, setImportStatusText: () => {},
-  setImportProgress: value => { if (value >= lastProgress + 10) { console.log(`Import ${Math.round(value)}%`); lastProgress = value; } } });
+let job = await uploadCsvImport('sample_stock.csv', { ...plan, autoCreateLocations: true, tabType: 'combined',
+  updateExistingItems: false }, crypto.randomUUID());
+const deadline = Date.now() + 15 * 60_000;
+while (csvImportRunning(job)) {
+  if (Date.now() > deadline) throw new Error('Sample import timed out');
+  if (job.progress >= lastProgress + 10) { console.log(`Import ${job.progress}%`); lastProgress = job.progress; }
+  await Bun.sleep(1000);
+  job = (await getCsvImports()).find(candidate => candidate.id === job.id) ?? job;
+}
+if (job.status !== 'completed') throw new Error(`Sample import ${job.status}: ${JSON.stringify(job.result)}`);
+const result = job.result;
 await Bun.write(resolve('backend/target/dev-import-result.json'), JSON.stringify(result, null, 2));
 console.log(JSON.stringify({ ...result, errors: result.errors.slice(0, 10), errorCount: result.errors.length }));
 if (result.errors.length) throw new Error('Import must finish without errors before exporting a seed.');
 
 const dump = await docker(['exec', container, 'pg_dump', '-U', 'quarkus', '-d', 'inventory', '--data-only', '--column-inserts',
   '--no-owner', '--no-privileges', '--exclude-table=public.flyway_schema_history', '--exclude-table=public.source_revisions',
-  '--exclude-table=public.stock_history_pending', '--exclude-table=public.operational_reports', '--exclude-table=public.report_rebuild_jobs']);
+  '--exclude-table=public.stock_history_pending', '--exclude-table=public.operational_reports', '--exclude-table=public.report_rebuild_jobs',
+  '--exclude-table=public.csv_import_jobs']);
 const inserts = dump.split('\n').filter(line => !line.startsWith('\\') && !line.startsWith('SET ')
   && !line.startsWith('SELECT pg_catalog.set_config')).join('\n').replace(/^SELECT pg_catalog\.setval/gm, 'PERFORM pg_catalog.setval');
 const target = resolve('backend/src/main/resources/db/dev/afterMigrate__import.sql');

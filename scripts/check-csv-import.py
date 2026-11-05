@@ -93,6 +93,7 @@ def main():
     lots = plan("items")
     tracked = item(1, " tracked")
     tracked["data"]["trackingMode"] = "lot_tracked"
+    tracked["storageLocationId"] = ""
     tracked["storageLocationPath"] = [owner + " building", "shelf"]
     tracked["lots"] = [{"lotNumber": "opening-lot", "quantity": 3}]
     lots["parsedItems"] = [tracked]

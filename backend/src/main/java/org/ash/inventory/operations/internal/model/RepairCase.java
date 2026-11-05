@@ -23,11 +23,11 @@ public class RepairCase extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "repair_owner_id") public UserAccount repairOwner;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "repair_vendor_id") public Vendor repairVendor;
     @Column(name = "safety_impact", nullable = false) public boolean safetyImpact;
-    @Column(name = "parts_and_cost_notes") public String partsAndCostNotes;
+    @Column(name = "parts_and_cost_notes", columnDefinition = "text") public String partsAndCostNotes;
     @Column(name = "started_at") public Instant startedAt;
     @Column(name = "completed_at") public Instant completedAt;
-    @Column(name = "verification_result") public String verificationResult;
+    @Column(name = "verification_result", columnDefinition = "text") public String verificationResult;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "approved_by") public UserAccount approvedBy;
     @Column(name = "repaired_pending_quantity", nullable = false) public int repairedPendingQuantity;
-    public String notes;
+    @Column(columnDefinition = "text") public String notes;
 }

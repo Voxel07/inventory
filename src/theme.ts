@@ -2,6 +2,7 @@ import { createTheme } from '@mui/material';
 import type {} from '@mui/x-data-grid/themeAugmentation';
 import { IconButton } from './components/shared/ActionButtons';
 import { translate } from './utils/naming';
+import contours from './assets/contours.svg?raw';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -58,9 +59,9 @@ export const tokens = {
 const TOUCH_TARGET = 44;
 const PHONE = '@media (max-width: 599.95px)';
 
-/** Seamless flat-top honeycomb tile drawn in faint black lines; the dark page needs a stronger alpha to stay visible. */
-function hexPattern(opacity: number) {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 17.3205'><path d='M0 8.66025L5 0H15L20 8.66025L15 17.3205H5Z M20 8.66025H30 M5 17.3205H15' fill='none' stroke='black' stroke-opacity='${opacity}' stroke-width='0.5'/></svg>`;
+/** Seamless topographic contours with fine white strokes. */
+function contourPattern(opacity: number) {
+  const svg = contours.replace('<svg ', `<svg stroke-opacity='${opacity}' `);
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
@@ -98,8 +99,8 @@ export function buildTheme(mode: ThemeMode) {
         styleOverrides: {
           body: {
             backgroundColor: c.page,
-            backgroundImage: hexPattern(mode === 'light' ? 0.06 : 0.35),
-            backgroundSize: '60px 34.641px',
+            backgroundImage: contourPattern(mode === 'light' ? 0.6 : 0.12),
+            backgroundSize: '600px 600px',
           },
           '::selection': { backgroundColor: c.selected, color: c.text },
           'code, kbd, samp, .mono': { fontFamily: MONO_FONT, fontSize: '0.92em' },

@@ -629,10 +629,10 @@ create table repair_cases (
     id uuid not null,
     repair_owner_id uuid,
     repair_vendor_id uuid,
-    notes varchar(255),
-    parts_and_cost_notes varchar(255),
+    notes text,
+    parts_and_cost_notes text,
     status varchar(255) not null check ((status in ('reported','triaged','awaiting_repair','in_repair','repaired','verified','returned_to_service','written_off'))),
-    verification_result varchar(255),
+    verification_result text,
     primary key (id)
 );
 

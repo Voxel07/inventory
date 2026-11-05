@@ -63,6 +63,17 @@ The local database starts empty and is discarded when its container stops.
 The smoke test writes sample items, an assembly and lot stock to this database.
 These tests are local only; the release CI does not execute them.
 
+For the complete sample regression, use a fresh empty local stack and run:
+
+```powershell
+bun scripts/check-csv-sample.ts http://localhost:18080
+```
+
+This imports all sample rows twice, checking both the empty-catalog preview and
+re-import against existing items, locations, events and orders. It rejects a
+populated starting catalog, so run it before the smaller smoke test. Results
+are written to `backend/target/csv-sample-pass-1.json` and `csv-sample-pass-2.json`.
+
 To use the Vite frontend with this native API, run in another PowerShell terminal
 from the repository root (clear both OIDC values to enable development login):
 

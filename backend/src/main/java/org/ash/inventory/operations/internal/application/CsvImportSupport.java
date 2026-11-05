@@ -171,8 +171,15 @@ public class CsvImportSupport {
             if (matches.isEmpty()) matches = values.stream().filter(item -> item.name.trim().toLowerCase(Locale.ROOT).equals(needle)).toList();
             if (matches.size() == 1) resolved = matches.getFirst().id.toString();
         } else if (value.startsWith("@location:")) {
-            var location = locationIndex().get(normalizeLocation(value.substring(10)));
+            String reference = value.substring(10);
+            var location = locationIndex().get(normalizeLocation(reference));
             if (location != null) resolved = location.id.toString();
+            else if (job.context.path("autoCreateLocations").asBoolean()) {
+                var segments = array();
+                for (String segment : reference.split("\\s*[/>\\\\]\\s*"))
+                    if (!segment.isBlank()) segments.add(segment.trim());
+                if (segments.size() > 1) resolved = locationPath(segments, true).toString();
+            }
         } else if (value.startsWith("@event:")) {
             String[] parts = value.substring(7).split(":", 2);
             if (parts.length == 2) resolved = catalog.getEvents(parts[0]).stream().filter(event -> event.startDate.equals(date(parts[1])))

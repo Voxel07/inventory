@@ -139,7 +139,8 @@ class CsvImportApiTest {
         var plan = plan("items");
         var row = item(1, owner);
         ((ObjectNode)row.path("data")).put("trackingMode", "lot_tracked");
-        row.putArray("storageLocationPath").add(owner + " building").add("shelf");
+        row.put("storageLocationId", "");
+        row.putArray("storageLocationPath").add(owner + " building").add("upstairs").add("rack").add("shelf");
         row.putArray("lots").addObject().put("lotNumber", "opening-lot").put("quantity", 3);
         plan.withArray("parsedItems").add(row);
         String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
@@ -150,6 +151,99 @@ class CsvImportApiTest {
                 .body("", hasSize(1)).extract().path("[0].id");
         request(owner).queryParam("itemId", itemId).get("/api/inventory-lots").then().statusCode(200)
                 .body("[0].lotNumber", equalTo("opening-lot")).body("[0].stock[0].onHand", equalTo(3));
+    }
+
+    @Test void operationsCreateAndResolveDeepLocationsAfterItemRows() {
+        String owner = "csv-path-" + UUID.randomUUID();
+        var plan = plan("combined");
+        var row = item(1, owner);
+        row.put("storageLocationId", "");
+        row.putArray("storageLocationPath").add(owner).add("upstairs").add("rack").add("shelf 1");
+        plan.withArray("parsedItems").add(row);
+        var operation = plan.withArray("parsedOperations").addObject().put("index", 2)
+                .put("name", owner + " stock").put("operation", "stock").put("status", "valid");
+        operation.putObject("data").put("itemId", "@item:" + owner).put("transactionType", "adjusted")
+                .put("quantityChanged", 3).put("reason", "CSV opening stock")
+                .put("locationId", "@location:" + owner + " / upstairs / rack / shelf 2");
+        String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        assertTrue(steps.next());
+        assertTrue(steps.next());
+        status(owner, id).then().body("status", equalTo("completed")).body("result.successItems", equalTo(1))
+                .body("result.successOperations", equalTo(1)).body("result.errors", hasSize(0));
+        request(owner).queryParam("search", "shelf 2").get("/api/storage-locations").then().statusCode(200)
+                .body("[0].hierarchyPath", equalTo(owner + " / upstairs / rack / shelf 2"));
+    }
+
+    @Test void missingOperationLocationsRespectDisabledAutoCreation() {
+        String owner = "csv-no-path-" + UUID.randomUUID();
+        var plan = plan("combined").put("autoCreateLocations", false);
+        plan.withArray("parsedItems").add(item(1, owner));
+        var operation = plan.withArray("parsedOperations").addObject().put("index", 2)
+                .put("name", owner + " stock").put("operation", "stock").put("status", "valid");
+        operation.putObject("data").put("itemId", "@item:" + owner).put("transactionType", "adjusted")
+                .put("quantityChanged", 3).put("reason", "CSV opening stock")
+                .put("locationId", "@location:" + owner + " / shelf");
+        String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        assertTrue(steps.next());
+        steps.failed(assertThrows(CsvImportSteps.RowFailure.class, () -> steps.next()));
+        status(owner, id).then().body("result.errors[0]", containsString("Reference could not be resolved"));
+        request(owner).queryParam("search", owner).get("/api/storage-locations").then().statusCode(200).body("", hasSize(0));
+    }
+
+    @Test void eventsAndBothOrderKindsResolveItemsFromTheSameUpload() {
+        String owner = "csv-event-" + UUID.randomUUID();
+        long date = java.time.Instant.parse("2026-01-17T00:00:00Z").toEpochMilli();
+        var plan = plan("combined");
+        plan.withArray("newFactions").addObject().put("id", "csv-faction-1").put("eventType", owner).put("name", "crew");
+        plan.withArray("parsedItems").add(item(1, owner));
+        var event = plan.withArray("parsedEvents").addObject().put("index", 2).put("status", "valid");
+        event.putObject("data").put("name", owner).put("eventType", owner).put("startDate", date)
+                .put("endDate", date).put("status", "planned");
+        event.putArray("plannedItems").addObject().put("itemId", "csv-new-1").put("quantity", 1);
+        for (String section : new String[]{"parsedOrders", "parsedGeneralOrders"}) {
+            var order = plan.withArray(section).addObject().put("index", 3).put("status", "valid")
+                    .put("targetStatus", "draft").put("eventType", owner).put("eventDate", date);
+            order.putObject("data").put("name", owner).put("purpose", "CSV regression")
+                    .put("eventType", owner).put("eventDate", date).put("faction", "crew");
+            order.putArray("requestedItems").addObject().put("itemId", "csv-new-1").put("quantity", 1);
+        }
+        String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        for (int i = 0; i < 5; i++) assertTrue(steps.next());
+        status(owner, id).then().body("status", equalTo("completed")).body("result.successEvents", equalTo(1))
+                .body("result.successOrders", equalTo(1)).body("result.successGeneralOrders", equalTo(1))
+                .body("result.errors", hasSize(0));
+    }
+
+    @Test void reimportDoesNotRepeatPartialOrderReturns() {
+        String owner = "CSV-PARTIAL-" + UUID.randomUUID().toString().toUpperCase(java.util.Locale.ROOT);
+        long date = java.time.Instant.parse("2026-01-17T00:00:00Z").toEpochMilli();
+        var plan = plan("combined");
+        var row = item(1, owner);
+        ((ObjectNode)row.path("data")).put("amount", 5);
+        row.put("storageLocationId", "");
+        row.putArray("storageLocationPath").add(owner).add("shelf");
+        plan.withArray("parsedItems").add(row);
+        var order = plan.withArray("parsedGeneralOrders").addObject().put("index", 2).put("status", "valid")
+                .put("targetStatus", "partially_returned").put("eventType", owner).put("eventDate", date);
+        order.putObject("data").put("name", owner).put("purpose", "Partial return regression");
+        order.putArray("requestedItems").addObject().put("itemId", "csv-new-1").put("quantity", 3);
+        order.putArray("returnedItems").addObject().put("itemId", "csv-new-1").put("quantity", 2);
+        String first = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        assertTrue(steps.next());
+        assertTrue(steps.next());
+        status(owner, first).then().body("result.errors", hasSize(0));
+        String itemId = request(owner).queryParam("search", owner).get("/api/items").then().statusCode(200).extract().path("[0].id");
+        ((ObjectNode)order.path("requestedItems").get(0)).put("itemId", itemId);
+        ((ObjectNode)order.path("returnedItems").get(0)).put("itemId", itemId);
+        var repeat = plan("combined");
+        repeat.withArray("parsedGeneralOrders").add(order.deepCopy());
+        String second = request(owner).body(upload(repeat)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        assertTrue(steps.next());
+        status(owner, second).then().body("status", equalTo("completed")).body("result.successGeneralOrders", equalTo(1))
+                .body("result.errors", hasSize(0));
+        var saved = request(owner).queryParam("search", owner).get("/api/orders/general").then().statusCode(200)
+                .body("", hasSize(1)).body("[0].status", equalTo("partially_returned")).extract().response();
+        assertEquals(Map.of(itemId, 2), saved.path("[0].returnedQuantities"));
     }
 
     private ObjectNode plan(String tab) {

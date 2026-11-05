@@ -44,6 +44,7 @@ public class CsvImportService {
         job.totalRows = plan.rows();
         job.totalSteps = plan.work().size();
         job.context = JsonNodeFactory.instance.objectNode();
+        job.context.put("autoCreateLocations", upload.plan().path("autoCreateLocations").asBoolean());
         orm.persist(job);
         return view(job);
     }

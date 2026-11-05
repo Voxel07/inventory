@@ -31,7 +31,7 @@ public class CsvImportOrders {
         var quantities = csv.quantities(job, row.path("requestedItems"));
         data.set("requestedQuantities", quantities);
         data.put("idempotencyKey", key(job, row, "create").toString());
-        var existing = CsvImportSupport.all((page, size) -> queries.orders(null, null, null, null, null, page, size)).stream()
+        var existing = CsvImportSupport.all((page, size) -> queries.orders(null, null, null, List.of(), null, page, size)).stream()
                 .filter(order -> order.eventType().equals(data.path("eventType").asText())
                         && order.faction().equalsIgnoreCase(data.path("faction").asText())
                         && EpochTime.millis(order.eventDate()) == data.path("eventDate").asLong()
@@ -55,8 +55,9 @@ public class CsvImportOrders {
             if (Set.of("returned", "closed").contains(target)
                     && Set.of(DomainEnums.OrderStatus.picked_up, DomainEnums.OrderStatus.partially_returned).contains(order.status))
                 order = orders.returnAll(order.id, key(job, row, "return-all"));
-            else if (target.equals("partially_returned") && order.status == DomainEnums.OrderStatus.picked_up)
-                order = returnQuantities(job, row, order.id, csv.quantities(job, row.path("returnedItems")));
+            else if (target.equals("partially_returned")
+                    && Set.of(DomainEnums.OrderStatus.picked_up, DomainEnums.OrderStatus.partially_returned).contains(order.status))
+                order = returnQuantities(job, row, order.id, csv.quantities(job, row.path("returnedItems")), true);
             if (target.equals("closed") && order.status == DomainEnums.OrderStatus.returned) order = transition(job, row, order, "closed");
         }
         requireTarget(order, target);
@@ -91,14 +92,14 @@ public class CsvImportOrders {
             order = transition(job, row, order, "picked_up");
         if (Set.of("partially_returned", "returned", "closed").contains(target) && row.path("returnedItems").size() > 0
                 && Set.of(DomainEnums.OrderStatus.picked_up, DomainEnums.OrderStatus.partially_returned).contains(order.status))
-            order = returnQuantities(job, row, order.id, csv.quantities(job, row.path("returnedItems")));
+            order = returnQuantities(job, row, order.id, csv.quantities(job, row.path("returnedItems")), true);
         if (target.equals("closed") && order.status == DomainEnums.OrderStatus.returned) order = transition(job, row, order, "closed");
         requireTarget(order, target);
         csv.increment(job, "successGeneralOrders");
     }
 
     private List<ApiResponses.GeneralOrderSummaryResponse> generalOrders() {
-        return CsvImportSupport.all((page, size) -> queries.generalOrders(new OrderOrm.Filter(null, null, null, null), page, size));
+        return CsvImportSupport.all((page, size) -> queries.generalOrders(new OrderOrm.Filter(List.of(), null, null, null), page, size));
     }
 
     private void requireTarget(InventoryOrder order, String target) {
@@ -132,7 +133,7 @@ public class CsvImportOrders {
         return orders.transition(order.id, DomainEnums.OrderStatus.valueOf(status), csv.input(data, ApiModels.TransitionInput.class));
     }
 
-    private InventoryOrder returnQuantities(CsvImportJob job, JsonNode row, UUID id, ObjectNode quantities) {
+    private InventoryOrder returnQuantities(CsvImportJob job, JsonNode row, UUID id, ObjectNode quantities, boolean cumulative) {
         if (quantities.isEmpty()) throw ApiException.badRequest("Returned quantities are missing");
         var order = csv.json(queries.orderDetail(id));
         var input = csv.object().put("idempotencyKey", key(job, row, "return").toString());
@@ -140,6 +141,9 @@ public class CsvImportOrders {
         var returnedAssets = input.putObject("assets");
         for (var entry : quantities.properties()) {
             int quantity = entry.getValue().asInt();
+            // Order preview rows describe the desired total; standalone return rows are individual movements.
+            if (cumulative) quantity -= order.path("returnedQuantities").path(entry.getKey()).asInt();
+            if (quantity <= 0) continue;
             lines.putObject(entry.getKey()).put("returned", quantity).put("damaged", 0).put("missing", 0).put("writtenOff", 0);
             int selected = 0;
             for (var assetId : order.path("assetAssignments").path(entry.getKey())) {
@@ -150,7 +154,7 @@ public class CsvImportOrders {
                 }
             }
         }
-        return orders.returnItems(id, csv.input(input, ApiModels.ReturnInput.class));
+        return lines.isEmpty() ? catalog.find(InventoryOrder.class, id) : orders.returnItems(id, csv.input(input, ApiModels.ReturnInput.class));
     }
 
     public void standaloneReturn(CsvImportJob job, JsonNode row) {
@@ -163,7 +167,7 @@ public class CsvImportOrders {
             if (matching.size() != 1) throw ApiException.badRequest("General order not found or ambiguous");
             var order = matching.getFirst();
             if (Set.of("returned", "closed").contains(order.status())) return;
-            returnQuantities(job, row, order.id(), csv.object().put(itemId.toString(), quantity));
+            returnQuantities(job, row, order.id(), csv.object().put(itemId.toString(), quantity), false);
         } else if (catalog.getVisibleItem(itemId).trackingMode == DomainEnums.TrackingMode.serialized) {
             var assets = assets(itemId);
             if (row.path("assetCodes").size() != quantity) throw ApiException.badRequest("Asset codes must match the return quantity");

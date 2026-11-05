@@ -57,7 +57,7 @@ public class CsvImportRows {
 
     private void item(CsvImportJob job, JsonNode row) {
         var data = csv.copy(row.path("data"));
-        if (row.path("storageLocationPath").isArray() && !row.path("storageLocationId").isTextual()) {
+        if (row.path("storageLocationPath").isArray() && row.path("storageLocationId").asText().isBlank()) {
             var location = csv.locationPath(row.path("storageLocationPath"), row.path("autoCreateLocations").asBoolean());
             if (location != null) data.put("storageLocation", location.toString());
         }
