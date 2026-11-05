@@ -33,7 +33,7 @@ public class StockManagementResource {
     }
 
     @PUT @Path("/inventory-lots/{id}") @jakarta.transaction.Transactional
-    public StockDtos.LotResponse updateLot(@PathParam("id") UUID id, @Valid StockDtos.LotInput input) {
+    public StockDtos.LotResponse updateLot(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid StockDtos.LotInput input) {
         return lots(List.of(service.updateLot(id, input))).getFirst();
     }
 

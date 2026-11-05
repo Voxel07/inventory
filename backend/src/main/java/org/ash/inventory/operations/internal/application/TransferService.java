@@ -271,7 +271,7 @@ public class TransferService {
                     destination.lot = line.lot;
                     orm.persist(destination);
                 }
-                destination.quantityOnHand += input.receivedQuantity();
+                destination.quantityOnHand = org.ash.inventory.platform.api.Inputs.addQuantity(destination.quantityOnHand, input.receivedQuantity());
             }
         }
         line.receivedQuantity += input.receivedQuantity();

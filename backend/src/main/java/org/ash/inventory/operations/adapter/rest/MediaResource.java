@@ -56,7 +56,8 @@ public class MediaResource {
     }
 
     @GET @Path("/{key:.+}")
-    public Response get(@PathParam("key") String key) {
+    public Response get(@PathParam("key") @org.ash.inventory.platform.api.InputText(max = 1000) String key) {
+        blobs.mediaReference(key);
         permissions.requireRead(key);
         var content = blobs.read(key);
         var context = io.opentelemetry.context.Context.current();
@@ -80,7 +81,7 @@ public class MediaResource {
     }
 
     @DELETE @Path("/{key:.+}")
-    public Response deleteStaged(@PathParam("key") String key) {
+    public Response deleteStaged(@PathParam("key") @org.ash.inventory.platform.api.InputText(max = 1000) String key) {
         actors.current();
         media.deleteStaged(key);
         return Response.noContent().build();

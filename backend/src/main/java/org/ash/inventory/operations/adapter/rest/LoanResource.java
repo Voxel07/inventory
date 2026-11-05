@@ -11,8 +11,8 @@ import java.util.*;
 public class LoanResource {
     @Inject LoanService service;
     @Paged @GET public List<LoanService.View> list(@QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) { return service.list(page, size); }
-    @POST public LoanService.View create(@Valid LoanService.Input input) { return service.create(input); }
-    @POST @Path("/{id}/collect") public LoanService.View collect(@PathParam("id") UUID id, @Valid LoanService.Movement input) { return service.move(id, input, false); }
-    @POST @Path("/{id}/return") public LoanService.View giveBack(@PathParam("id") UUID id, @Valid LoanService.Movement input) { return service.move(id, input, true); }
-    @POST @Path("/{id}/extend") public LoanService.View extend(@PathParam("id") UUID id, @Valid LoanService.Extension input) { return service.extend(id, input); }
+    @POST public LoanService.View create(@jakarta.validation.constraints.NotNull @Valid LoanService.Input input) { return service.create(input); }
+    @POST @Path("/{id}/collect") public LoanService.View collect(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid LoanService.Movement input) { return service.move(id, input, false); }
+    @POST @Path("/{id}/return") public LoanService.View giveBack(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid LoanService.Movement input) { return service.move(id, input, true); }
+    @POST @Path("/{id}/extend") public LoanService.View extend(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid LoanService.Extension input) { return service.extend(id, input); }
 }

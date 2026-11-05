@@ -15,5 +15,5 @@ public class HandoverResource {
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         if (orderId == null) throw ApiException.badRequest("orderId is required"); return service.list(orderId, page, size);
     }
-    @POST @Path("/{id}/evidence") public HandoverEvidenceService.Evidence record(@PathParam("id") UUID id, @Valid HandoverEvidenceService.Input input) { return service.record(id, input); }
+    @POST @Path("/{id}/evidence") public HandoverEvidenceService.Evidence record(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid HandoverEvidenceService.Input input) { return service.record(id, input); }
 }

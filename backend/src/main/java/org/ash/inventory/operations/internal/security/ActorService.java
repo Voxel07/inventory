@@ -147,6 +147,9 @@ public class ActorService {
             throw new ApiException(401, "Authentication required");
         }
 
+        for (var value : new String[]{issuer, subject, name, email})
+            if (value != null && (value.length() > 255 || value.indexOf('\0') >= 0))
+                throw new ApiException(401, "Identity fields are invalid or too long");
         cached = users.findByIdentity(issuer, subject);
         if (cached != null && !cached.active) throw ApiException.forbidden("This inventory account is deactivated");
         boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email);

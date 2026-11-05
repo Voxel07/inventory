@@ -1,5 +1,6 @@
 import { Chip, Button, Tab } from '../shared/ActionButtons';
 import { buildCsvImportPlan } from '../../utils/csv/importPlan';
+import { MAX_CSV_BYTES } from '../../utils/csv/core';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditEvents, canViewOrganization } from '../../utils/access';
 import { getEventTypes, getFactions } from '../../services/referenceDataService';
@@ -107,10 +108,16 @@ export function CsvImportDialog({
     }
   }, [selectedJob, queryClient]);
 
-  const { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
-    () => buildCsvImportPlan({ csvContent: catalogComplete ? csvContent : '', tabType, items, assemblies, storageLocations, updateExistingItems,
-      reference: { eventTypes: catalog.data?.eventTypes ?? [], factions: catalog.data?.factions ?? [] },
-      autoCreateReferences: canCreateReferences && autoCreateReferences }),
+  const { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, totalErrorsCount, totalDuplicatesCount, totalToImport, parseError } = useMemo(
+    () => {
+      const input = { csvContent: catalogComplete ? csvContent : '', tabType, items, assemblies, storageLocations, updateExistingItems,
+        reference: { eventTypes: catalog.data?.eventTypes ?? [], factions: catalog.data?.factions ?? [] },
+        autoCreateReferences: canCreateReferences && autoCreateReferences };
+      try { return { ...buildCsvImportPlan(input), parseError: '' }; }
+      catch (error) {
+        return { ...buildCsvImportPlan({ ...input, csvContent: '' }), parseError: error instanceof Error ? error.message : String(error) };
+      }
+    },
     [csvContent, tabType, items, assemblies, storageLocations, updateExistingItems, catalogComplete, catalog.data, canCreateReferences, autoCreateReferences],
   );
 
@@ -141,6 +148,11 @@ export function CsvImportDialog({
   }
 
   function handleFileSelected(file: File) {
+    if (file.size > MAX_CSV_BYTES) {
+      setCsvContent('');
+      setUploadError(t('inputSecurity.csvTooLarge'));
+      return;
+    }
     setItemSearch('');
     setAssemblySearch('');
     setFileName(file.name);
@@ -235,6 +247,7 @@ export function CsvImportDialog({
 
       <DialogContent sx={{ pt: 1 }}>
         {uploadError && <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert>}
+        {parseError && <Alert severity="error" sx={{ mb: 2 }}>{parseError}</Alert>}
         {jobs.isError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => void jobs.refetch()}>{t('common.retry')}</Button>}>
           {t('dialogs.csvImportDialog.backgroundLoadFailed')}
         </Alert>}
@@ -244,7 +257,7 @@ export function CsvImportDialog({
             {jobs.data.map((job) => (
               <Box key={job.id} sx={{ mb: 1 }}>
                 <Button size="small" onClick={() => { setSelectedJobId(job.id); setHiddenResultId(null); }}>
-                  {job.filename} — {t(`dialogs.csvImportDialog.jobStatus.${job.status}`)} ({job.processedRows} / {job.totalRows})
+                  {job.filename} â€” {t(`dialogs.csvImportDialog.jobStatus.${job.status}`)} ({job.processedRows} / {job.totalRows})
                 </Button>
                 {csvImportRunning(job) && <LinearProgress variant="determinate" value={job.progress} aria-label={job.filename} />}
               </Box>
@@ -364,7 +377,7 @@ export function CsvImportDialog({
                     value={csvContent}
                     onChange={(e) => {
                       setCsvContent(e.target.value);
-                      setFileName('Eingefügter Text');
+                      setFileName('EingefÃ¼gter Text');
                     }}
                   />
                 </Box>

@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.contract.dto;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.operations.internal.model.DomainEnums;
 
 import jakarta.validation.constraints.NotBlank;
@@ -15,7 +17,7 @@ public final class StockDtos {
      * A lot exists only with stock: it is created by the stock booking (added/adjusted transaction or goods receipt)
      * that brings its first units in, for that booking's item. Also the shape of a lot update; the item never changes.
      */
-    public record LotInput(@NotBlank String lotNumber, LocalDate expiryDate, DomainEnums.LotStatus status) {}
+    public record LotInput(@NotBlank @InputText String lotNumber, LocalDate expiryDate, DomainEnums.LotStatus status) {}
     /**
      * {@code stock}: one row per location holding the lot. {@code empty}: nothing on hand or in transit, which is
      * computed and independent of the eligibility {@code status}.

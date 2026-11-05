@@ -165,6 +165,12 @@ public class CatalogService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public List<Item> saveItems(List<ApiModels.ItemBatchEntry> entries) {
+        long assets = entries.stream().mapToLong(entry -> {
+            long codes = entry.assetCodes() == null ? 0 : entry.assetCodes().size();
+            return codes + (entry.id() == null && entry.item().trackingMode() == DomainEnums.TrackingMode.serialized
+                    && entry.item().amount() != null ? entry.item().amount() : 0);
+        }).sum();
+        if (assets > 1000) throw ApiException.badRequest("Create at most 1000 serialized assets per batch");
         var saved = new ArrayList<Item>(entries.size());
         for (int index = 0; index < entries.size(); index++) {
             var entry = entries.get(index);
@@ -244,11 +250,15 @@ public class CatalogService {
         if (codePattern && item.trackingMode != DomainEnums.TrackingMode.serialized)
             throw ApiException.badRequest("Asset code generation only applies to serialized items");
         if (item.trackingMode == DomainEnums.TrackingMode.serialized && initialAmount > 0) {
+            if (initialAmount > 1000) throw ApiException.badRequest("Create at most 1000 serialized assets per item at a time");
             String prefix = input.assetCodePrefix() != null && !input.assetCodePrefix().isBlank()
                     ? input.assetCodePrefix().trim().toUpperCase(Locale.ROOT) : item.sku + "-";
             int start = input.assetStartNumber() == null ? 1 : input.assetStartNumber();
-            for (int i = start; i < start + initialAmount; i++) {
-                String code = String.format("%s%03d", prefix, i);
+            if ((long) start + initialAmount - 1 > Integer.MAX_VALUE)
+                throw ApiException.badRequest("Asset number range is too large");
+            for (int index = 0; index < initialAmount; index++) {
+                String code = String.format("%s%03d", prefix, (long) start + index);
+                if (code.length() > 255) throw ApiException.badRequest("Generated asset code is too long");
                 if (orm.assetCodeExists(code)) throw ApiException.conflict("Asset code " + code + " already exists");
                 var asset = new AssetInstance();
                 asset.item = item;
@@ -558,6 +568,13 @@ public class CatalogService {
     }
 
     private void apply(StorageLocation target, StorageLocation parent, ApiModels.StorageLocationInput input) {
+        if ((input.latitude() == null) != (input.longitude() == null))
+            throw ApiException.badRequest("Latitude and longitude must be supplied together");
+        if (input.overlayBounds() != null) for (var corner : input.overlayBounds()) {
+            double latitude = corner.get(0), longitude = corner.get(1);
+            if (!Double.isFinite(latitude) || !Double.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180)
+                throw ApiException.badRequest("Overlay bounds must contain valid latitude/longitude pairs");
+        }
         if (input.privateResource() != null && input.privateResource() != (target.accessPolicy != null))
             throw ApiException.badRequest("Privacy cannot be changed through location edits");
         target.name = input.name().trim();

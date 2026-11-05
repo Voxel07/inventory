@@ -26,6 +26,7 @@ public class InventoryReceiptService {
     @Inject ItemLocks itemLocks;
     @Inject ActorService actors;
     @Inject CategoryMaintenanceService categoryDefaults;
+    @Inject StockReadService stockReads;
     public record ReceiptStock(UUID id, String receiptNumber, UUID idempotencyKey, UUID lineId,
             UUID itemId, UUID lotId, UUID locationId, int receivedQuantity, int damagedQuantity, List<String> assetCodes) {
         public ReceiptStock { assetCodes = assetCodes == null ? List.of() : List.copyOf(assetCodes); }
@@ -37,6 +38,8 @@ public class InventoryReceiptService {
         actors.requireWarehouse();
         itemLocks.lock(lines.stream().map(ReceiptStock::itemId).distinct().toList());
         lines.forEach(this::receiveLine);
+        for (var id : lines.stream().map(ReceiptStock::itemId).distinct().toList())
+            stockReads.physicalStock(orm.require(Item.class, id, "Item"));
     }
     private void receiveLine(ReceiptStock input) {
         if (input.receivedQuantity() < 0 || input.damagedQuantity() < 0
@@ -83,8 +86,8 @@ public class InventoryReceiptService {
                 position.lot = line.lot;
                 orm.persist(position);
             }
-            position.quantityOnHand += stockReceived;
-            position.quantityDamaged += line.damagedQuantity;
+            position.quantityOnHand = org.ash.inventory.platform.api.Inputs.addQuantity(position.quantityOnHand, stockReceived);
+            position.quantityDamaged = org.ash.inventory.platform.api.Inputs.addQuantity(position.quantityDamaged, line.damagedQuantity);
             appendTransaction(receipt, line, null, location, DomainEnums.TransactionType.received,
                     stockReceived, derivedKey(receipt.idempotencyKey(), receipt.lineId() + ":received"), actor);
             if (line.damagedQuantity > 0) recordReceiptDamage(receipt, line, null, actor, 0);

@@ -55,11 +55,11 @@ public class EventLogisticsResource {
 
     @POST @Path("/event-people")
 
-    public PersonResponse createPerson(@Valid PersonInput input) { return service.savePerson(null, input); }
+    public PersonResponse createPerson(@jakarta.validation.constraints.NotNull @Valid PersonInput input) { return service.savePerson(null, input); }
 
     @PUT @Path("/event-people/{id}")
 
-    public PersonResponse updatePerson(@PathParam("id") UUID id, @Valid PersonInput input) { return service.savePerson(id, input); }
+    public PersonResponse updatePerson(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid PersonInput input) { return service.savePerson(id, input); }
 
     @DELETE @Path("/event-people/{id}")
 
@@ -81,7 +81,7 @@ public class EventLogisticsResource {
 
     @POST @Path("/events/{eventId}/attendees")
 
-    public AttendeeResponse createAttendee(@PathParam("eventId") UUID eventId, @Valid AttendeeInput input) {
+    public AttendeeResponse createAttendee(@PathParam("eventId") UUID eventId, @jakarta.validation.constraints.NotNull @Valid AttendeeInput input) {
 
         return service.saveAttendee(eventId, null, input);
 
@@ -89,7 +89,7 @@ public class EventLogisticsResource {
 
     @PUT @Path("/events/{eventId}/attendees/{id}")
 
-    public AttendeeResponse updateAttendee(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @Valid AttendeeInput input) {
+    public AttendeeResponse updateAttendee(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid AttendeeInput input) {
 
         return service.saveAttendee(eventId, id, input);
 
@@ -115,7 +115,7 @@ public class EventLogisticsResource {
 
     @PUT @Path("/events/{eventId}/catering")
 
-    public CateringSettings saveCatering(@PathParam("eventId") UUID eventId, @Valid CateringSettings settings) {
+    public CateringSettings saveCatering(@PathParam("eventId") UUID eventId, @jakarta.validation.constraints.NotNull @Valid CateringSettings settings) {
 
         return service.saveCateringSettings(eventId, settings);
 
@@ -123,7 +123,7 @@ public class EventLogisticsResource {
 
     @POST @Path("/events/{eventId}/timeline")
 
-    public TimelineResponse createTimeline(@PathParam("eventId") UUID eventId, @Valid TimelineInput input) {
+    public TimelineResponse createTimeline(@PathParam("eventId") UUID eventId, @jakarta.validation.constraints.NotNull @Valid TimelineInput input) {
 
         return service.saveTimeline(eventId, null, input);
 
@@ -131,7 +131,7 @@ public class EventLogisticsResource {
 
     @PUT @Path("/events/{eventId}/timeline/{id}")
 
-    public TimelineResponse updateTimeline(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @Valid TimelineInput input) {
+    public TimelineResponse updateTimeline(@PathParam("eventId") UUID eventId, @PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid TimelineInput input) {
 
         return service.saveTimeline(eventId, id, input);
 

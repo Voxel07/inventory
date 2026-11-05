@@ -47,21 +47,21 @@ public class ReturnSubmissionResource {
 
     @POST
     @Transactional
-    public ApiResponses.ReturnSubmissionResponse create(@Valid ApiModels.ReturnSubmissionInput input) {
+    public ApiResponses.ReturnSubmissionResponse create(@jakarta.validation.constraints.NotNull @Valid ApiModels.ReturnSubmissionInput input) {
         return response(service.create(input));
     }
 
     @POST @Path("/{id}/acknowledge")
     @Transactional
     public ApiResponses.ReturnSubmissionResponse acknowledge(@PathParam("id") UUID id,
-            ApiModels.ReturnDecisionInput input) {
+            @Valid ApiModels.ReturnDecisionInput input) {
         return response(service.acknowledge(id, input));
     }
 
     @POST @Path("/{id}/reject")
     @Transactional
     public ApiResponses.ReturnSubmissionResponse reject(@PathParam("id") UUID id,
-            ApiModels.ReturnDecisionInput input) {
+            @Valid ApiModels.ReturnDecisionInput input) {
         return response(service.reject(id, input));
     }
 }

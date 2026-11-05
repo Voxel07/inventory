@@ -15,7 +15,11 @@ public final class EpochTime {
     public static LocalDate date(long millis) {
         var instant = Instant.ofEpochMilli(millis);
         var date = instant.atOffset(ZoneOffset.UTC).toLocalDate();
-        if (millis(date) != millis) throw new IllegalArgumentException("Calendar dates must be midnight UTC epoch milliseconds");
+        try {
+            if (millis(date) != millis) throw new IllegalArgumentException("Calendar dates must be midnight UTC epoch milliseconds");
+        } catch (ArithmeticException invalid) {
+            throw new IllegalArgumentException("Calendar date is outside the supported range");
+        }
         return date;
     }
 }

@@ -11,6 +11,6 @@ import java.util.UUID;
 public class AccountLifecycleResource {
     @Inject AccountLifecycleService service;
     @GET public AccountLifecycleService.Overview overview(@PathParam("id") UUID id) { return service.overview(id); }
-    @PATCH public void status(@PathParam("id") UUID id, @Valid AccountLifecycleService.StatusInput input) { service.status(id, input); }
-    @POST @Path("/transfer") public AccountLifecycleService.TransferResult transfer(@PathParam("id") UUID id, @Valid AccountLifecycleService.TransferInput input) { return service.transfer(id, input); }
+    @PATCH public void status(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid AccountLifecycleService.StatusInput input) { service.status(id, input); }
+    @POST @Path("/transfer") public AccountLifecycleService.TransferResult transfer(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid AccountLifecycleService.TransferInput input) { return service.transfer(id, input); }
 }

@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.notification.api.NotificationService;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -27,8 +29,8 @@ public class OrderPickupService {
     @Inject ActorService actors;
     @Inject DomainEventService events;
 
-    public record Input(@Size(max = 2000) Map<String, PickupAssignment> assignments) {}
-    public record ResponsibilityInput(UUID responsiblePersonId, @Size(max = 255) String responsiblePersonName) {}
+    public record Input(@Size(max = 2000) Map<@jakarta.validation.constraints.NotNull @InputText String, @jakarta.validation.constraints.NotNull @jakarta.validation.Valid PickupAssignment> assignments) {}
+    public record ResponsibilityInput(UUID responsiblePersonId, @InputText String responsiblePersonName) {}
     public record Responsibility(UUID responsiblePersonId, String responsiblePersonName) {}
     public record Line(UUID itemId, String name, int ordered, int prepared) {}
     public record Group(String key, String name, UUID responsiblePersonId, String responsiblePersonName,

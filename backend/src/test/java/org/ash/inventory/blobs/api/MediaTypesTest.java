@@ -25,5 +25,8 @@ class MediaTypesTest {
         assertEquals("upload.pdf", MediaTypes.fileName(null, "application/pdf"));
         assertEquals("application/pdf", MediaTypes.fromKey("vendor-documents/x/upload.pdf"));
         assertEquals("application/octet-stream", MediaTypes.fromKey("legacy.gif"));
+        assertEquals("photo.webp", MediaTypes.fileName("../../photo.html", "image/webp"));
+        assertEquals("photo.webp", MediaTypes.fileName("C:\\uploads\\photo.html", "image/webp"));
+        assertEquals(185, MediaTypes.fileName("x".repeat(500) + ".png", "image/webp").length());
     }
 }

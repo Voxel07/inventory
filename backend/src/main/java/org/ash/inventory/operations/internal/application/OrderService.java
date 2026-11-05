@@ -719,7 +719,9 @@ public class OrderService {
                 var assembly = orm.require(Assembly.class, entry.getKey(), "Assembly");
                 if (!assembly.active) throw ApiException.notFound("Assembly not found");
                 for (var component : orm.assemblyItems(assembly)) {
-                    addLine(order, component.item, assembly, component.quantity * entry.getValue());
+                    long quantity = (long) component.quantity * entry.getValue();
+                    if (quantity > Integer.MAX_VALUE) throw ApiException.badRequest("Assembly quantity is too large");
+                    addLine(order, component.item, assembly, (int) quantity);
                     count++;
                 }
             }
@@ -801,6 +803,11 @@ public class OrderService {
 
     private void addLine(InventoryOrder order, Item item, Assembly assembly, int quantity) {
         actors.requireItemAccess(item);
+        if (quantity < 1 || order.lines.size() >= 2000)
+            throw ApiException.badRequest("Orders allow at most 2000 lines with positive quantities");
+        long total = quantity + order.lines.stream().filter(line -> line.item.id.equals(item.id))
+                .mapToLong(line -> line.requestedQuantity).sum();
+        if (total > Integer.MAX_VALUE) throw ApiException.badRequest("Total requested quantity is too large");
         var line = new OrderLine();
         line.order = order;
         line.item = item;

@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.InventoryAccessGroup;
@@ -25,12 +27,12 @@ public class AccountLifecycleService {
     @Inject DomainEventService events;
     @Inject CustodyBalanceService custody;
     @Inject InventoryAccessService access;
-    public record StatusInput(@NotNull Boolean active, @NotNull Long revision, @NotBlank @Size(max=1000) String reason) {}
+    public record StatusInput(@NotNull Boolean active, @NotNull Long revision, @NotBlank @InputText(max = 1000) String reason) {}
     public record Resource(UUID policyId, String kind, UUID id, String name) {}
     public record Overview(boolean active, long revision, Instant deactivatedAt, long keeperAssignments,
             List<CustodyBalanceService.Balance> custody, List<Resource> resources, boolean moreResources) {}
     public record TransferInput(@NotNull UUID successorId, @NotEmpty @Size(max=200) List<@NotNull UUID> policyIds,
-            @NotBlank @Size(max=1000) String reason) {}
+            @NotBlank @InputText(max = 1000) String reason) {}
     public record TransferResult(List<UUID> transferred, Map<UUID, String> blocked) {}
 
     @Transactional

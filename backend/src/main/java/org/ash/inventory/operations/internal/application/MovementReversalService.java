@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -22,7 +24,7 @@ public class MovementReversalService {
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.StockReadService stockReads;
     @Inject EntityManager em; @Inject ActorService actors; @Inject InventoryOperationsService inventory;
     @Inject PositionService positions; @Inject DomainEventService events;
-    public record Input(@NotNull UUID commandId,@NotBlank @Size(max=255) String reason) {}
+    public record Input(@NotNull UUID commandId,@NotBlank @InputText String reason) {}
     public StockTransaction reverse(UUID id,Input input) {
         actors.requireAdmin(); var original=em.find(StockTransaction.class,id);
         if(original==null)throw ApiException.notFound("Movement not found");

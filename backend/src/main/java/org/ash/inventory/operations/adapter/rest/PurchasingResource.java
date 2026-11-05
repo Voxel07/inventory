@@ -32,21 +32,21 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/vendors")
     public List<PurchasingDtos.VendorResponse> vendors(
-            @QueryParam("search") String search,
+            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return service.vendors(search, page, size);
     }
 
     @POST @Path("/vendors")
-    public Response createVendor(@Valid PurchasingDtos.VendorInput input) {
+    public Response createVendor(@jakarta.validation.constraints.NotNull @Valid PurchasingDtos.VendorInput input) {
         var created = service.createVendor(input);
         return Response.created(URI.create("/api/vendors/" + created.id())).entity(created).build();
     }
 
     @PUT @Path("/vendors/{id}")
     public PurchasingDtos.VendorResponse updateVendor(@PathParam("id") UUID id,
-            @Valid PurchasingDtos.VendorInput input) {
+            @jakarta.validation.constraints.NotNull @Valid PurchasingDtos.VendorInput input) {
         return service.updateVendor(id, input);
     }
 
@@ -58,27 +58,27 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/purchase-orders")
     public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(
-            @QueryParam("status") String status,
+            @QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return service.purchaseOrders(status, page, size);
     }
 
     @POST @Path("/purchase-orders")
-    public Response createPurchaseOrder(@Valid PurchasingDtos.PurchaseOrderInput input) {
+    public Response createPurchaseOrder(@jakarta.validation.constraints.NotNull @Valid PurchasingDtos.PurchaseOrderInput input) {
         var created = service.createPurchaseOrder(input);
         return Response.created(URI.create("/api/purchase-orders/" + created.id())).entity(created).build();
     }
 
     @PUT @Path("/purchase-orders/{id}")
     public PurchasingDtos.PurchaseOrderResponse updatePurchaseOrder(@PathParam("id") UUID id,
-            @Valid PurchasingDtos.PurchaseOrderInput input) {
+            @jakarta.validation.constraints.NotNull @Valid PurchasingDtos.PurchaseOrderInput input) {
         return service.updatePurchaseOrder(id, input);
     }
 
     @POST @Path("/purchase-orders/{id}/transitions")
     public PurchasingDtos.PurchaseOrderResponse transitionPurchaseOrder(@PathParam("id") UUID id,
-            @Valid PurchasingDtos.PurchaseOrderTransitionInput input) {
+            @jakarta.validation.constraints.NotNull @Valid PurchasingDtos.PurchaseOrderTransitionInput input) {
         return service.transitionPurchaseOrder(id, input);
     }
 
@@ -91,7 +91,7 @@ public class PurchasingResource {
     }
 
     @POST @Path("/goods-receipts")
-    public Response postReceipt(@Valid PurchasingDtos.GoodsReceiptInput input) {
+    public Response postReceipt(@jakarta.validation.constraints.NotNull @Valid PurchasingDtos.GoodsReceiptInput input) {
         var created = service.postReceipt(input);
         return Response.created(URI.create("/api/goods-receipts/" + created.id())).entity(created).build();
     }
@@ -106,7 +106,7 @@ public class PurchasingResource {
     }
 
     @POST @Path("/vendor-documents")
-    public Response attachDocument(@Valid PurchasingDtos.VendorDocumentInput input) {
+    public Response attachDocument(@jakarta.validation.constraints.NotNull @Valid PurchasingDtos.VendorDocumentInput input) {
         var created = service.attachDocument(input);
         return Response.created(URI.create("/api/vendor-documents/" + created.id())).entity(created).build();
     }

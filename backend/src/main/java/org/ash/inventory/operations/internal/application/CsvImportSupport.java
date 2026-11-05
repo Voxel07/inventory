@@ -44,6 +44,7 @@ public class CsvImportSupport {
     }
 
     public <T> T input(JsonNode data, Class<T> type) {
+        if (data == null || !data.isObject()) throw ApiException.badRequest("Import input must be an object");
         T value;
         try { value = mapper.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(data); }
         catch (java.io.IOException | IllegalArgumentException invalid) { throw ApiException.badRequest("Invalid " + type.getSimpleName() + " fields"); }
@@ -73,13 +74,21 @@ public class CsvImportSupport {
     public void increment(CsvImportJob job, String field) { job.result.put(field, job.result.path(field).asInt() + 1); }
     public ObjectNode quantities(CsvImportJob job, JsonNode components) {
         var result = object();
+        if (components.isMissingNode() || components.isNull()) return result;
+        if (!components.isArray() || components.size() > 2000) throw ApiException.badRequest("Provide at most 2000 components");
         for (var component : components) {
             String key = itemId(job, component.path("itemId")).toString();
-            int quantity = component.path("quantity").asInt();
+            int quantity = integer(component.path("quantity"));
             if (quantity <= 0) throw ApiException.badRequest("Component quantity must be positive");
-            result.put(key, Math.addExact(result.path(key).asInt(), quantity));
+            result.put(key, org.ash.inventory.platform.api.Inputs.addQuantity(result.path(key).asInt(), quantity));
         }
         return result;
+    }
+
+    public static int integer(JsonNode value) {
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToInt())
+            throw ApiException.badRequest("CSV quantities must be whole numbers in the supported range");
+        return value.intValue();
     }
 
     public static <T> List<T> all(BiFunction<Integer, Integer, List<T>> load) {
@@ -117,6 +126,8 @@ public class CsvImportSupport {
     }
 
     public UUID locationPath(JsonNode segments, boolean create) {
+        if (!segments.isArray() || segments.size() > LocationHierarchyService.MAX_DEPTH)
+            throw ApiException.badRequest("Storage location paths allow at most 16 levels");
         var index = locationIndex();
         StorageLocation parent = null;
         var path = new ArrayList<String>();

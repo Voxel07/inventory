@@ -187,7 +187,7 @@ public class PositionService {
             LocationHierarchyService.requireActiveStockLocation(destination);
             tx.destinationLocation = destination;
             var p = orm.position(tx.item, destination, tx.lot);
-            p.quantityOnHand += tx.quantity;
+            p.quantityOnHand = org.ash.inventory.platform.api.Inputs.addQuantity(p.quantityOnHand, tx.quantity);
             tx.positionQuantities = Map.of(p.id.toString(), tx.quantity);
             return;
         }

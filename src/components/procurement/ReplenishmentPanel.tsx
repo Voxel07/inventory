@@ -45,6 +45,7 @@ import { useItemRequestQueue } from '../../hooks/useItemRequestQueue';
 import { useEventReports } from '../../hooks/useEvents';
 import { translate, useT } from '../../utils/naming';
 import { formatDate } from '../../utils/dateFormat';
+import { csvCell } from '../../utils/csvExport';
 
 const toOrder = (row: ProcurementDeficit) => Math.max(0, row.netDeficit - (row.orderedStock ?? 0));
 
@@ -101,7 +102,7 @@ export function ReplenishmentPanel() {
       '', '', request.name, 'request', request.quantity, '', '', '', '', request.quantity - request.receivedQuantity, [orderLabel, request.link].filter(Boolean).join(' · '),
     ]);
     const csv = [header, ...rows, ...requestRows]
-      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+      .map((row) => row.map(csvCell).join(','))
       .join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');

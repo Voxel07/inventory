@@ -226,14 +226,15 @@ public class BlobStore {
     }
 
     public String allocateKey(String originalName) {
-        String safeName = (originalName == null ? "upload" : originalName).replaceAll("[^a-zA-Z0-9._-]", "_");
+        String safeName = MediaTypes.safeFilename(originalName);
         return Instant.now().atZone(ZoneOffset.UTC).getYear() + "-" + UUID.randomUUID() + "-" + safeName;
     }
 
     private void validateKey(String key) {
-        if (key == null || key.isBlank() || key.startsWith("/") || key.contains("\\")
+        if (key == null || key.isBlank() || key.length() > 1000 || key.startsWith("/") || key.contains("\\")
+                || key.chars().anyMatch(c -> c < 32 || c == 127 || c == ':' || c == '%')
                 || java.util.Arrays.stream(key.split("/", -1))
-                        .anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
+                        .anyMatch(part -> part.isBlank() || part.length() > 255 || part.equals(".") || part.equals("..") || part.endsWith(".") || part.endsWith(" "))) {
             throw ApiException.badRequest("Invalid media key");
         }
     }

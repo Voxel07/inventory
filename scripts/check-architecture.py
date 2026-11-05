@@ -20,6 +20,28 @@ PLATFORM_EXPORTS = {
 }
 
 
+def field_types(code):
+    """Remove balanced annotation arguments before finding declarations; avoid regex backtracking on records."""
+    annotation = re.compile(r"@[\w.]+")
+    parts, cursor = [], 0
+    while match := annotation.search(code, cursor):
+        parts.append(code[cursor:match.start()])
+        end = match.end()
+        while end < len(code) and code[end].isspace():
+            end += 1
+        if end < len(code) and code[end] == "(":
+            depth = 1
+            end += 1
+            while end < len(code) and depth:
+                depth += (code[end] == "(") - (code[end] == ")")
+                end += 1
+        parts.append(" ")
+        cursor = end
+    parts.append(code[cursor:])
+    return re.findall(r"(?:^|[;{}])\s*(?:(?:private|protected|public|final|static|volatile|transient)\s+)*"
+                      r"(?!(?:return|throw|package|import|yield)\b)([\w.]+)(?:<[^;{}\n]+>)?\s+\w+\s*(?=[;=])", "".join(parts), re.M)
+
+
 def cycles(graph):
     active, done, path, found = set(), set(), [], []
     def visit(node):
@@ -116,7 +138,7 @@ def main():
             table = entity_tables.get(token, token.lower())
             if table in owners and owners[table] != module:
                 errors.append(f"{path.relative_to(ROOT)}: queries {table} owned by {owners[table]}")
-        fields = re.findall(r"(?:@(?:[\w.]+)(?:\([^;]*?\))?\s+|\b(?:private|protected|public|final)\s+)+([\w.]+)(?:<[^;\n]+>)?\s+\w+\s*[;=]", code)
+        fields = field_types(code)
         bean_graph[fqn] = {lookup[t.rsplit('.', 1)[-1]] for t in fields if t.rsplit('.', 1)[-1] in lookup and lookup[t.rsplit('.', 1)[-1]] != fqn} if fqn in bean_types else set()
         for interface in re.findall(r"\bimplements\s+(\w+)", code):
             if interface in lookup and fqn in bean_types:

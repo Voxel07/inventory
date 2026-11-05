@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -29,16 +31,16 @@ public class EquipmentService {
     @Inject CheckoutEligibility eligibility;
     @Inject MaintenanceEvaluationService maintenance;
 
-    public record ProfileInput(@NotNull Item.Ownership ownershipType, @Size(max=255) String ownerName,
-            @Size(max=255) String keeperName, @Size(max=255) String keeperContact,
+    public record ProfileInput(@NotNull Item.Ownership ownershipType, @InputText String ownerName,
+            @InputText String keeperName, @InputText String keeperContact,
             @NotNull Item.AvailabilityPolicy availabilityPolicy, @NotNull Long revision,
-            @NotBlank @Size(max=255) String reason) {}
-    public record CommitmentInput(UUID eventId, @Min(1) int quantity, List<UUID> assetIds,
+            @NotBlank @InputText String reason) {}
+    public record CommitmentInput(UUID eventId, @Min(1) int quantity, @Size(max = 1000) List<@NotNull UUID> assetIds,
             @NotNull LocalDate availableFrom, @NotNull LocalDate availableUntil,
-            @NotBlank @Size(max=255) String pickupDetails, LocalDate returnDue,
-            @Size(max=255) String returnDetails, @NotBlank @Size(max=255) String notes,
+            @NotBlank @InputText String pickupDetails, LocalDate returnDue,
+            @InputText String returnDetails, @NotBlank @InputText String notes,
             @NotNull Long revision) {}
-    public record CancelInput(@NotNull Long revision, @NotBlank @Size(max=255) String reason) {}
+    public record CancelInput(@NotNull Long revision, @NotBlank @InputText String reason) {}
     public record CommitmentView(UUID id, UUID eventId, String eventName, int quantity, List<String> assetIds,
             LocalDate availableFrom, LocalDate availableUntil, String pickupDetails, LocalDate returnDue,
             String returnDetails, String notes, String status, String cancellationReason, String recordedBy) {}

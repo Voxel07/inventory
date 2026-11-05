@@ -1,6 +1,15 @@
 import type { TranslationCatalog } from './types';
 
 export default {
+  inputSecurity: {
+    csvTooLarge: 'CSV-Dateien dürfen höchstens 8 MB groß sein.',
+    csvNul: 'CSV-Felder dürfen keine NUL-Zeichen enthalten.',
+    csvColumns: 'CSV-Dateien dürfen höchstens 128 Spalten enthalten.',
+    csvRows: 'CSV-Dateien dürfen höchstens 50000 Datenzeilen enthalten.',
+    csvFieldLength: 'CSV-Felder dürfen höchstens 16000 Zeichen enthalten.',
+    csvUnterminated: 'Ein CSV-Feld enthält ein nicht geschlossenes Anführungszeichen.',
+    csvHeaders: 'CSV-Spaltennamen müssen eindeutig sein.',
+  },
   ordering: {
     both: 'Beides',
     showContents: 'Bestellinhalt anzeigen',

@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.Assembly;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -29,9 +31,9 @@ public class InventoryAccessService {
     @Inject InventoryAccess access;
     @Inject DomainEventService events;
     @Inject org.ash.inventory.operations.internal.persistence.CatalogOrm catalogFacts;
-    public record Grant(UUID userId, UUID groupId, boolean canEdit, String name) {}
+    public record Grant(UUID userId, UUID groupId, boolean canEdit, @InputText String name) {}
     /** {@code publicUse}: items only, null keeps current public availability. */
-    public record Input(@NotNull Long revision, @NotNull List<Grant> grants, UUID ownerId,
+    public record Input(@NotNull Long revision, @NotNull @Size(max = 200) List<@NotNull @jakarta.validation.Valid Grant> grants, UUID ownerId,
                         Boolean publicUse) {}
     /**
      * {@code inherited}: shares that reach this resource through the private locations it is stored in;
@@ -46,10 +48,10 @@ public class InventoryAccessService {
     public record Inherited(UUID locationId, String locationName, String kind, UUID principalId, String name, boolean canEdit) {}
     public record Person(UUID id, String name) {}
     /** {@code ownerId} null: managed by the inventory admin. Members are listed for managers and group members. */
-    public record Group(UUID id, String name, long revision, List<UUID> memberIds, List<Person> members, UUID ownerId, String ownerName, boolean canManage) {}
+    public record Group(UUID id, String name, long revision, List<@NotNull UUID> memberIds, List<Person> members, UUID ownerId, String ownerName, boolean canManage) {}
     /** {@code adminManaged}: admin only, creates a shared admin group without a personal owner. */
-    public record GroupInput(@NotBlank @Size(max=255) String name, @NotNull @Size(max=200) List<UUID> memberIds,
-                             @NotNull Long revision, @NotBlank @Size(max=1000) String reason, Boolean adminManaged) {}
+    public record GroupInput(@NotBlank @InputText String name, @NotNull @Size(max=200) List<UUID> memberIds,
+                             @NotNull Long revision, @NotBlank @InputText(max = 1000) String reason, Boolean adminManaged) {}
     public record GroupDeletion(@NotNull Long revision, @NotBlank @Size(max=1000) String reason) {}
 
     public InventoryAccessPolicy create() {

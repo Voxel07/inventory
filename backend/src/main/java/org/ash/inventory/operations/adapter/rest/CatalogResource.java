@@ -47,14 +47,14 @@ public class CatalogResource {
     }
 
     @Paged @GET @Path("/items")
-    public List<ApiResponses.ItemResponse> items(@QueryParam("search") String search,
-            @QueryParam("category") String category,
-            @QueryParam("eventType") String eventType,
+    public List<ApiResponses.ItemResponse> items(@QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
+            @QueryParam("category") @org.ash.inventory.platform.api.InputText String category,
+            @QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
             @QueryParam("includeUntagged") @DefaultValue("false") boolean includeUntagged,
-            @QueryParam("locationId") List<UUID> locationIds,
-            @QueryParam("id") List<UUID> ids,
+            @QueryParam("locationId") @jakarta.validation.constraints.Size(max = 2000) List<UUID> locationIds,
+            @QueryParam("id") @jakarta.validation.constraints.Size(max = 2000) List<UUID> ids,
             @QueryParam("mine") @DefaultValue("false") boolean mine,
-            @QueryParam("sort") String sort,
+            @QueryParam("sort") @org.ash.inventory.platform.api.InputText String sort,
             @QueryParam("maintenanceAttention") @DefaultValue("false") boolean maintenanceAttention,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
@@ -81,14 +81,14 @@ public class CatalogResource {
         return queries.stockHistory(id, page, size);
     }
     @GET @Path("/items/by-sku/{sku:.+}")
-    public ApiResponses.ItemResponse itemBySku(@PathParam("sku") String sku) { return queries.itemBySku(sku); }
-    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }
+    public ApiResponses.ItemResponse itemBySku(@PathParam("sku") @org.ash.inventory.platform.api.InputText String sku) { return queries.itemBySku(sku); }
+    @POST @Path("/items") @Transactional public ApiResponses.ItemResponse createItem(@jakarta.validation.constraints.NotNull @Valid ApiModels.ItemInput input) { return queries.projectItem(service.createItem(input)); }
     /** Bulk create/update for imports: one request and one transaction per chunk of up to 100 rows. */
     @POST @Path("/items/batch") @Transactional
     public List<ApiResponses.ItemResponse> saveItems(@Valid @jakarta.validation.constraints.NotNull ApiModels.ItemBatchInput input) {
         return queries.projectItems(service.saveItems(input.items()));
     }
-    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @Valid ApiModels.ItemInput input) { return queries.projectItem(service.updateItem(id, input)); }
+    @PATCH @Path("/items/{id}") @Transactional public ApiResponses.ItemResponse updateItem(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ItemInput input) { return queries.projectItem(service.updateItem(id, input)); }
     @DELETE @Path("/items/{id}") @Transactional public Response deleteItem(@PathParam("id") UUID id) { service.retireItem(id); return Response.noContent().build(); }
 
     @Paged @GET @Path("/items/{id}/assets")
@@ -98,17 +98,17 @@ public class CatalogResource {
     }
 
     @GET @Path("/assets/by-code/{code:.+}")
-    public ApiResponses.AssetInstanceResponse assetByCode(@PathParam("code") String code) {
+    public ApiResponses.AssetInstanceResponse assetByCode(@PathParam("code") @org.ash.inventory.platform.api.InputText String code) {
         return queries.assetByCode(code);
     }
 
     @POST @Path("/items/{id}/assets") @Transactional
-    public ApiResponses.AssetInstanceResponse createAsset(@PathParam("id") UUID id, @Valid ApiModels.AssetInstanceInput input) {
+    public ApiResponses.AssetInstanceResponse createAsset(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetInstanceInput input) {
         return mapper.asset(service.createAsset(id, input));
     }
 
     @PATCH @Path("/items/{id}/assets/{assetId}") @Transactional
-    public ApiResponses.AssetInstanceResponse updateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId, @Valid ApiModels.AssetInstanceInput input) {
+    public ApiResponses.AssetInstanceResponse updateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId, @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetInstanceInput input) {
         return mapper.asset(service.updateAsset(id, assetId, input));
     }
 
@@ -116,7 +116,7 @@ public class CatalogResource {
 
     @POST @Path("/items/{id}/assets/{assetId}/runtime") @Transactional
     public ApiResponses.RuntimeEntryResponse logRuntime(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
-            @Valid ApiModels.RuntimeInput input) {
+            @jakarta.validation.constraints.NotNull @Valid ApiModels.RuntimeInput input) {
         return mapper.runtime(runtime.log(id, assetId, input));
     }
 
@@ -134,13 +134,13 @@ public class CatalogResource {
 
     @POST @Path("/items/{id}/assets/{assetId}/relocate") @Transactional
     public ApiResponses.AssetInstanceResponse relocateAsset(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
-            @Valid ApiModels.AssetRelocationInput input) {
+            @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetRelocationInput input) {
         return mapper.asset(service.relocateAsset(id, assetId, input));
     }
 
     @POST @Path("/items/{id}/assets/{assetId}/condition") @Transactional
     public ApiResponses.AssetInstanceResponse updateAssetCondition(@PathParam("id") UUID id, @PathParam("assetId") UUID assetId,
-            @Valid ApiModels.AssetConditionInput input) {
+            @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetConditionInput input) {
         return mapper.asset(service.updateAssetCondition(id, assetId, input));
     }
 
@@ -152,69 +152,69 @@ public class CatalogResource {
 
     /** Re-codes existing units; no units are created, so stock is unchanged. */
     @POST @Path("/items/{id}/assets/recode") @Transactional
-    public List<ApiResponses.AssetInstanceResponse> recodeAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetRecodeInput input) {
+    public List<ApiResponses.AssetInstanceResponse> recodeAssets(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetRecodeInput input) {
         return mapper.assets(service.recodeAssets(id, input));
     }
 
     /** Writes off several units at once; all or nothing. */
     @POST @Path("/items/{id}/assets/write-off") @Transactional
-    public Response writeOffAssets(@PathParam("id") UUID id, @Valid ApiModels.AssetIdsInput input) {
+    public Response writeOffAssets(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.AssetIdsInput input) {
         service.writeOffAssets(id, input.assetIds());
         return Response.noContent().build();
     }
 
     @Paged @GET @Path("/storage-locations") @Transactional
     public List<ApiResponses.StorageLocationResponse> locations(@QueryParam("includeInactive") @DefaultValue("false") boolean includeInactive,
-            @QueryParam("search") String search, @QueryParam("subtreeId") UUID subtreeId,
+            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search, @QueryParam("subtreeId") UUID subtreeId,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         var bounds = org.ash.inventory.platform.api.PageBounds.of(page, size);
         return mapper.locations(service.getLocations(includeInactive, search, subtreeId, bounds.offset(), bounds.limit()));
     }
     @GET @Path("/storage-locations/{id}")
     public ApiResponses.StorageLocationResponse location(@PathParam("id") UUID id) { return queries.location(id); }
-    @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@Valid ApiModels.StorageLocationInput input) { return mapper.location(service.createLocation(input)); }
-    @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.updateLocation(id, input)); }
+    @POST @Path("/storage-locations") @Transactional public ApiResponses.StorageLocationResponse createLocation(@jakarta.validation.constraints.NotNull @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.createLocation(input)); }
+    @PATCH @Path("/storage-locations/{id}") @Transactional public ApiResponses.StorageLocationResponse updateLocation(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.StorageLocationInput input) { return mapper.location(service.updateLocation(id, input)); }
     /** Creates or extends a top-level location with its sections and storage places; returns the whole location tree. */
     @PUT @Path("/storage-locations/structure") @Transactional
-    public List<ApiResponses.StorageLocationResponse> saveStructure(@Valid ApiModels.StorageStructureInput input) { return mapper.locations(service.saveStructure(input)); }
+    public List<ApiResponses.StorageLocationResponse> saveStructure(@jakarta.validation.constraints.NotNull @Valid ApiModels.StorageStructureInput input) { return mapper.locations(service.saveStructure(input)); }
     @DELETE @Path("/storage-locations/{id}") @Transactional public Response deleteLocation(@PathParam("id") UUID id) { service.deleteLocation(id); return Response.noContent().build(); }
 
     @Paged @GET @Path("/assemblies")
-    public List<ApiResponses.AssemblyResponse> assemblies(@QueryParam("search") String search,
+    public List<ApiResponses.AssemblyResponse> assemblies(@QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("mine") @DefaultValue("false") boolean mine,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         return queries.assemblies(search, null, mine, page, size);
     }
     @GET @Path("/assemblies/{id}")
     public ApiResponses.AssemblyResponse assembly(@PathParam("id") UUID id) { return queries.assembly(id); }
-    @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.createAssembly(input)); }
-    @PATCH @Path("/assemblies/{id}") @Transactional public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.updateAssembly(id, input)); }
+    @POST @Path("/assemblies") @Transactional public ApiResponses.AssemblyResponse createAssembly(@jakarta.validation.constraints.NotNull @Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.createAssembly(input)); }
+    @PATCH @Path("/assemblies/{id}") @Transactional public ApiResponses.AssemblyResponse updateAssembly(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.AssemblyInput input) { return queries.projectAssembly(service.updateAssembly(id, input)); }
     @DELETE @Path("/assemblies/{id}") @Transactional public Response deleteAssembly(@PathParam("id") UUID id) { service.retireAssembly(id); return Response.noContent().build(); }
 
     @Paged @GET @Path("/events")
-    public List<ApiResponses.EventResponse> events(@QueryParam("eventType") String eventType,
-            @QueryParam("status") String status, @QueryParam("page") @DefaultValue("0") int page,
+    public List<ApiResponses.EventResponse> events(@QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
+            @QueryParam("status") @org.ash.inventory.platform.api.InputText String status, @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.events(eventType, status, page, size);
     }
     @GET @Path("/events/{id}")
     public ApiResponses.EventResponse event(@PathParam("id") UUID id) { return queries.event(id); }
-    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@Valid ApiModels.EventInput input) { return queries.projectEvent(service.createEvent(input)); }
-    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @Valid ApiModels.EventInput input) { return queries.projectEvent(service.updateEvent(id, input)); }
+    @POST @Path("/events") @Transactional public ApiResponses.EventResponse createEvent(@jakarta.validation.constraints.NotNull @Valid ApiModels.EventInput input) { return queries.projectEvent(service.createEvent(input)); }
+    @PATCH @Path("/events/{id}") @Transactional public ApiResponses.EventResponse updateEvent(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.EventInput input) { return queries.projectEvent(service.updateEvent(id, input)); }
     @DELETE @Path("/events/{id}") @Transactional public Response deleteEvent(@PathParam("id") UUID id) { service.deleteEvent(id); return Response.noContent().build(); }
 
     @GET @Path("/event-types")
     public List<String> eventTypes() { return service.eventTypes(); }
 
     @GET @Path("/factions")
-    public Response factions(@QueryParam("eventType") String eventType,
+    public Response factions(@QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
             @jakarta.ws.rs.HeaderParam("If-None-Match") String ifNoneMatch) {
         actor.current();
         String etag = responses.factionsEtag(cacheKey(eventType));
         if (etag.equals(ifNoneMatch)) return Response.notModified().header("ETag", etag).build();
         return Response.ok(responses.factions(cacheKey(eventType)), MediaType.APPLICATION_JSON_TYPE).header("ETag", etag).build();
     }
-    @POST @Path("/factions") @Transactional public ApiResponses.FactionResponse createFaction(@Valid ApiModels.FactionInput input) { return mapper.faction(service.createFaction(input)); }
+    @POST @Path("/factions") @Transactional public ApiResponses.FactionResponse createFaction(@jakarta.validation.constraints.NotNull @Valid ApiModels.FactionInput input) { return mapper.faction(service.createFaction(input)); }
 
     private String cacheKey(String value) {
         return value == null ? "" : value;

@@ -17,11 +17,13 @@ final class OrderReturnPolicy {
 
     /** One item's return outcome; {@code missing} is the unresolved total after this command. */
     record Outcome(int returned, int damaged, int writtenOff, int missing, String writeOffReason) {
-        int reconciled() { return returned + damaged + writtenOff; }
+        long reconciled() { return (long) returned + damaged + writtenOff; }
     }
 
     /** Consumables are consumed at pickup, write-offs need an admin and a reason, and nothing exceeds the outstanding quantity. */
     static void validate(Item item, Outcome outcome, int outstanding, ActorService actors) {
+        if (outcome.returned() < 0 || outcome.damaged() < 0 || outcome.writtenOff() < 0 || outcome.missing() < 0)
+            throw ApiException.badRequest("Return quantities must be non-negative");
         if (item.consumable())
             throw ApiException.badRequest(item.name + " is a consumable: it was consumed at pickup and is not returned");
         if (outcome.writtenOff() > 0) {

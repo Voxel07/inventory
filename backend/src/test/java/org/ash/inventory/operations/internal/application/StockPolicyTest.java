@@ -13,6 +13,30 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StockPolicyTest {
+    @Test void catalogBatchCannotMultiplyThePerItemAssetCreationBudget() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        var entry = json.readValue("{\"item\":{\"name\":\"N\",\"category\":\"C\",\"trackingMode\":\"serialized\",\"amount\":501}}",
+                org.ash.inventory.operations.internal.contract.ApiModels.ItemBatchEntry.class);
+        var service = new CatalogService(null, null, null, null);
+        assertThrows(org.ash.inventory.platform.api.ApiException.class, () -> service.saveItems(List.of(entry, entry)));
+    }
+
+    @Test void largeLifetimeMovementsKeepTheirNetStockAndOverflowCannotWrap() {
+        var service = new StockReadService();
+        var totals = java.util.Map.of(DomainEnums.TransactionType.added, 4_000_000_000L,
+                DomainEnums.TransactionType.checkout, 3_999_999_995L, DomainEnums.TransactionType.checkin, 3_999_999_995L,
+                DomainEnums.TransactionType.written_off, 3_999_999_995L);
+        assertEquals(5, service.physicalStock(new Item(), totals, 0, 0, 0, 0, List.of()).onHand());
+        assertThrows(org.ash.inventory.platform.api.ApiException.class,
+                () -> service.physicalStock(new Item(), java.util.Map.of(DomainEnums.TransactionType.added, 2_147_483_648L), 0, 0, 0, 0, List.of()));
+    }
+
+    @Test void csvQuantityConversionDoesNotTruncateOrWrap() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (var text : List.of("4294967297", "1.5", "null", "\"1\""))
+            assertThrows(org.ash.inventory.platform.api.ApiException.class, () -> CsvImportSupport.integer(json.readTree(text)));
+        assertEquals(17, CsvImportSupport.integer(json.readTree("17")));
+    }
     @Test void privateItemsUseUsableStockWithoutCommitmentsAndStillRespectDamageAndMaintenance() {
         var item = new Item(); item.ownershipType = Item.Ownership.private_owner;
         item.accessPolicy = new InventoryAccessPolicy();

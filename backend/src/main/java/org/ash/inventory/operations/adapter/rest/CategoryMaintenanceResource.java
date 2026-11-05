@@ -36,7 +36,7 @@ public class CategoryMaintenanceResource {
 
     @PUT
 
-    public Policy save(Policy input) { return service.save(input); }
+    public Policy save(@jakarta.validation.constraints.NotNull @jakarta.validation.Valid Policy input) { return service.save(input); }
 
 }
 

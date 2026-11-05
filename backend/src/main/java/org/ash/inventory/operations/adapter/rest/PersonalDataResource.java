@@ -13,5 +13,5 @@ public class PersonalDataResource {
     @GET @Path("/export") @Produces("application/zip") public Response export(@PathParam("id") UUID id) {
         return Response.ok(service.export(id)).header("Content-Disposition","attachment; filename=\"inventory-person-"+id+".zip\"").header("Cache-Control","no-store").build();
     }
-    @POST @Path("/pseudonymize") @Consumes(MediaType.APPLICATION_JSON) public void erase(@PathParam("id") UUID id,@Valid PersonalDataService.EraseInput input) {service.erase(id,input);}
+    @POST @Path("/pseudonymize") @Consumes(MediaType.APPLICATION_JSON) public void erase(@PathParam("id") UUID id,@jakarta.validation.constraints.NotNull @Valid PersonalDataService.EraseInput input) {service.erase(id,input);}
 }

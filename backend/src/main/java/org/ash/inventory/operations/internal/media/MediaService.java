@@ -144,9 +144,7 @@ public class MediaService {
 
         permissions.requireStaged(source);
 
-        String safeName = (originalFilename == null ? "document" : originalFilename)
-
-                .replaceAll("[^a-zA-Z0-9._-]", "_");
+        String safeName = org.ash.inventory.blobs.api.MediaTypes.safeFilename(originalFilename);
 
         String destination = "vendor-documents/" + documentId + "/" + safeName;
 

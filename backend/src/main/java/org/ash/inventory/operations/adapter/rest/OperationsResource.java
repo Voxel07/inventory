@@ -47,7 +47,7 @@ public class OperationsResource {
     }
 
     @POST @Path("/procurement/overrides")
-    public jakarta.ws.rs.core.Response planningOverride(org.ash.inventory.operations.internal.application.PlanningService.OverrideInput input) {
+    public jakarta.ws.rs.core.Response planningOverride(@jakarta.validation.constraints.NotNull @Valid org.ash.inventory.operations.internal.application.PlanningService.OverrideInput input) {
         planning.override(input);
         return jakarta.ws.rs.core.Response.noContent().build();
     }
@@ -66,29 +66,29 @@ public class OperationsResource {
     public List<ApiResponses.TransactionResponse> transactions(@QueryParam("itemId") UUID itemId,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("userId") UUID userId,
             @QueryParam("eventOccurrenceId") UUID eventOccurrenceId,
-            @QueryParam("transactionType") String type, @QueryParam("startDate") Instant start,
-            @QueryParam("endDate") Instant end, @QueryParam("search") String search,
+            @QueryParam("transactionType") @org.ash.inventory.platform.api.InputText String type, @QueryParam("startDate") Instant start,
+            @QueryParam("endDate") Instant end, @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.transactions(itemId, assetInstanceId, userId, eventOccurrenceId, type, start, end, search, page, size);
     }
 
     @POST @Path("/transactions/batch") @Transactional
-    public List<ApiResponses.TransactionResponse> transactionBatch(List<ApiModels.@Valid TransactionInput> inputs) {
+    public List<ApiResponses.TransactionResponse> transactionBatch(@jakarta.validation.constraints.NotEmpty @jakarta.validation.constraints.Size(max = 200) List<ApiModels.@jakarta.validation.constraints.NotNull @Valid TransactionInput> inputs) {
         return service.transactBatch(inputs).stream().map(mapper::transaction).toList();
     }
 
     @POST
     @Path("/transactions")
     @Transactional
-    public ApiResponses.TransactionResponse transaction(@Valid ApiModels.TransactionInput input) {
+    public ApiResponses.TransactionResponse transaction(@jakarta.validation.constraints.NotNull @Valid ApiModels.TransactionInput input) {
         return mapper.transaction(service.transact(input));
     }
 
     @POST
     @Path("/transactions/{id}/restock")
     @Transactional
-    public ApiResponses.TransactionResponse restock(@jakarta.ws.rs.PathParam("id") UUID id, @Valid ApiModels.RestockInput input) {
+    public ApiResponses.TransactionResponse restock(@jakarta.ws.rs.PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.RestockInput input) {
         return mapper.transaction(service.restockUnused(id, input));
     }
 
@@ -102,9 +102,9 @@ public class OperationsResource {
     @Paged @GET
     @Path("/damage-reports")
     public List<ApiResponses.DamageResponse> damageReports(@QueryParam("itemId") UUID itemId,
-            @QueryParam("search") String search,
+            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("assetInstanceId") UUID assetInstanceId, @QueryParam("assemblyId") UUID assemblyId,
-            @QueryParam("status") List<org.ash.inventory.operations.internal.model.DomainEnums.DamageStatus> statuses,
+            @QueryParam("status") @jakarta.validation.constraints.Size(max = 2000) List<org.ash.inventory.operations.internal.model.DomainEnums.DamageStatus> statuses,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.damageReports(itemId, assetInstanceId, assemblyId, statuses, search, page, size);
@@ -113,14 +113,14 @@ public class OperationsResource {
     @POST
     @Path("/damage-reports")
     @Transactional
-    public ApiResponses.DamageResponse createDamage(@Valid ApiModels.DamageInput input) {
+    public ApiResponses.DamageResponse createDamage(@jakarta.validation.constraints.NotNull @Valid ApiModels.DamageInput input) {
         return mapper.damage(service.reportDamage(input));
     }
 
     @PATCH
     @Path("/damage-reports/{id}")
     @Transactional
-    public ApiResponses.DamageResponse resolveDamage(@PathParam("id") UUID id, @Valid ApiModels.DamageResolutionInput input) {
+    public ApiResponses.DamageResponse resolveDamage(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.DamageResolutionInput input) {
         return mapper.damage(service.resolveDamageReport(id, input));
     }
 
@@ -135,7 +135,7 @@ public class OperationsResource {
     @POST
     @Path("/maintenance")
     @Transactional
-    public ApiResponses.MaintenanceResponse maintenance(@Valid ApiModels.MaintenanceInput input) {
+    public ApiResponses.MaintenanceResponse maintenance(@jakarta.validation.constraints.NotNull @Valid ApiModels.MaintenanceInput input) {
         return mapper.maintenance(service.recordMaintenance(input));
     }
 
@@ -154,13 +154,13 @@ public class OperationsResource {
 
     @POST
     @Path("/procurement/item-requests/{id}/item")
-    public ApiResponses.ItemRequestQueueEntry assignRequestItem(@PathParam("id") UUID id, @Valid ApiModels.ItemRequestAssignment input) {
+    public ApiResponses.ItemRequestQueueEntry assignRequestItem(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ItemRequestAssignment input) {
         return itemRequests.assignItem(id, input.itemId());
     }
 
     @POST
     @Path("/procurement/item-requests/{id}/decline")
-    public ApiResponses.ItemRequestQueueEntry declineRequest(@PathParam("id") UUID id, @Valid ApiModels.ItemRequestDecline input) {
+    public ApiResponses.ItemRequestQueueEntry declineRequest(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ItemRequestDecline input) {
         return itemRequests.decline(id, input.reason());
     }
 

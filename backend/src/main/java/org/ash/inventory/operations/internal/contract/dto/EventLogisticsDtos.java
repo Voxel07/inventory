@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.contract.dto;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.operations.internal.model.EventAttendee;
 import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.operations.internal.model.EventPerson;
@@ -31,19 +33,19 @@ public final class EventLogisticsDtos {
 
     /** Faction roles require one of the event type's factions; only event crew carries an assignment. */
     public record RoleInput(
-            @NotNull @Pattern(regexp = "faction_leader|faction_deputy|faction_hq_crew|as_held|event_crew") String role,
-            UUID factionId, @Size(max = 255) String assignment) {}
+            @NotNull @Pattern(regexp = "faction_leader|faction_deputy|faction_hq_crew|as_held|event_crew") @InputText String role,
+            UUID factionId, @InputText String assignment) {}
 
     /**
      * Without {@code personId} a new person named {@code personName} is created. With it, the person is
      * renamed and (un)linked in place, which applies to every event they attend.
      */
-    public record AttendeeInput(UUID personId, @NotBlank @Size(max = 255) String personName, UUID personUserId,
-            Instant arrivesAt, Instant leavesAt, boolean foodStampsIssued, @Size(max = 2000) String notes,
+    public record AttendeeInput(UUID personId, @NotBlank @InputText String personName, UUID personUserId,
+            Instant arrivesAt, Instant leavesAt, boolean foodStampsIssued, @InputText(max = 2000) String notes,
             @NotNull @Size(min = 1, max = 20) List<@NotNull @Valid RoleInput> roles) {}
 
     /** A directory entry; renaming or relinking applies at every event the person attends. */
-    public record PersonInput(@NotBlank @Size(max = 255) String name, UUID userId) {}
+    public record PersonInput(@NotBlank @InputText String name, UUID userId) {}
 
     public record PersonSummary(UUID id, String name, UUID userId, String userName) {
         public static PersonSummary from(EventPerson person) {
@@ -71,11 +73,11 @@ public final class EventLogisticsDtos {
         }
     }
 
-    public record TimelineInput(@NotNull @Pattern(regexp = "in_game|preparation|catering") String category,
-            @NotBlank @Size(max = 255) String title, @NotNull Instant startsAt, Instant endsAt,
-            @Size(max = 255) String owner, @Size(max = 255) String location,
-            @NotNull @Pattern(regexp = "planned|in_progress|completed") String status,
-            @Size(max = 2000) String description) {}
+    public record TimelineInput(@NotNull @Pattern(regexp = "in_game|preparation|catering") @InputText String category,
+            @NotBlank @InputText String title, @NotNull Instant startsAt, Instant endsAt,
+            @InputText String owner, @InputText String location,
+            @NotNull @Pattern(regexp = "planned|in_progress|completed") @InputText String status,
+            @InputText(max = 2000) String description) {}
 
     public record TimelineResponse(UUID id, UUID eventId, String category, String title,
             Instant startsAt, Instant endsAt, String owner, String location,

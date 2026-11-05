@@ -45,7 +45,10 @@ public class OperationsOrm extends EntityOrm {
         if (assetInstanceId != null) query.setParameter("assetInstanceId", assetInstanceId);
         if (userId != null) query.setParameter("userId", userId);
         if (eventOccurrenceId != null) query.setParameter("eventOccurrenceId", eventOccurrenceId);
-        if (type != null && !type.isBlank()) query.setParameter("type", DomainEnums.TransactionType.valueOf(type));
+        if (type != null && !type.isBlank()) {
+            try { query.setParameter("type", DomainEnums.TransactionType.valueOf(type)); }
+            catch (IllegalArgumentException invalid) { throw org.ash.inventory.platform.api.ApiException.badRequest("Invalid transaction type"); }
+        }
         if (start != null) query.setParameter("start", start);
         if (end != null) query.setParameter("end", end);
         if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));

@@ -1,4 +1,13 @@
 export default {
+  inputSecurity: {
+    csvTooLarge: 'CSV files must be at most 8 MB.',
+    csvNul: 'CSV fields must not contain NUL characters.',
+    csvColumns: 'CSV files must contain at most 128 columns.',
+    csvRows: 'CSV files must contain at most 50000 data rows.',
+    csvFieldLength: 'CSV fields must contain at most 16000 characters.',
+    csvUnterminated: 'CSV contains an unterminated quoted field.',
+    csvHeaders: 'CSV column names must be unique.',
+  },
   ordering: {
     both: 'Both',
     showContents: 'Show order contents',

@@ -236,6 +236,7 @@ public class PurchasingService {
                 throw ApiException.conflict("Received quantity exceeds the remaining quantity for " + orderLine.item.name);
             }
             var lot = validateReceiptTracking(orderLine.item, inputLine, stockReceived, assetCodes, newLots);
+            if (assetCodes.size() > 1000) throw ApiException.badRequest("Receive at most 1000 serialized assets per receipt");
             var line = new GoodsReceiptLine();
             line.goodsReceipt = receipt;
             line.purchaseOrderLine = orderLine;

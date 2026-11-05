@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.media.MediaService;
 import org.ash.inventory.operations.internal.model.CustodyHandover;
@@ -26,7 +28,7 @@ public class HandoverEvidenceService {
     @Inject DomainEventService events;
     @Inject com.fasterxml.jackson.databind.ObjectMapper json;
     public record Input(@NotNull UUID commandId, boolean conditionConfirmed,
-            @NotBlank @Size(max=2000) String conditionNotes, @Size(max=1024) String acknowledgementObjectKey) {}
+            @NotBlank @InputText(max = 2000) String conditionNotes, @InputText(max = 1024) String acknowledgementObjectKey) {}
     public record Evidence(UUID id, UUID recordedById, Instant recordedAt, boolean conditionConfirmed, String conditionNotes, String acknowledgementObjectKey) {}
     public record Handover(UUID id, String code, String type, Instant occurredAt, String collector, List<Evidence> evidence) {}
 

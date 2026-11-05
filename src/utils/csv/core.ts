@@ -1,10 +1,19 @@
 import type { EventType } from '../../types';
+import { translate } from '../naming';
+
+export const MAX_CSV_BYTES = 8_000_000;
+const MAX_ROWS = 50_000;
+const MAX_COLUMNS = 128;
+const MAX_FIELD_LENGTH = 16_000;
 
 /**
  * Robust CSV tokenizer handling quotes, escaped quotes, newlines within quotes,
  * and auto-detection of delimiters (comma, semicolon, tab, pipe).
  */
 export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
+  if (text.length > MAX_CSV_BYTES || new TextEncoder().encode(text).length > MAX_CSV_BYTES)
+    throw new Error(translate('inputSecurity.csvTooLarge'));
+  if (text.includes('\0')) throw new Error(translate('inputSecurity.csvNul'));
   // Strip BOM if present
   const content = text.replace(/^\uFEFF/, '').trim();
   if (!content) return { headers: [], rows: [] };
@@ -18,7 +27,22 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
   let currentField = '';
   let inQuotes = false;
 
+  function finishField() {
+    if (currentRow.length >= MAX_COLUMNS) throw new Error(translate('inputSecurity.csvColumns'));
+    currentRow.push(currentField.trim());
+    currentField = '';
+  }
+  function finishRow() {
+    finishField();
+    if (currentRow.some((field) => field.length > 0)) {
+      if (rawRows.length >= MAX_ROWS + 1) throw new Error(translate('inputSecurity.csvRows'));
+      rawRows.push(currentRow);
+    }
+    currentRow = [];
+  }
+
   for (let i = 0; i < content.length; i++) {
+    if (currentField.length > MAX_FIELD_LENGTH) throw new Error(translate('inputSecurity.csvFieldLength'));
     const char = content[i];
     const nextChar = content[i + 1];
 
@@ -39,38 +63,32 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
       if (char === '"') {
         inQuotes = true;
       } else if (char === delimiter) {
-        currentRow.push(currentField.trim());
-        currentField = '';
+        finishField();
       } else if (char === '\r') {
         if (nextChar === '\n') i++;
-        currentRow.push(currentField.trim());
-        currentField = '';
-        if (currentRow.some((f) => f.length > 0)) rawRows.push(currentRow);
-        currentRow = [];
+        finishRow();
       } else if (char === '\n') {
-        currentRow.push(currentField.trim());
-        currentField = '';
-        if (currentRow.some((f) => f.length > 0)) rawRows.push(currentRow);
-        currentRow = [];
+        finishRow();
       } else {
         currentField += char;
       }
     }
   }
 
-  if (currentField.length > 0 || currentRow.length > 0) {
-    currentRow.push(currentField.trim());
-    if (currentRow.some((f) => f.length > 0)) rawRows.push(currentRow);
-  }
+  if (currentField.length > MAX_FIELD_LENGTH) throw new Error(translate('inputSecurity.csvFieldLength'));
+  if (inQuotes) throw new Error(translate('inputSecurity.csvUnterminated'));
+  if (currentField.length > 0 || currentRow.length > 0) finishRow();
 
   if (rawRows.length === 0) return { headers: [], rows: [] };
 
   const headers = rawRows[0].map((h) => h.replace(/^["']|["']$/g, '').trim());
+  const names = headers.filter(Boolean).map(normalizeKey);
+  if (new Set(names).size !== names.length) throw new Error(translate('inputSecurity.csvHeaders'));
   const rows: Record<string, string>[] = [];
 
   for (let r = 1; r < rawRows.length; r++) {
     const rowValues = rawRows[r];
-    const rowObj: Record<string, string> = {};
+    const rowObj: Record<string, string> = Object.create(null);
     for (let c = 0; c < headers.length; c++) {
       const headerName = headers[c];
       if (headerName) {

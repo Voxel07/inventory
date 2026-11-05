@@ -45,7 +45,7 @@ public class LifecycleResource {
 
     @POST
     @Path("/maintenance-schedules")
-    public Response createSchedule(@Valid LifecycleDtos.ScheduleInput input) {
+    public Response createSchedule(@jakarta.validation.constraints.NotNull @Valid LifecycleDtos.ScheduleInput input) {
         var created = service.createSchedule(input);
         return Response.created(java.net.URI.create("/api/maintenance-schedules/" + created.id))
                 .entity(schedule(created)).build();
@@ -54,7 +54,7 @@ public class LifecycleResource {
     @PUT
     @Path("/maintenance-schedules/{id}")
     public LifecycleDtos.ScheduleResponse updateSchedule(@PathParam("id") UUID id,
-            @Valid LifecycleDtos.ScheduleInput input) {
+            @jakarta.validation.constraints.NotNull @Valid LifecycleDtos.ScheduleInput input) {
         return schedule(service.updateSchedule(id, input));
     }
 
@@ -68,7 +68,7 @@ public class LifecycleResource {
     @Paged @GET
     @Path("/repairs")
     public List<LifecycleDtos.RepairResponse> repairs(
-            @QueryParam("status") String status,
+            @QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return service.repairs(status, page, size).stream().map(this::repair).toList();
@@ -76,7 +76,7 @@ public class LifecycleResource {
 
     @POST
     @Path("/repairs")
-    public Response createRepair(@Valid LifecycleDtos.RepairInput input) {
+    public Response createRepair(@jakarta.validation.constraints.NotNull @Valid LifecycleDtos.RepairInput input) {
         var created = service.createRepair(input);
         return Response.created(java.net.URI.create("/api/repairs/" + created.id))
                 .entity(repair(created)).build();
@@ -85,7 +85,7 @@ public class LifecycleResource {
     @POST
     @Path("/repairs/{id}/transitions")
     public LifecycleDtos.RepairResponse transitionRepair(@PathParam("id") UUID id,
-            @Valid LifecycleDtos.RepairTransitionInput input) {
+            @jakarta.validation.constraints.NotNull @Valid LifecycleDtos.RepairTransitionInput input) {
         return repair(service.transitionRepair(id, input));
     }
 

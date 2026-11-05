@@ -54,6 +54,8 @@ public class SyncService {
 
     public ApiResponses.SyncBatchResponse sync(@Valid ApiModels.SyncBatch batch) {
         var actor = actors.current();
+        for (var action : batch.actions())
+            org.ash.inventory.platform.api.Inputs.validateJson(objectMapper.valueToTree(action.payload()));
         return telemetry.call("sync", "batch", "database", () -> {
             telemetry.measure("inventory.sync.batch.size", batch.actions().size(), "{command}", Attributes.empty());
             var results = new ArrayList<ApiResponses.SyncActionResponse>();
@@ -283,7 +285,10 @@ public class SyncService {
     }
 
     private <T> T validated(Object payload, Class<T> type) {
-        T value = objectMapper.convertValue(payload, type);
+        if (payload == null) throw ApiException.badRequest("Action input is required");
+        T value;
+        try { value = objectMapper.convertValue(payload, type); }
+        catch (IllegalArgumentException invalid) { throw ApiException.badRequest("Invalid action input fields"); }
         var violations = validator.validate(value);
         if (!violations.isEmpty()) throw ApiException.badRequest(violations.stream()
                 .map(v -> v.getPropertyPath() + ": " + v.getMessage()).sorted().collect(java.util.stream.Collectors.joining("; ")));

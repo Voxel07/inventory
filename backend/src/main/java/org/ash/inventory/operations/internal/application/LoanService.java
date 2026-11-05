@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.EquipmentCommitment;
@@ -27,10 +29,10 @@ public class LoanService {
     @Inject ActorService actors;
     @Inject EquipmentService equipment;
     @Inject DomainEventService events;
-    public record Input(@NotNull UUID commitmentId, @NotNull UUID providerLocationId, @NotBlank String kind,
-            @NotBlank @Size(max=255) String provider, @NotBlank @Size(max=255) String contact, @NotBlank @Size(max=2000) String terms) {}
-    public record Movement(@NotNull UUID transferId, @NotNull Long revision, @NotBlank @Size(max=255) String notes) {}
-    public record Extension(@NotNull LocalDate availableUntil, @NotNull LocalDate returnDue, @NotNull Long revision, @NotBlank @Size(max=255) String reason) {}
+    public record Input(@NotNull UUID commitmentId, @NotNull UUID providerLocationId, @NotBlank @InputText String kind,
+            @NotBlank @InputText String provider, @NotBlank @InputText String contact, @NotBlank @InputText(max = 2000) String terms) {}
+    public record Movement(@NotNull UUID transferId, @NotNull Long revision, @NotBlank @InputText String notes) {}
+    public record Extension(@NotNull LocalDate availableUntil, @NotNull LocalDate returnDue, @NotNull Long revision, @NotBlank @InputText String reason) {}
     public record View(UUID id, UUID itemId, String item, UUID commitmentId, UUID providerLocationId, String kind, String provider,
             String contact, String terms, int quantity, int collected, int returned, List<String> assetCodes,
             LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,Object>> history) {}

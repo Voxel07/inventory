@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.model.AssetInstance;
@@ -32,13 +34,13 @@ public class MemberService {
     @Inject InventoryOperationsService inventory;
     public record Stored(UUID itemId, String name, UUID locationId, String location, UUID assetId, String assetCode, int quantity) {}
     public record RequestInput(@NotNull UUID itemId, UUID assetId, UUID locationId,
-            @NotBlank String kind, @Min(1) int quantity, @NotBlank @Size(max=2000) String notes, @NotNull UUID commandId,
+            @NotBlank @InputText String kind, @Min(1) int quantity, @NotBlank @InputText(max = 2000) String notes, @NotNull UUID commandId,
             DomainEnums.DamageSeverity severity) {}
-    public record Decision(@NotNull Long revision, @NotBlank @Size(max=2000) String response, boolean resolved) {}
+    public record Decision(@NotNull Long revision, @NotBlank @InputText(max = 2000) String response, boolean resolved) {}
     public record Assignment(UUID userId) {}
     public record RequestView(UUID id, UUID itemId, String item, String requester, String kind, int quantity,
             String notes, String status, String response, Instant createdAt, long revision, UUID assetId, UUID locationId, UUID damageReportId) {}
-    public record ReturnInput(@NotBlank String custodyKey, @Min(1) int quantity, UUID assetId, @Size(max=255) String notes, @NotNull UUID commandId) {}
+    public record ReturnInput(@NotBlank @InputText String custodyKey, @Min(1) int quantity, UUID assetId, @InputText String notes, @NotNull UUID commandId) {}
 
     @Transactional
     public List<CustodyBalanceService.Balance> custodyRows() {

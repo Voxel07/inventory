@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.operations.internal.model.ActionReminder;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.persistence.ActionInboxOrm;
@@ -27,7 +29,7 @@ public class ActionInboxService {
     public record Action(String key, String kind, String title, String detail, LocalDate due, String path, Instant remindAt) {}
     /** Authorization references stay typed until filtering; task keys and URLs are display/navigation strings. */
     private record Candidate(Action action, Set<UUID> references) {}
-    public record ReminderInput(@NotNull String key, Instant remindAt) {}
+    public record ReminderInput(@NotNull @InputText String key, Instant remindAt) {}
     @Transactional public List<Action> list() {
         var user = actors.current(); var reminders = new HashMap<String, Instant>();
         orm.reminders(user).forEach(r -> reminders.put(r.actionKey, r.remindAt));

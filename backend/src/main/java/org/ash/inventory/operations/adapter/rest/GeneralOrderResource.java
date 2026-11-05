@@ -49,10 +49,10 @@ public class GeneralOrderResource {
 
     @Paged @GET
     public List<ApiResponses.GeneralOrderSummaryResponse> orders(
-            @QueryParam("status") List<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses,
+            @QueryParam("status") @jakarta.validation.constraints.Size(max = 2000) List<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses,
             @QueryParam("eventId") UUID eventId,
-            @QueryParam("eventType") String eventType,
-            @QueryParam("search") String search,
+            @QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
+            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return queries.generalOrders(new org.ash.inventory.operations.internal.persistence.OrderOrm.Filter(statuses, eventId, eventType, search), page, size);
@@ -66,7 +66,7 @@ public class GeneralOrderResource {
 
     @POST
     @Transactional
-    public ApiResponses.GeneralOrderResponse create(@Valid ApiModels.GeneralOrderInput input) {
+    public ApiResponses.GeneralOrderResponse create(@jakarta.validation.constraints.NotNull @Valid ApiModels.GeneralOrderInput input) {
         actors.current();
         return queries.projectGeneralOrder(service.createGeneral(input));
     }
@@ -74,7 +74,7 @@ public class GeneralOrderResource {
     @PATCH
     @Path("/{id}")
     @Transactional
-    public ApiResponses.GeneralOrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.GeneralOrderInput input) {
+    public ApiResponses.GeneralOrderResponse update(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.GeneralOrderInput input) {
         queries.generalOrder(id);
         return queries.projectGeneralOrder(service.updateGeneral(id, input));
     }
@@ -83,14 +83,14 @@ public class GeneralOrderResource {
     @Path("/{id}/transitions/{status}")
     @Transactional
     public ApiResponses.GeneralOrderResponse transition(@PathParam("id") UUID id, @PathParam("status") org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus status,
-            ApiModels.TransitionInput input) {
+            @Valid ApiModels.TransitionInput input) {
         queries.generalOrder(id);
         var safe = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return queries.projectGeneralOrder(service.transition(id, status, safe));
     }
 
     @POST @Path("/{id}/prepare") @Transactional
-    public ApiResponses.GeneralOrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
+    public ApiResponses.GeneralOrderResponse prepare(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.PreparationInput input) {
         queries.generalOrder(id);
         return queries.projectGeneralOrder(service.prepare(id, input));
     }
@@ -98,7 +98,7 @@ public class GeneralOrderResource {
     @POST
     @Path("/{id}/return")
     @Transactional
-    public ApiResponses.GeneralOrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
+    public ApiResponses.GeneralOrderResponse returnItems(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ReturnInput input) {
         queries.generalOrder(id);
         return queries.projectGeneralOrder(service.returnItems(id, input));
     }
@@ -106,7 +106,7 @@ public class GeneralOrderResource {
     @POST
     @Path("/{id}/restock")
     @Transactional
-    public ApiResponses.GeneralOrderResponse restock(@PathParam("id") UUID id, @Valid ApiModels.OrderRestockInput input) {
+    public ApiResponses.GeneralOrderResponse restock(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderRestockInput input) {
         queries.generalOrder(id);
         return queries.projectGeneralOrder(service.restockUnused(id, input));
     }

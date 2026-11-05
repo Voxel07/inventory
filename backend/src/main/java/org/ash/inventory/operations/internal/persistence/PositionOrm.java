@@ -53,7 +53,7 @@ public class PositionOrm {
                     when t.type in (checkout, transfer_out) or (t.type = written_off and t.custodyWriteOff = false) then -t.quantity
                     else 0 end), 0) from StockTransaction t where t.item = :item
                 """, Long.class).setParameter("item", item).getSingleResult();
-        int located = positions(item).stream().mapToInt(p -> p.quantityOnHand).sum();
+        long located = positions(item).stream().mapToLong(p -> p.quantityOnHand).sum();
         return Math.toIntExact(Math.max(0, onHand - located));
     }
     public List<org.ash.inventory.operations.internal.model.DamageReport> unlocatedDamage(Item item) {

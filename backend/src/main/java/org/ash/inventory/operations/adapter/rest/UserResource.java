@@ -57,7 +57,7 @@ public class UserResource {
     @POST @Path("/auth/logout") public void logout() { sessions.logout(actors.authenticated().id); }
 
     @POST @Path("/auth/dev-login") @Transactional
-    public ApiResponses.DevLoginResponse devLogin(@Valid ApiModels.DevLoginInput input) {
+    public ApiResponses.DevLoginResponse devLogin(@jakarta.validation.constraints.NotNull @Valid ApiModels.DevLoginInput input) {
         if (!devAuthEnabled) throw ApiException.notFound("Development login is disabled");
         var user = users.devLogin(input);
         return new ApiResponses.DevLoginResponse("dev:" + user.externalSubject, mapper.currentUser(user));
@@ -79,7 +79,7 @@ public class UserResource {
 
     /** Inventory admin sets role and faction memberships; Authentik only grants access to the system. */
     @jakarta.ws.rs.PATCH @Path("/users/{id}")
-    public ApiResponses.UserResponse updateAccess(@jakarta.ws.rs.PathParam("id") java.util.UUID id, @Valid ApiModels.UserAccessInput input) {
+    public ApiResponses.UserResponse updateAccess(@jakarta.ws.rs.PathParam("id") java.util.UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.UserAccessInput input) {
         return mapper.user(users.updateAccess(id, input));
     }
 

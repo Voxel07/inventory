@@ -15,7 +15,7 @@ import java.util.UUID;
 public class OrderCopyResource {
     @Inject OrderService orders; @Inject ApiQueryService queries;
     public record Input(@NotNull UUID sourceOrderId, @NotNull UUID eventId, @NotNull UUID commandId) {}
-    @POST @Transactional public ApiResponses.OrderDetail create(@Valid Input input) {
+    @POST @Transactional public ApiResponses.OrderDetail create(@jakarta.validation.constraints.NotNull @Valid Input input) {
         return queries.projectAnyOrder(orders.copyAsDraft(input.sourceOrderId(),input.eventId(),input.commandId()));
     }
 }

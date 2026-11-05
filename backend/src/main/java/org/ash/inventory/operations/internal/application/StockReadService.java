@@ -87,7 +87,7 @@ public class StockReadService {
     }
 
     private StockState ledgerStock(Map<DomainEnums.TransactionType, Long> totals, int damaged, int reserved, int blocked, int inTransit) {
-        int onHand = quantity(totals, DomainEnums.TransactionType.added)
+        long onHand = quantity(totals, DomainEnums.TransactionType.added)
                 + quantity(totals, DomainEnums.TransactionType.received)
                 + quantity(totals, DomainEnums.TransactionType.adjusted)
                 + quantity(totals, DomainEnums.TransactionType.checkin)
@@ -95,16 +95,20 @@ public class StockReadService {
                 - quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.written_off)
                 - quantity(totals, DomainEnums.TransactionType.transfer_out);
-        int checkedOut = quantity(totals, DomainEnums.TransactionType.checkout)
+        long checkedOut = quantity(totals, DomainEnums.TransactionType.checkout)
                 - quantity(totals, DomainEnums.TransactionType.checkin)
                 - quantity(totals, DomainEnums.TransactionType.consumed)
                 - quantity(totals, DomainEnums.TransactionType.missing);
-        return new StockState(Math.max(0, onHand), Math.max(0, checkedOut), inTransit, damaged, reserved,
-                Math.max(0, onHand - damaged - reserved - blocked));
+        try {
+            return new StockState(Math.toIntExact(Math.max(0, onHand)), Math.toIntExact(Math.max(0, checkedOut)), inTransit, damaged, reserved,
+                    Math.toIntExact(Math.max(0, onHand - damaged - reserved - blocked)));
+        } catch (ArithmeticException invalid) {
+            throw org.ash.inventory.platform.api.ApiException.badRequest("Stock quantity exceeds the supported range");
+        }
     }
 
-    private int quantity(Map<DomainEnums.TransactionType, Long> totals, DomainEnums.TransactionType type) {
-        return Math.toIntExact(totals.getOrDefault(type, 0L));
+    private long quantity(Map<DomainEnums.TransactionType, Long> totals, DomainEnums.TransactionType type) {
+        return totals.getOrDefault(type, 0L);
     }
 
 }

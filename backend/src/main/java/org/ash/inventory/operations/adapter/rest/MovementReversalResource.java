@@ -13,5 +13,5 @@ import java.util.UUID;
 @Path("/api/transactions/{id}/reversal") @Consumes(MediaType.APPLICATION_JSON) @Produces(MediaType.APPLICATION_JSON)
 public class MovementReversalResource {
     @Inject MovementReversalService service;@Inject ApiMapper mapper;
-    @POST @Transactional public ApiResponses.TransactionResponse reverse(@PathParam("id")UUID id,@Valid MovementReversalService.Input input){return mapper.transaction(service.reverse(id,input));}
+    @POST @Transactional public ApiResponses.TransactionResponse reverse(@PathParam("id")UUID id,@jakarta.validation.constraints.NotNull @Valid MovementReversalService.Input input){return mapper.transaction(service.reverse(id,input));}
 }

@@ -61,6 +61,8 @@ public class RuntimeService {
     public RuntimeEntry record(Item item, AssetInstance asset, BigDecimal reading, EventOccurrence event, InventoryOrder order,
             RuntimeEntry.Source source, String notes) {
         if (reading == null || reading.signum() < 0) return null;
+        if (reading.precision() - reading.scale() > 36 || reading.scale() > 2)
+            throw ApiException.badRequest("Operating hours exceed the supported precision or range");
         var current = asset != null ? asset.operatingHours : item.currentOperatingHours;
         if (current == null) current = BigDecimal.ZERO;
         var next = reading.setScale(2, RoundingMode.HALF_UP);

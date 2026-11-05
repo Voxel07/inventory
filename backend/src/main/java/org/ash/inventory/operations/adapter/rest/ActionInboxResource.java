@@ -11,5 +11,5 @@ import java.util.List;
 public class ActionInboxResource {
     @Inject ActionInboxService service;
     @GET public List<ActionInboxService.Action> list() { return service.list(); }
-    @PUT @Path("/reminder") public void remind(@Valid ActionInboxService.ReminderInput input) { service.remind(input); }
+    @PUT @Path("/reminder") public void remind(@jakarta.validation.constraints.NotNull @Valid ActionInboxService.ReminderInput input) { service.remind(input); }
 }

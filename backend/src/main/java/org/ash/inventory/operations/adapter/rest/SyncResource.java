@@ -19,10 +19,10 @@ public class SyncResource {
     public SyncResource(SyncService sync) { this.sync = sync; }
 
     @POST
-    public ApiResponses.SyncBatchResponse sync(@Valid ApiModels.SyncBatch batch) { return sync.sync(batch); }
+    public ApiResponses.SyncBatchResponse sync(@jakarta.validation.constraints.NotNull @Valid ApiModels.SyncBatch batch) { return sync.sync(batch); }
 
     @Paged @GET @Path("/audit")
-    public List<ApiResponses.SyncAuditResponse> audit(@QueryParam("status") String status,
+    public List<ApiResponses.SyncAuditResponse> audit(@QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
         return sync.audit(status, page, size);
     }

@@ -13,6 +13,7 @@ public final class CsvImportPlan {
     public record Prepared(ArrayNode work, ObjectNode result, int rows) {}
 
     public static Prepared prepare(ObjectNode plan) {
+        org.ash.inventory.platform.api.Inputs.validateJson(plan);
         if (plan.toString().length() > 8_000_000) throw ApiException.badRequest("Import exceeds the 8 MB upload limit");
         String tab = plan.path("tabType").asText();
         if (!Set.of("items", "assemblies", "combined").contains(tab)) throw ApiException.badRequest("Unknown import type");

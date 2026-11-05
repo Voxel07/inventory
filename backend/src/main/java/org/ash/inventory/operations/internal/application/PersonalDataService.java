@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.notification.api.NotificationService;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -25,7 +27,7 @@ public class PersonalDataService {
     @Inject ActorService actors;
     @Inject AccountLifecycleService lifecycle;
     @Inject DomainEventService events;
-    public record EraseInput(@NotNull Long revision, @NotBlank @Size(max=1000) String reason) {}
+    public record EraseInput(@NotNull Long revision, @NotBlank @InputText(max = 1000) String reason) {}
     private static final class ExportBuffer extends ByteArrayOutputStream {
         private void reserve(int length) {
             if ((long)count+length>25*1024*1024) throw new ApiException(413,"Person export exceeds 25 MiB; use an operator-assisted export");

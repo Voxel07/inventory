@@ -77,7 +77,7 @@ public class CsvImportRows {
             var known = CsvImportSupport.all((page, size) -> stock.lots(saved.id, page, size)).stream()
                     .filter(candidate -> candidate.lotNumber.equalsIgnoreCase(lot.path("lotNumber").asText())).findFirst();
             var transaction = csv.object().put("itemId", saved.id.toString()).put("transactionType", "adjusted")
-                    .put("reason", "CSV lot opening stock").put("quantityChanged", quantity.asInt());
+                    .put("reason", "CSV lot opening stock").put("quantityChanged", CsvImportSupport.integer(quantity));
             if (saved.storageLocation != null) transaction.put("locationId", saved.storageLocation.id.toString());
             if (known.isPresent()) transaction.put("lotId", known.get().id.toString()); else transaction.set("newLot", lot);
             var identity = csv.array().add("lot-opening-stock").add(saved.id.toString()).add(lot.path("lotNumber").asText());

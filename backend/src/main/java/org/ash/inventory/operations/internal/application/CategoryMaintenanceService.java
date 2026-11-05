@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.CategoryMaintenancePolicy;
@@ -29,7 +31,7 @@ public class CategoryMaintenanceService {
         this.events = events;
     }
 
-    public record Policy(String category, int intervalDays) {}
+    public record Policy(@InputText String category, int intervalDays) {}
 
     @Transactional
     public List<Policy> list() {

@@ -39,10 +39,23 @@ public final class MediaTypes {
 
     /** The original base name with the extension that matches the sniffed type. */
     public static String fileName(String originalName, String contentType) {
-        String name = originalName == null || originalName.isBlank() ? "upload" : originalName;
+        String name = safeFilename(originalName);
         int dot = name.lastIndexOf('.');
         if (dot > 0) name = name.substring(0, dot);
         return name + EXTENSIONS.get(contentType);
+    }
+
+    /** Leave room for the generated UUID prefix on local filesystems; never preserve path syntax. */
+    public static String safeFilename(String originalName) {
+        String name = originalName == null || originalName.isBlank() ? "upload" : originalName;
+        name = name.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1).replaceAll("[^a-zA-Z0-9._-]", "_");
+        int dot = name.lastIndexOf('.');
+        String extension = dot > 0 && name.length() - dot <= 10 ? name.substring(dot) : "";
+        String base = extension.isEmpty() ? name : name.substring(0, dot);
+        if (base.length() > 180) base = base.substring(0, 180);
+        base = base.replaceAll("^[.]+|[.]+$", "");
+        return (base.isBlank() ? "upload" : base) + extension;
     }
 
     /** Content type for a stored key, derived from the extension assigned at upload. */

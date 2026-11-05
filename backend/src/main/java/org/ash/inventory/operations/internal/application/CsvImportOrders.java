@@ -159,7 +159,7 @@ public class CsvImportOrders {
 
     public void standaloneReturn(CsvImportJob job, JsonNode row) {
         UUID itemId = csv.itemId(job, row.path("itemId"));
-        int quantity = row.path("quantity").asInt();
+        int quantity = CsvImportSupport.integer(row.path("quantity"));
         if (!row.path("generalOrderName").asText().isBlank()) {
             var matching = generalOrders().stream().filter(order -> order.name().equalsIgnoreCase(row.path("generalOrderName").asText())
                     && (!row.path("date").isNumber() || EpochTime.millis(catalog.find(org.ash.inventory.operations.internal.model.EventOccurrence.class,
@@ -191,7 +191,7 @@ public class CsvImportOrders {
 
     public void checkout(CsvImportJob job, JsonNode row) {
         UUID itemId = csv.itemId(job, row.path("itemId"));
-        int quantity = row.path("quantity").asInt();
+        int quantity = CsvImportSupport.integer(row.path("quantity"));
         var imported = previous(row, itemId, "checkout");
         int alreadyImported = imported.stream().mapToInt(ApiResponses.TransactionResponse::quantityChanged).sum();
         if (alreadyImported >= quantity) return;

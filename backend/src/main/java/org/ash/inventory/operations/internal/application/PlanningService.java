@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.platform.api.InputText;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -28,7 +30,7 @@ public class PlanningService {
     public PlanningService(PlanningOrm orm, PlanningStockService stockSnapshots, ActorService actors, DomainEventService events) {
         this.orm = orm; this.stockSnapshots = stockSnapshots; this.actors = actors; this.events = events;
     }
-    public record OverrideInput(UUID eventId, UUID itemId, int quantity, String reason) {}
+    public record OverrideInput(UUID eventId, UUID itemId, int quantity, @InputText String reason) {}
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand
     public void override(OverrideInput input) {

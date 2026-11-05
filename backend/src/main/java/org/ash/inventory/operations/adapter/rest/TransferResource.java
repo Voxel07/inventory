@@ -27,33 +27,33 @@ public class TransferResource {
     public TransferResource(TransferService service) { this.service = service; }
 
     @Paged @GET
-    public List<TransferDtos.TransferResponse> list(@QueryParam("status") String status,
+    public List<TransferDtos.TransferResponse> list(@QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
         return service.list(status, page, size);
     }
 
     @POST
-    public Response create(@Valid TransferDtos.TransferInput input) {
+    public Response create(@jakarta.validation.constraints.NotNull @Valid TransferDtos.TransferInput input) {
         var created = service.create(input);
         return Response.created(URI.create("/api/transfers/" + created.id())).entity(created).build();
     }
 
     @POST @Path("/{id}/dispatch")
     public TransferDtos.TransferResponse dispatch(@PathParam("id") UUID id,
-            @Valid TransferDtos.CommandInput input) {
+            @jakarta.validation.constraints.NotNull @Valid TransferDtos.CommandInput input) {
         return service.dispatch(id, input);
     }
 
     @POST @Path("/{id}/receive")
     public TransferDtos.TransferResponse receive(@PathParam("id") UUID id,
-            @Valid TransferDtos.ReceiveInput input) {
+            @jakarta.validation.constraints.NotNull @Valid TransferDtos.ReceiveInput input) {
         return service.receive(id, input);
     }
 
     @POST @Path("/{id}/cancel")
     public TransferDtos.TransferResponse cancel(@PathParam("id") UUID id,
-            @Valid TransferDtos.CommandInput input) {
+            @jakarta.validation.constraints.NotNull @Valid TransferDtos.CommandInput input) {
         return service.cancel(id, input);
     }
 }

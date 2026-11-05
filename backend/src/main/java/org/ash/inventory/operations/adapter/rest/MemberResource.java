@@ -14,9 +14,9 @@ public class MemberResource {
     @Inject MemberService service;
     @GET @Path("/custody") public List<org.ash.inventory.operations.internal.application.CustodyBalanceService.Balance> custody() { return service.custodyRows(); }
     @GET @Path("/storage") public List<MemberService.Stored> stored() { return service.stored(); }
-    @PUT @Path("/assignments/{id}") public void assign(@PathParam("id") UUID id, @Valid MemberService.Assignment input) { service.assign(id, input); }
+    @PUT @Path("/assignments/{id}") public void assign(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid MemberService.Assignment input) { service.assign(id, input); }
     @Paged @GET @Path("/requests") public List<MemberService.RequestView> requests(@QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) { return service.requests(page, size); }
-    @POST @Path("/requests") public MemberService.RequestView request(@Valid MemberService.RequestInput input) { return service.request(input); }
-    @POST @Path("/requests/{id}") public MemberService.RequestView decide(@PathParam("id") UUID id, @Valid MemberService.Decision input) { return service.decide(id, input); }
-    @POST @Path("/returns") public Map<String, UUID> submitReturn(@Valid MemberService.ReturnInput input) { return Map.of("id", service.submitReturn(input)); }
+    @POST @Path("/requests") public MemberService.RequestView request(@jakarta.validation.constraints.NotNull @Valid MemberService.RequestInput input) { return service.request(input); }
+    @POST @Path("/requests/{id}") public MemberService.RequestView decide(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid MemberService.Decision input) { return service.decide(id, input); }
+    @POST @Path("/returns") public Map<String, UUID> submitReturn(@jakarta.validation.constraints.NotNull @Valid MemberService.ReturnInput input) { return Map.of("id", service.submitReturn(input)); }
 }

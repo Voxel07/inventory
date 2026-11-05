@@ -1,6 +1,7 @@
 import { formatDate, formatReportValue, formatDateTime } from '../../utils/dateFormat';
 import { ActionBar } from '../shared/ActionBar';
 import { useState } from 'react';
+import { csvCell } from '../../utils/csvExport';
 import { Alert, Box, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from '@mui/material';
 import { DateRangeField, TextField as MuiTextField } from '../shared/DateTextField';
 import { Link } from 'react-router-dom';
@@ -58,8 +59,7 @@ export function ReportsPanel() {
         return;
       }
       const keys = [...new Set(rows.flatMap(Object.keys))];
-      const cell = (value: unknown) => { let s = String(value ?? ''); if (/^[=+@\-\t\r]/.test(s)) s = `'${s}`; return `"${s.replaceAll('"', '""')}"`; };
-      const csv = [keys.map(cell).join(','), ...rows.map((row) => keys.map((key) => cell(formatReportValue(key, row[key], ''))).join(','))].join('\r\n');
+      const csv = [keys.map(csvCell).join(','), ...rows.map((row) => keys.map((key) => csvCell(formatReportValue(key, row[key], ''))).join(','))].join('\r\n');
       save(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }), fileName);
     } catch (e) { setExportError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
   }

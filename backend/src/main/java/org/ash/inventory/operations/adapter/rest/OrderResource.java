@@ -47,10 +47,10 @@ public class OrderResource {
     }
 
     @Paged @GET
-    public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") String eventType,
-            @QueryParam("faction") String faction,
-            @QueryParam("orderCode") String orderCode,
-            @QueryParam("status") List<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses,
+    public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
+            @QueryParam("faction") @org.ash.inventory.platform.api.InputText String faction,
+            @QueryParam("orderCode") @org.ash.inventory.platform.api.InputText String orderCode,
+            @QueryParam("status") @jakarta.validation.constraints.Size(max = 2000) List<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses,
             @QueryParam("eventId") UUID eventId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
@@ -58,8 +58,8 @@ public class OrderResource {
     }
 
     @GET @Path("/previous")
-    public ApiResponses.OrderResponse previous(@QueryParam("eventType") String eventType,
-            @QueryParam("faction") String faction, @QueryParam("before") java.time.LocalDate before,
+    public ApiResponses.OrderResponse previous(@QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
+            @QueryParam("faction") @org.ash.inventory.platform.api.InputText String faction, @QueryParam("before") java.time.LocalDate before,
             @QueryParam("excludeId") UUID excludeId) {
         return queries.previousFactionOrder(eventType, faction, before, excludeId);
     }
@@ -72,7 +72,7 @@ public class OrderResource {
 
     @POST
     @Transactional
-    public ApiResponses.OrderResponse create(@Valid ApiModels.OrderInput input) {
+    public ApiResponses.OrderResponse create(@jakarta.validation.constraints.NotNull @Valid ApiModels.OrderInput input) {
         actor.current();
         return queries.projectOrder(service.create(input));
     }
@@ -80,7 +80,7 @@ public class OrderResource {
     @PATCH
     @Path("/{id}")
     @Transactional
-    public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @Valid ApiModels.OrderInput input) {
+    public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderInput input) {
         actor.current();
         queries.order(id);
         return queries.projectOrder(service.update(id, input));
@@ -89,7 +89,7 @@ public class OrderResource {
     @POST
     @Path("/{id}/prepare")
     @Transactional
-    public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @Valid ApiModels.PreparationInput input) {
+    public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.PreparationInput input) {
         queries.order(id);
         return queries.projectOrder(service.prepare(id, input));
     }
@@ -98,7 +98,7 @@ public class OrderResource {
     @Path("/{id}/transitions/{status}")
     @Transactional
     public ApiResponses.OrderResponse transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
-            ApiModels.TransitionInput input) {
+            @Valid ApiModels.TransitionInput input) {
         queries.order(id);
         var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return queries.projectOrder(service.transition(id, status, safeInput));
@@ -107,7 +107,7 @@ public class OrderResource {
     @POST
     @Path("/{id}/return")
     @Transactional
-    public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @Valid ApiModels.ReturnInput input) {
+    public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ReturnInput input) {
         queries.order(id);
         return queries.projectOrder(service.returnItems(id, input));
     }
@@ -115,7 +115,7 @@ public class OrderResource {
     @POST
     @Path("/{id}/restock")
     @Transactional
-    public ApiResponses.OrderResponse restock(@PathParam("id") UUID id, @Valid ApiModels.OrderRestockInput input) {
+    public ApiResponses.OrderResponse restock(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderRestockInput input) {
         queries.order(id);
         return queries.projectOrder(service.restockUnused(id, input));
     }
@@ -123,7 +123,7 @@ public class OrderResource {
     @POST
     @Path("/{id}/return-all")
     @Transactional
-    public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, ApiModels.TransitionInput input) {
+    public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, @Valid ApiModels.TransitionInput input) {
         queries.order(id);
         return queries.projectOrder(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }
