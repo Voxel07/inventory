@@ -27,7 +27,7 @@ public class TenantScopeFilter implements ContainerRequestFilter {
             "api/notifications", "api/media", "api/action-inbox", "api/events/stream", "api/event-types",
             "api/inventory-positions", "api/inventory-assets", "api/inventory-lots",
             "api/transfers", "api/inventory-counts", "api/returns", "api/custody-balances",
-            "api/equipment-availability", "api/transactions");
+            "api/equipment-availability", "api/transactions", "api/csv-imports");
     /** Histories that are scoped to one of the tenant's resources by the service. */
     private static final List<String> TENANT_HISTORY = List.of("api/transactions", "api/damage-reports", "api/maintenance");
 

@@ -1518,3 +1518,27 @@ create index integration_deliveries_pending on integration_deliveries(consumer,s
 
 INSERT INTO source_revisions (name, shard) SELECT 'assemblies', shard FROM generate_series(0, 15) AS shard;
 CREATE TRIGGER source_revision AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON assemblies FOR EACH STATEMENT EXECUTE FUNCTION advance_source_revision();
+
+-- Uploaded CSV plans and row checkpoints are durable and owned by the submitting account.
+create table csv_import_jobs (
+    id uuid primary key default gen_random_uuid(),
+    requested_by uuid not null references app_users(id),
+    authenticated_by uuid not null references app_users(id),
+    access_revision bigint not null,
+    command_id uuid not null unique,
+    filename varchar(255) not null,
+    status varchar(16) not null default 'queued' check (status in ('queued','running','completed','failed')),
+    cursor integer not null default 0 check (cursor >= 0),
+    total_rows integer not null check (total_rows > 0),
+    total_steps integer not null check (total_steps > 0 and cursor <= total_steps),
+    processed_rows integer not null default 0 check (processed_rows >= 0 and processed_rows <= total_rows),
+    timezone varchar(64) not null,
+    work jsonb not null,
+    context jsonb not null default '{}',
+    result jsonb not null,
+    authorization_context jsonb not null,
+    created_at bigint not null,
+    updated_at bigint not null
+);
+create index csv_import_jobs_pending on csv_import_jobs(created_at,id) where status in ('queued','running');
+create index csv_import_jobs_owner on csv_import_jobs(requested_by,authenticated_by,created_at desc,id desc);

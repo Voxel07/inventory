@@ -9,7 +9,7 @@ import java.util.Set;
 /** Runtime process roles; job selection permits separate worker pools from the same image. */
 @ApplicationScoped
 public class WorkerRoles {
-    private static final Set<String> JOBS = Set.of("outbox", "notifications", "reminders", "digests", "reports", "media", "retention", "sessions", "stock-history");
+    private static final Set<String> JOBS = Set.of("outbox", "notifications", "reminders", "digests", "reports", "media", "retention", "sessions", "stock-history", "imports");
     @ConfigProperty(name = "inventory.process-role", defaultValue = "all") String role;
     @ConfigProperty(name = "inventory.worker-jobs", defaultValue = "all") String jobs;
     private Set<String> selected;

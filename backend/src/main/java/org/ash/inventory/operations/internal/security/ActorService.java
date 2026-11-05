@@ -64,6 +64,11 @@ public class ActorService {
     private boolean previewingRole;
     private int privateMutationDepth;
     private int usageDepth;
+    private java.util.UUID backgroundActor;
+    private java.util.UUID backgroundAuthenticated;
+    private long backgroundRevision;
+    private Set<DomainEnums.UserRole> backgroundRoles;
+    private List<String> backgroundFactions;
 
     public ActorService(SecurityIdentity identity, CurrentVertxRequest request, UserOrm users,
             @ConfigProperty(name = "inventory.dev-auth.enabled", defaultValue = "false") boolean devAuthEnabled,
@@ -79,6 +84,7 @@ public class ActorService {
 
     @Transactional
     public UserAccount current() {
+        if (backgroundActor != null) return backgroundCurrent();
         if (cached != null) {
             if (!cached.active) throw ApiException.forbidden("This inventory account is deactivated");
             if (previewingRole) {
@@ -179,6 +185,47 @@ public class ActorService {
     public UserAccount authenticated() {
         current();
         return authenticated;
+    }
+
+    /** Internal worker entry point. No token is stored; current account access is rechecked for every row. */
+    public void useBackgroundActor(java.util.UUID actor, java.util.UUID signedIn, long revision,
+            Set<DomainEnums.UserRole> roles, List<String> factions) {
+        backgroundActor = actor;
+        backgroundAuthenticated = signedIn;
+        backgroundRevision = revision;
+        backgroundRoles = Set.copyOf(roles);
+        backgroundFactions = List.copyOf(factions);
+        impersonation.impersonatedBy(null);
+        cached = null;
+        backgroundCurrent();
+    }
+
+    private UserAccount backgroundCurrent() {
+        var actor = users.find(backgroundActor);
+        authenticated = users.find(backgroundAuthenticated);
+        if (actor == null || !actor.active || authenticated == null || !authenticated.active
+                || actor.accessRevision != backgroundRevision)
+            throw ApiException.forbidden("Import stopped because the submitting account's access changed");
+        if (!backgroundActor.equals(backgroundAuthenticated)) {
+            if (!impersonationEnabled || authenticated.role != DomainEnums.UserRole.admin)
+                throw ApiException.forbidden("Import impersonation is no longer authorized");
+            impersonation.impersonatedBy(authenticated.id);
+        }
+        if (new java.util.HashSet<>(actor.roles).equals(backgroundRoles) && actor.factions.equals(backgroundFactions))
+            return cached = actor;
+        // Preserve development role previews without ever persisting the projection on the real administrator.
+        if (!devAuthEnabled || !DEV_ISSUER.equals(authenticated.issuer) || authenticated.role != DomainEnums.UserRole.admin)
+            throw ApiException.forbidden("Import authorization no longer matches the submitting account");
+        var projection = new UserAccount();
+        projection.id = actor.id;
+        projection.name = actor.name;
+        projection.email = actor.email;
+        projection.issuer = actor.issuer;
+        projection.externalSubject = actor.externalSubject;
+        projection.accessRevision = actor.accessRevision;
+        projection.setRoles(backgroundRoles);
+        projection.factions = new java.util.ArrayList<>(backgroundFactions);
+        return cached = projection;
     }
 
     /** An unmanaged authorization projection; the real admin remains unchanged in the persistence context. */

@@ -53,6 +53,7 @@
         "assembly_items",
         "asset_instances",
         "category_maintenance_policies",
+        "csv_import_jobs",
         "custody_handover_lines",
         "custody_handovers",
         "damage_reports",

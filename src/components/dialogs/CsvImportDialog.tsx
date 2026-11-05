@@ -5,7 +5,7 @@ import { canEditEvents, canViewOrganization } from '../../utils/access';
 import { getEventTypes, getFactions } from '../../services/referenceDataService';
 import { DialogActions } from '@mui/material';
 import { CsvImportPreview } from './CsvImportPreview';
-import { runCsvImport, type CsvImportResult } from '../../services/csvImportService';
+import { uploadCsvImport, getCsvImports, csvImportRunning, csvImportCounts, type CsvImportJob } from '../../services/csvImportService';
 import { Dialog } from '../shared/ClosableDialog';
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { DialogTitle, DialogContent, Box, Typography, Tabs, Stack, Paper, FormControlLabel, Checkbox, LinearProgress, Alert, TextField, Collapse, useMediaQuery, useTheme } from '@mui/material';
@@ -22,10 +22,10 @@ import { translate, useT } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 
 import { generateSampleItemsCsv, generateSampleAssembliesCsv, generateSampleCombinedCsv } from '../../utils/csv/templates';
-import { EMPTY_CSV_IMPORT_COUNTS, type CsvImportCounts, type CsvImportType } from '../../types/csvImport';
+import { EMPTY_CSV_IMPORT_COUNTS, type CsvImportType } from '../../types/csvImport';
 
 import type { Item, Assembly, StorageLocation } from '../../types';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { itemApi } from '../../services/inventoryService';
 import { assemblyApi } from '../../services/assemblyService';
 import { storageLocationApi } from '../../services/storageLocationService';
@@ -82,16 +82,32 @@ export function CsvImportDialog({
   const [autoCreateLocations, setAutoCreateLocations] = useState(true);
   const [autoCreateReferences, setAutoCreateReferences] = useState(true);
 
-  // Import execution state
-  const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState(0);
-  const [importStatusText, setImportStatusText] = useState('');
-  const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
-  const [importedCounts, setImportedCounts] = useState<CsvImportCounts>(EMPTY_CSV_IMPORT_COUNTS);
-  const [importTotal, setImportTotal] = useState(0);
+  const queryClient = useQueryClient();
+  const jobsKey = ['csv-imports', user?.id];
+  const jobs = useQuery({ queryKey: jobsKey, queryFn: getCsvImports, enabled: open && !!user,
+    staleTime: 0, refetchOnWindowFocus: true,
+    refetchInterval: (query) => query.state.data?.some(csvImportRunning) ? 2000 : false });
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [hiddenResultId, setHiddenResultId] = useState<string | null>(null);
+  const pendingUpload = useRef<{ signature: string; commandId: string } | null>(null);
+  const selectedJob = jobs.data?.find((job) => job.id === selectedJobId) ?? jobs.data?.[0];
+  const isImporting = isUploading || !!jobs.data?.some(csvImportRunning);
+  const importResult = selectedJob && !csvImportRunning(selectedJob) && selectedJob.id !== hiddenResultId ? selectedJob.result : null;
+  const importedCounts = !csvContent && selectedJob ? csvImportCounts(selectedJob.result) : EMPTY_CSV_IMPORT_COUNTS;
+  const importTotal = selectedJob?.totalRows ?? 0;
   const totalImported = Object.values(importedCounts).reduce((sum, count) => sum + count, 0);
+  const refreshedJob = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedJob || csvImportRunning(selectedJob) || refreshedJob.current === selectedJob.id) return;
+    refreshedJob.current = selectedJob.id;
+    for (const key of ['items', 'assemblies', 'event-reports', 'faction-orders', 'general-orders', 'storageLocations']) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [selectedJob, queryClient]);
 
-  const { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
+  const { rows, newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, totalErrorsCount, totalDuplicatesCount, totalToImport } = useMemo(
     () => buildCsvImportPlan({ csvContent: catalogComplete ? csvContent : '', tabType, items, assemblies, storageLocations, updateExistingItems,
       reference: { eventTypes: catalog.data?.eventTypes ?? [], factions: catalog.data?.factions ?? [] },
       autoCreateReferences: canCreateReferences && autoCreateReferences }),
@@ -128,8 +144,8 @@ export function CsvImportDialog({
     setItemSearch('');
     setAssemblySearch('');
     setFileName(file.name);
-    setImportResult(null);
-    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
+    setHiddenResultId(selectedJob?.id ?? null);
+    setUploadError('');
     const reader = new FileReader();
     reader.onload = (e) => setCsvContent((e.target?.result as string) || '');
     reader.readAsText(file);
@@ -168,57 +184,39 @@ export function CsvImportDialog({
     if (fileInputRef.current) fileInputRef.current.value = '';
     setCsvContent('');
     setFileName('');
-    setImportResult(null);
-    setImportProgress(0);
-    setImportStatusText('');
-    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
+    setHiddenResultId(selectedJob?.id ?? null);
+    setUploadError('');
   }
 
   async function executeImport() {
-    if (totalToImport === 0 || !catalogComplete) return;
-    setIsImporting(true);
-    setImportProgress(0);
-    setImportResult(null);
-    setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
-    setImportTotal(totalToImport);
-
-    const { successItems, updatedItems, successAssemblies, successEvents, successOrders, successGeneralOrders, successReturns, successCheckouts, successOperations, errors } = await runCsvImport({ newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders, parsedReturns, parsedCheckouts, parsedOperations, storageLocations, autoCreateLocations, tabType, items, updateExistingItems, validEventsCount, validOrdersCount, validGeneralOrdersCount, validReturnsCount, validCheckoutsCount, validOperationsCount, t, setImportProgress, setImportStatusText, setImportedCounts });
-
-    setIsImporting(false);
-    setImportProgress(100);
-    setImportStatusText('');
-    setImportResult({
-      successItems,
-      updatedItems,
-      successAssemblies,
-      successEvents,
-      successOrders,
-      successGeneralOrders,
-      successReturns,
-      successCheckouts,
-      successOperations,
-      errors,
-    });
-    if (errors.length === 0) {
-      setItemSearch('');
-      setAssemblySearch('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    if (totalToImport === 0 || !catalogComplete || isUploading) return;
+    const plan = { newFactions, parsedItems, parsedAssemblies, parsedEvents, parsedOrders, parsedGeneralOrders,
+      parsedReturns, parsedCheckouts, parsedOperations, autoCreateLocations, tabType, updateExistingItems };
+    const signature = JSON.stringify(plan);
+    if (pendingUpload.current?.signature !== signature) pendingUpload.current = { signature, commandId: crypto.randomUUID() };
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const job = await uploadCsvImport(fileName || t('dialogs.csvImportDialog.loadedCSVData'), plan, pendingUpload.current.commandId);
+      queryClient.setQueryData<CsvImportJob[]>(jobsKey, (current = []) => [job, ...current.filter((entry) => entry.id !== job.id)]);
+      setSelectedJobId(job.id);
+      setHiddenResultId(null);
+      pendingUpload.current = null;
       setCsvContent('');
       setFileName('');
       setPasteOpen(false);
-    }
-
-    const totalSuccess = successItems + updatedItems + successAssemblies + successEvents + successOrders + successGeneralOrders + successReturns + successCheckouts + successOperations;
-    if (totalSuccess > 0) {
-      showSnackbar(
-        t('dialogs.csvImportDialog.importFinishedTotalSuccessEntriesSuccessfullyProcessed', { totalSuccess: totalSuccess }),
-        errors.length ? 'warning' : 'success',
-      );
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      showSnackbar(t('dialogs.csvImportDialog.backgroundStarted'), 'success');
+      void queryClient.invalidateQueries({ queryKey: jobsKey });
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsUploading(false);
     }
   }
 
   return (
-    <Dialog open={open} onClose={isImporting ? undefined : onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
+    <Dialog open={open} onClose={isUploading ? undefined : onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <Typography variant="h6" component="span">
           {t('dialogs.csvImportDialog.cSVImportItemsAssemblies')}
@@ -236,14 +234,32 @@ export function CsvImportDialog({
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
+        {uploadError && <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert>}
+        {jobs.isError && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => void jobs.refetch()}>{t('common.retry')}</Button>}>
+          {t('dialogs.csvImportDialog.backgroundLoadFailed')}
+        </Alert>}
+        {jobs.data && jobs.data.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>{t('dialogs.csvImportDialog.recentImports')}</Typography>
+            {jobs.data.map((job) => (
+              <Box key={job.id} sx={{ mb: 1 }}>
+                <Button size="small" onClick={() => { setSelectedJobId(job.id); setHiddenResultId(null); }}>
+                  {job.filename} — {t(`dialogs.csvImportDialog.jobStatus.${job.status}`)} ({job.processedRows} / {job.totalRows})
+                </Button>
+                {csvImportRunning(job) && <LinearProgress variant="determinate" value={job.progress} aria-label={job.filename} />}
+              </Box>
+            ))}
+            {jobs.data.some(csvImportRunning) && <Alert severity="info" sx={{ mt: 1 }}>{t('dialogs.csvImportDialog.backgroundContinues')}</Alert>}
+          </Paper>
+        )}
         {importResult && (
           <Alert
             severity={importResult.errors.length > 0 ? 'warning' : 'success'}
             sx={{ mb: 2 }}
-            onClose={() => setImportResult(null)}
+            onClose={() => setHiddenResultId(selectedJob?.id ?? null)}
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              {importResult.errors.length > 0
+              {selectedJob?.status === 'failed' ? t('dialogs.csvImportDialog.jobStatus.failed') : importResult.errors.length > 0
                 ? t('dialogs.csvImportDialog.importCompletedWithErrors')
                 : t('dialogs.csvImportDialog.importCompleted')}
             </Typography>
@@ -276,11 +292,7 @@ export function CsvImportDialog({
         )}
         <Tabs
           value={tabType}
-          onChange={(_e, v) => {
-            setTabType(v);
-            setImportedCounts(EMPTY_CSV_IMPORT_COUNTS);
-            setImportResult(null);
-          }}
+          onChange={(_e, v) => { setTabType(v); setUploadError(''); }}
           sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab title={translate('dialogs.csvImportDialog.importItemsFromCSV')} value="items" label={t('nav.items')} disabled={isImporting} />
@@ -298,7 +310,7 @@ export function CsvImportDialog({
                 setDragOver(true);
               }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
+              onDrop={isUploading ? undefined : handleDrop}
               sx={{
                 p: 4,
                 textAlign: 'center',
@@ -310,7 +322,7 @@ export function CsvImportDialog({
                 transition: 'all 0.2s',
                 mb: 2,
               }}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { if (!isUploading) fileInputRef.current?.click(); }}
             >
               <input
                 ref={fileInputRef}
@@ -458,16 +470,6 @@ export function CsvImportDialog({
               )}
             </Stack>
 
-            {/* Progress Bar */}
-            {isImporting && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>
-                  {importStatusText}
-                </Typography>
-                <LinearProgress variant="determinate" value={importProgress} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
-            )}
-
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               {t('dialogs.csvImportDialog.previewCountsTotalImported')}
             </Typography>
@@ -477,18 +479,18 @@ export function CsvImportDialog({
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
-        <Button title={translate('common.closeThisDialog')} onClick={onClose} disabled={isImporting}>
+        <Button title={translate('common.closeThisDialog')} onClick={onClose} disabled={isUploading}>
           {t('common.close')}
         </Button>
         {csvContent && (
           <Button title={translate('dialogs.csvImportDialog.importTheEntriesShownInThePreview')}
             variant="contained"
             onClick={executeImport}
-            disabled={isImporting || !catalogComplete || totalToImport === 0}
+            disabled={isImporting || jobs.isPending || jobs.isError || !catalogComplete || totalToImport === 0}
             startIcon={<CloudUploadIcon />}
           >
             {isImporting
-              ? t('dialogs.csvImportDialog.importing')
+              ? t('dialogs.csvImportDialog.uploading')
               : t('dialogs.csvImportDialog.importNowTotalToImport', { totalToImport: totalToImport })}
           </Button>
         )}

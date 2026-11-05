@@ -20,6 +20,7 @@ class BaselineSchemaTest {
         @Override public Map<String, String> getConfigOverrides() {
             return Map.of("quarkus.hibernate-orm.schema-management.strategy", "validate",
                     "quarkus.hibernate-orm.database.default-schema", "inventory_baseline_test",
+                    "quarkus.datasource.jdbc.additional-jdbc-properties.currentSchema", "inventory_baseline_test,public",
                     "quarkus.flyway.schemas", "inventory_baseline_test",
                     "quarkus.scheduler.enabled", "false",
                     "quarkus.flyway.migrate-at-start", "true",
