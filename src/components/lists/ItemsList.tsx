@@ -267,9 +267,8 @@ export function ItemsList({ items, isLoading, loadingMore, loadError, onRetry, o
             <Paper variant="outlined" component="ul" sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }} aria-label={t('nav.items')}>
                 {rows.slice(0, visibleCount).map((row) => <CatalogRow key={row.id}
                     to={`/items/${row.id}`}
-                    title={row.name}
+                    title={requiredQuantities ? `${requiredQuantities[row.id] ?? 1}* ${row.name}` : row.name}
                     primary={<Box component="span" sx={{ fontWeight: 600 }}>{availabilityText(row)}</Box>}
-                    secondary={requiredQuantities ? `${requiredQuantities[row.id] ?? 1}× ${t('lists.itemsList.perAssembly2')}` : undefined}
                     selectable={selecting && canEditItem(row.item)}
                     selected={selectedIds.has(row.id)}
                     onToggleSelected={() => toggleSelected(row.id)}
