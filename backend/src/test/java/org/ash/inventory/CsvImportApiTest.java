@@ -12,6 +12,10 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.ash.inventory.operations.internal.application.CsvImportSteps;
 import org.ash.inventory.operations.internal.model.UserAccount;
+import org.ash.inventory.operations.internal.model.CsvImportJob;
+import org.ash.inventory.operations.internal.persistence.JsonNodeMutabilityPlan;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.type.BasicType;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.UUID;
@@ -21,6 +25,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @QuarkusTest
 @TestProfile(CsvImportApiTest.ManualWorker.class)
@@ -33,6 +41,32 @@ class CsvImportApiTest {
     @Inject ObjectMapper json;
     @Inject CsvImportSteps steps;
     @Inject EntityManager em;
+
+    @Test void jsonSnapshotsUseTreeCopiesInsteadOfJavaSerialization() {
+        var factory = em.getEntityManagerFactory().unwrap(SessionFactoryImplementor.class);
+        var mapping = factory.getMappingMetamodel().getEntityDescriptor(CsvImportJob.class);
+        for (String attribute : new String[]{"work", "context", "result", "authorization"}) {
+            var type = (BasicType<?>) mapping.getPropertyType(attribute);
+            var mutability = assertInstanceOf(JsonNodeMutabilityPlan.class,
+                    type.getJavaTypeDescriptor().getMutabilityPlan(), attribute);
+            var nested = json.createObjectNode();
+            nested.putArray("values").add("original");
+            com.fasterxml.jackson.databind.JsonNode original = attribute.equals("work")
+                    ? json.createArrayNode().add(nested) : nested;
+            var snapshot = (com.fasterxml.jackson.databind.JsonNode) type.deepCopy(original, factory);
+            assertNotSame(original, snapshot);
+            assertEquals(original, snapshot);
+            var cached = mutability.disassemble(original, null);
+            assertInstanceOf(String.class, cached);
+            assertEquals(original, mutability.assemble(cached, null));
+            nested.withArray("values").add("changed");
+            assertEquals(1, (attribute.equals("work") ? snapshot.get(0) : snapshot).path("values").size());
+            assertEquals(snapshot, mutability.assemble(cached, null));
+            assertNull(mutability.deepCopy(null));
+            assertNull(mutability.assemble(null, null));
+            assertNull(mutability.disassemble(null, null));
+        }
+    }
 
     @Test void uploadIsIdempotentAndProgressPersistsBetweenWorkerCalls() {
         String owner = "csv-progress-" + UUID.randomUUID();
@@ -62,7 +96,8 @@ class CsvImportApiTest {
         String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
         steps.failed(assertThrows(CsvImportSteps.RowFailure.class, () -> steps.next()));
         request(owner).queryParam("search", owner + " invalid").get("/api/items").then().statusCode(200).body("", hasSize(0));
-        status(owner, id).then().body("processedRows", equalTo(1)).body("result.errors", hasSize(1));
+        status(owner, id).then().body("processedRows", equalTo(1)).body("result.errors", hasSize(1))
+                .body("result.errors[0]", containsString("Inventory lots require an item with lot_tracked tracking mode"));
         assertTrue(steps.next());
         status(owner, id).then().body("status", equalTo("completed")).body("processedRows", equalTo(2))
                 .body("result.successItems", equalTo(1)).body("result.errors", hasSize(1));
@@ -97,6 +132,24 @@ class CsvImportApiTest {
         assertTrue(steps.next());
         status(owner, id).then().body("status", equalTo("completed")).body("result.successItems", equalTo(1))
                 .body("result.successAssemblies", equalTo(1)).body("result.errors", hasSize(0));
+    }
+
+    @Test void lotOpeningStockImportsWithItsLocation() {
+        String owner = "csv-lot-" + UUID.randomUUID();
+        var plan = plan("items");
+        var row = item(1, owner);
+        ((ObjectNode)row.path("data")).put("trackingMode", "lot_tracked");
+        row.putArray("storageLocationPath").add(owner + " building").add("shelf");
+        row.putArray("lots").addObject().put("lotNumber", "opening-lot").put("quantity", 3);
+        plan.withArray("parsedItems").add(row);
+        String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        assertTrue(steps.next());
+        status(owner, id).then().body("status", equalTo("completed")).body("result.successItems", equalTo(1))
+                .body("result.errors", hasSize(0));
+        String itemId = request(owner).queryParam("search", owner).get("/api/items").then().statusCode(200)
+                .body("", hasSize(1)).extract().path("[0].id");
+        request(owner).queryParam("itemId", itemId).get("/api/inventory-lots").then().statusCode(200)
+                .body("[0].lotNumber", equalTo("opening-lot")).body("[0].stock[0].onHand", equalTo(3));
     }
 
     private ObjectNode plan(String tab) {

@@ -1,0 +1,37 @@
+# Standalone local native API with a disposable database; no production .env required.
+name: inventory-native-local
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: inventory_native_local
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: local_native_only
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory_native_local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  inventory-api:
+    image: inventory-native-local:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.native
+    ports:
+      - "127.0.0.1:18080:8080"
+    environment:
+      QUARKUS_PROFILE: native-local
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/inventory_native_local
+      QUARKUS_DATASOURCE_USERNAME: inventory
+      QUARKUS_DATASOURCE_PASSWORD: local_native_only
+      DEV_AUTH_ENABLED: "true"
+      OIDC_ENABLED: "false"
+      OTEL_SDK_DISABLED: "true"
+      API_RATE_LIMIT_REQUESTS: "100000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 768m

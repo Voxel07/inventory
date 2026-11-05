@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Validator;
@@ -35,6 +36,7 @@ public class CsvImportSupport {
     @Inject CatalogService catalog;
 
     public ObjectNode object() { return mapper.createObjectNode(); }
+    public ArrayNode array() { return mapper.createArrayNode(); }
     public ObjectNode json(Object value) { return mapper.valueToTree(value); }
     public ObjectNode copy(JsonNode value) {
         if (!value.isObject()) throw ApiException.badRequest("Import data must be an object");

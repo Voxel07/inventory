@@ -47,6 +47,39 @@ Loan and member-request lists and item-asset GETs accept `page` and `size` (maxi
 
 ## Native executable memory experiment
 
+For an isolated local native check, run these commands from the repository root:
+
+```powershell
+docker compose -f docker-compose.native-local.yml up -d --build
+python scripts/check-csv-import.py --base-url http://localhost:18080
+```
+
+This standalone stack needs no Java installation or production `.env` settings.
+It uses the same native Dockerfile as releases, a temporary PostgreSQL database,
+and the `native-local` configuration profile for development login. Native mode
+does not provide hot reload or the Quarkus Dev UI; changing a profile does not
+turn a compiled executable into `quarkus:dev`. Rebuild after backend changes.
+The local database starts empty and is discarded when its container stops.
+The smoke test writes sample items, an assembly and lot stock to this database.
+These tests are local only; the release CI does not execute them.
+
+To use the Vite frontend with this native API, run in another PowerShell terminal
+from the repository root (clear both OIDC values to enable development login):
+
+```powershell
+$env:VITE_API_URL = 'http://localhost:18080'
+$env:VITE_OIDC_AUTHORITY = ''
+$env:VITE_OIDC_CLIENT_ID = ''
+bun run dev
+```
+
+Use the URL printed by Vite, then import a CSV through the normal dialog.
+Stop and remove this isolated stack with:
+
+```powershell
+docker compose -f docker-compose.native-local.yml down -v
+```
+
 `Dockerfile.native` compiles the backend inside a Java 25 Mandrel builder and
 packages the executable in UBI 9 Micro. `src/main/docker/Dockerfile.native-micro`
 only packages an already compiled Linux executable. They use the same runtime

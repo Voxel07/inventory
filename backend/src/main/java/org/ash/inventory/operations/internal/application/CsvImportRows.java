@@ -80,7 +80,7 @@ public class CsvImportRows {
                     .put("reason", "CSV lot opening stock").put("quantityChanged", quantity.asInt());
             if (saved.storageLocation != null) transaction.put("locationId", saved.storageLocation.id.toString());
             if (known.isPresent()) transaction.put("lotId", known.get().id.toString()); else transaction.set("newLot", lot);
-            var identity = csv.mapper.createArrayNode().add("lot-opening-stock").add(saved.id.toString()).add(lot.path("lotNumber").asText());
+            var identity = csv.array().add("lot-opening-stock").add(saved.id.toString()).add(lot.path("lotNumber").asText());
             if (saved.storageLocation == null) identity.addNull(); else identity.add(saved.storageLocation.id.toString());
             transaction.put("idempotencyKey", CsvImportSupport.command(identity.toString()).toString());
             inventory.transact(csv.input(transaction, ApiModels.TransactionInput.class));

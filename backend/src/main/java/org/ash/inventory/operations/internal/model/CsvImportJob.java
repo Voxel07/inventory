@@ -6,7 +6,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import org.ash.inventory.platform.persistence.BaseEntity;
+import org.ash.inventory.operations.internal.persistence.JsonNodeMutabilityPlan;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.Mutability;
 import org.hibernate.type.SqlTypes;
 import java.util.UUID;
 
@@ -26,8 +28,12 @@ public class CsvImportJob extends BaseEntity {
     @Column(name = "total_steps", nullable = false) public int totalSteps;
     @Column(name = "processed_rows", nullable = false) public int processedRows;
     @Column(nullable = false, length = 64) public String timezone;
+    @Mutability(JsonNodeMutabilityPlan.class)
     @JdbcTypeCode(SqlTypes.JSON) @Column(nullable = false, columnDefinition = "jsonb") public ArrayNode work;
+    @Mutability(JsonNodeMutabilityPlan.class)
     @JdbcTypeCode(SqlTypes.JSON) @Column(nullable = false, columnDefinition = "jsonb") public ObjectNode context;
+    @Mutability(JsonNodeMutabilityPlan.class)
     @JdbcTypeCode(SqlTypes.JSON) @Column(nullable = false, columnDefinition = "jsonb") public ObjectNode result;
+    @Mutability(JsonNodeMutabilityPlan.class)
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "authorization_context", nullable = false, columnDefinition = "jsonb") public ObjectNode authorization;
 }
