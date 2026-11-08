@@ -112,3 +112,19 @@ test('reference auto-creation does not accept missing event types or checkout fa
   expect(result.parsedCheckouts[0].status).toBe('error');
   expect(result.newFactions).toEqual([]);
 });
+
+test('purchase links are optional, carried into item data and validated', () => {
+  const items = plan(sample, 'items').parsedItems;
+  const linked = items.filter((row) => row.data.purchaseUrl);
+  expect(linked.length).toBe(rows.filter((row) => row.Typ === 'Artikel' && row.Kauflink).length);
+  expect(linked.length).toBeGreaterThan(0);
+  expect(linked.every((row) => row.status !== 'error' && /^https:\/\//.test(row.data.purchaseUrl!))).toBe(true);
+  expect(items.some((row) => !row.data.purchaseUrl && row.status !== 'error')).toBe(true);
+
+  const header = 'Name;Kategorie;Lagerort;Kauflink';
+  const single = (link: string) => plan(`${header}\nKabel;Elektro;Lager / Regal;${link}\n`, 'items').parsedItems[0];
+  expect(single('https://www.reichelt.de/p/1').data.purchaseUrl).toBe('https://www.reichelt.de/p/1');
+  expect(single('').data.purchaseUrl).toBeUndefined();
+  expect(single('reichelt.de/p/1').status).toBe('error');
+  expect(plan('Name;Kategorie;Lagerort\nKabel;Elektro;Lager / Regal\n', 'items').parsedItems[0].data.purchaseUrl).toBeUndefined();
+});
