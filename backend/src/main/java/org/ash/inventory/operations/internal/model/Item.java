@@ -47,6 +47,9 @@ public class Item extends BaseEntity {
     public String category;
     public String subcategory;
     public String supplier;
+    /** Where to buy this item; parsed into generated suppliers by the supplier link scan. */
+    @Column(name = "purchase_url", length = 2048)
+    public String purchaseUrl;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "event_tags", columnDefinition = "jsonb", nullable = false)
     public List<String> eventTags = new ArrayList<>();

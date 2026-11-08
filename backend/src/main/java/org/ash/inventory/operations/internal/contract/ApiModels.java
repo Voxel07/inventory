@@ -23,6 +23,7 @@ public final class ApiModels {
 
     public record ItemInput(
             @InputText String sku, @NotBlank @InputText String name, @InputText(max = 16000) String description, @NotBlank @InputText String category, @InputText String subcategory, @InputText String supplier,
+            @InputText(max = 2048) String purchaseUrl,
             @Size(max = 100) List<@NotBlank @InputText String> eventTypes, @Min(0) Integer amount, @Min(0) Integer minStock,
             @Min(0) @jakarta.validation.constraints.DecimalMax("21474836.47") @jakarta.validation.constraints.Digits(integer = 8, fraction = 2) BigDecimal value, UUID storageLocation, @InputText String positionDetails, @InputText String hint,
             @jakarta.validation.constraints.DecimalMin("1") @jakarta.validation.constraints.Digits(integer = 9, fraction = 0) BigDecimal containerSize,

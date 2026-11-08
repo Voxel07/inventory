@@ -1,4 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
+import { validPurchaseUrl } from '../../utils/purchaseLinks';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { canCreateInventory, canEditCatalog } from '../../utils/access';
 import { AccordionSummary, Button } from '../shared/ActionButtons';
@@ -71,6 +72,7 @@ export function ItemForm({
         category: initialData?.category ?? '',
         subcategory: initialData?.subcategory ?? '',
         supplier: initialData?.supplier ?? '',
+        purchaseUrl: initialData?.purchaseUrl ?? '',
         eventTypes: initialData ? (initialData.eventTypes ?? []) : [...eventTypes],
         storageLocation: initialData?.storageLocation ?? '',
         positionDetails: initialData?.positionDetails ?? '',
@@ -173,6 +175,7 @@ export function ItemForm({
             unitCapacity: measured ? Number(numericInputs.unitCapacity) : null,
             currentOperatingHours: parseOptional(numericInputs.currentOperatingHours),
             fuelConsumptionLitersPer100Km: parseOptional(numericInputs.fuelConsumptionLitersPer100Km),
+            purchaseUrl: formData.purchaseUrl?.trim() || null,
             ...(offersSchedules && schedules.length ? { maintenanceSchedules: schedules.map(toScheduleInput) } : {}),
             ...(generatesAssetCodes ? {
                 assetCodePrefix: assetCodePrefix.trim() || undefined,
@@ -215,7 +218,8 @@ export function ItemForm({
     const capacityValid = !measured || (Boolean(formData.unit?.trim()) && numericInputs.unitCapacity !== ''
         && Number.isFinite(capacity) && capacity >= 0.001 && capacity <= 999999999.999
         && Math.abs(capacity * 1000 - Math.round(capacity * 1000)) < 1e-6);
-    const isDisabled = isLoading || !nameKey || !!nameError || !formData.category.trim() || !amountValid || !containerSizeValid
+    const purchaseUrlInvalid = !validPurchaseUrl(formData.purchaseUrl);
+    const isDisabled = isLoading || purchaseUrlInvalid || !nameKey || !!nameError || !formData.category.trim() || !amountValid || !containerSizeValid
         || !openedContainerValid || !openedPercentValid || !requiredNumbersValid || !assetStartValid || !capacityValid;
     const normalizedCategory = formData.category.trim().toLocaleLowerCase();
     const isVehicle = ['vehicle', 'vehicles', 'fahrzeug', 'fahrzeuge'].some((value) => normalizedCategory.includes(value));
@@ -226,7 +230,7 @@ export function ItemForm({
     const offersSchedules = !initialData && canCreatePublic && formData.inventoryRole !== 'consumable';
     const countsHoursForSchedule = offersSchedules && schedules.some((schedule) => schedule.intervalType === 'operating_hours');
     const openingHours = formData.trackingMode === 'serialized' ? 0 : Number(numericInputs.currentOperatingHours) || 0;
-    const hasAdditionalDetails = Boolean(initialData && (initialData.supplier || initialData.hint || initialData.images?.length));
+    const hasAdditionalDetails = Boolean(initialData && (initialData.supplier || initialData.purchaseUrl || initialData.hint || initialData.images?.length));
     const trackingModes: { value: NonNullable<ItemFormData['trackingMode']>; label: string; help: string }[] = [
         { value: 'bulk', label: t('forms.itemForm.bulk'), help: t('forms.itemForm.onlyTheQuantityCountsEGCableTiesOrTent') },
         { value: 'serialized', label: t('forms.itemForm.serializedAssets'), help: t('forms.itemForm.everyUnitIsTrackedIndividuallyWithAssetCodeConditionOperating') },
@@ -575,6 +579,17 @@ export function ItemForm({
                                 label={t('common.supplier')}
                                 value={formData.supplier ?? ''}
                                 onChange={handleChange('supplier')}
+                                fullWidth
+                            />
+                            <TextField
+                                label={t('forms.itemForm.purchaseUrl')}
+                                type="url"
+                                value={formData.purchaseUrl ?? ''}
+                                onChange={handleChange('purchaseUrl')}
+                                error={purchaseUrlInvalid}
+                                helperText={purchaseUrlInvalid ? t('forms.itemForm.purchaseUrlInvalid') : t('forms.itemForm.purchaseUrlHelp')}
+                                placeholder="https://"
+                                slotProps={{ htmlInput: { maxLength: 2048, inputMode: 'url' } }}
                                 fullWidth
                             />
                             <TextField

@@ -95,7 +95,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   const type = detail.type;
   if (type === 'catalog.changed') {
     switch (detail.resource) {
-      case 'items': return new Set([...stock]);
+      case 'items': return new Set([...stock, 'operations:vendor-sources']);
       case 'assemblies': return new Set(['assemblies', 'faction-orders', 'procurement-deficits', 'action-inbox', 'reports']);
       case 'storage-locations': return new Set([...stock, 'storageLocations', 'operations:transfers']);
       case 'events': return new Set(['event-reports', 'event-logistics', 'event-types', 'faction-orders', 'general-orders', 'procurement-deficits', 'items', 'action-inbox', 'reports', 'loans', ...custody]);
@@ -112,7 +112,7 @@ export function affectedDomains(detail?: ApiChangeDetail): ReadonlySet<string> |
   if (type === 'users.changed') return new Set(['users']);
   if (type.startsWith('planning.')) return new Set(['procurement-deficits', 'action-inbox']);
   if (type.startsWith('vendor_document.')) return new Set(['operations:documents']);
-  if (type.startsWith('vendor.')) return new Set([...purchasing, 'operations:vendors', 'operations:repair-vendors', 'operations:repairs']);
+  if (type.startsWith('vendor.')) return new Set([...purchasing, 'operations:vendors', 'operations:vendor-sources', 'operations:repair-vendors', 'operations:repairs']);
   if (type.startsWith('purchase_order.')) return new Set([...purchasing, 'items']);
   if (type.startsWith('goods_receipt.')) return new Set([...stock, ...purchasing]);
   if (type.startsWith('location.')) return new Set(['storageLocations', 'member-storage', 'action-inbox']);

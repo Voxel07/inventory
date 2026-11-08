@@ -19,4 +19,6 @@ public class Vendor extends BaseEntity {
     @Column(name = "preferred_vendor", nullable = false) public boolean preferredVendor;
     @Column(name = "internal_notes") public String internalNotes;
     @Column(nullable = false) public boolean active = true;
+    /** Shop host this supplier was generated from by the item link scan; null for suppliers entered by hand. */
+    @Column(name = "source_host", unique = true) public String sourceHost;
 }

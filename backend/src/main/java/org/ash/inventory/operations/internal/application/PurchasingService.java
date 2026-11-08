@@ -474,7 +474,7 @@ public class PurchasingService {
     private PurchasingDtos.VendorResponse vendor(Vendor value) {
         return new PurchasingDtos.VendorResponse(value.id, value.name, value.contactPerson, value.email,
                 value.phone, value.address, value.website, value.paymentNotes, value.preferredVendor,
-                value.internalNotes, value.active);
+                value.internalNotes, value.active, value.sourceHost);
     }
 
     private PurchasingDtos.VendorDocumentResponse document(VendorDocument value) {

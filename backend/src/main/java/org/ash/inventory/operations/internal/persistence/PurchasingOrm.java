@@ -8,6 +8,9 @@ import org.ash.inventory.operations.internal.model.PurchaseOrder;
 import org.ash.inventory.operations.internal.model.PurchaseOrderLine;
 import org.ash.inventory.operations.internal.model.Vendor;
 import org.ash.inventory.operations.internal.model.VendorDocument;
+import org.ash.inventory.operations.internal.model.Item;
+import org.ash.inventory.operations.internal.model.VendorItemSource;
+import org.ash.inventory.operations.internal.model.VendorSourceScan;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;
@@ -38,6 +41,43 @@ public class PurchasingOrm extends EntityOrm {
                 .setParameter("name", name.trim().toLowerCase(Locale.ROOT));
         if (excluding != null) query.setParameter("excluding", excluding);
         return query.getSingleResult() > 0;
+    }
+
+    /** Serializes item link scans, so two runs never create the same generated supplier twice. */
+    public void lockVendorSourceScan() {
+        entityManager.createNativeQuery("select 1 from pg_advisory_xact_lock(659743254)").getSingleResult();
+    }
+    public List<Vendor> allVendors() {
+        return entityManager.createQuery("from Vendor vendor order by vendor.active desc, vendor.preferredVendor desc, vendor.name, vendor.id", Vendor.class)
+                .getResultList();
+    }
+    /** Active organization items with a purchase link; privately owned items never feed shared suppliers. */
+    public List<Item> itemsWithPurchaseLinks() {
+        return entityManager.createQuery("select item from Item item where item.active = true and item.accessPolicy is null"
+                + " and item.purchaseUrl is not null order by item.name, item.id", Item.class).getResultList();
+    }
+    public void removeVendorItemSources() {
+        entityManager.createQuery("delete from VendorItemSource").executeUpdate();
+    }
+    /** Links of the last scan whose item the actor may see and that is still active. */
+    public List<VendorItemSource> vendorItemSources() {
+        var query = entityManager.createQuery("select source from VendorItemSource source join fetch source.vendor vendor"
+                + " join fetch source.item item where item.active = true" + InventoryAccessOrm.scope("item", "item")
+                + " order by lower(vendor.name), vendor.id, lower(item.name), item.id", VendorItemSource.class);
+        return InventoryAccessOrm.bind(query, accessActor.current()).getResultList();
+    }
+    /** Organization item links added, changed or removed since the last scan. */
+    public long changedPurchaseLinks() {
+        var added = entityManager.createQuery("select count(item) from Item item where item.active = true and item.accessPolicy is null"
+                + " and item.purchaseUrl is not null and not exists (select 1 from VendorItemSource source"
+                + " where source.item = item and source.url = item.purchaseUrl)", Long.class).getSingleResult();
+        var removed = entityManager.createQuery("select count(source) from VendorItemSource source join source.item item"
+                + " where item.active = false or item.purchaseUrl is null", Long.class).getSingleResult();
+        return added + removed;
+    }
+    public VendorSourceScan lastVendorSourceScan() {
+        return entityManager.createQuery("select scan from VendorSourceScan scan join fetch scan.actor order by scan.createdAt desc, scan.id desc", VendorSourceScan.class)
+                .setMaxResults(1).getResultStream().findFirst().orElse(null);
     }
 
     public List<PurchaseOrder> purchaseOrders(String status, int offset, int limit) {

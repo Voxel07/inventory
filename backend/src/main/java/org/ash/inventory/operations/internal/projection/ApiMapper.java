@@ -245,6 +245,7 @@ public class ApiMapper {
                 value.category,
                 value.subcategory,
                 value.supplier,
+                value.purchaseUrl,
                 value.eventTags == null ? List.of() : value.eventTags,
                 value.consumable(),
                 value.trackingMode.name(),

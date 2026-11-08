@@ -107,6 +107,8 @@
         "storage_locations",
         "sync_command_audit",
         "vendor_documents",
+        "vendor_item_sources",
+        "vendor_source_scans",
         "vendors"
       ]
     }

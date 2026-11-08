@@ -13,6 +13,7 @@ import { useT } from '../utils/naming';
 import { TransfersPanel, CountsPanel, LotsPanel } from '../components/operations/StockOperations';
 import { ReplenishmentPanel } from '../components/procurement/ReplenishmentPanel';
 import { PurchasingPanel, ReceiptsPanel, VendorsPanel } from '../components/operations/PurchasingOperations';
+import { VendorSourcesPanel } from '../components/operations/VendorSourcesPanel';
 
 type Section = { key: string; label: string; component: ReactNode };
 type Group = { key: string; label: string; sections: Section[] };
@@ -36,6 +37,7 @@ export function Operations() {
       ...(purchasing ? [{ key: 'purchases', label: t('pages.operations.purchaseOrders'), component: <PurchasingPanel /> }] : []),
       ...(warehouse ? [{ key: 'receipts', label: t('pages.operations.receiving'), component: <ReceiptsPanel /> }] : []),
       ...(purchasing ? [{ key: 'vendors', label: t('pages.operations.suppliers'), component: <VendorsPanel /> }] : []),
+      ...(purchasing ? [{ key: 'vendor-sources', label: t('pages.operations.supplierLinks'), component: <VendorSourcesPanel /> }] : []),
     ] },
     { key: 'reporting', label: t('pages.operations.reports'), sections: warehouse ? [
       { key: 'reports', label: t('pages.operations.operationalReports'), component: <ReportsPanel /> },

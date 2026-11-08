@@ -1,4 +1,5 @@
 import { DATE_FORMAT } from '../../utils/dateFormat';
+import { validPurchaseUrl } from '../purchaseLinks';
 import { csvDate } from './eventLogistics';
 import { type StorageLocation, type Item, type ItemFormData } from '../../types';
 import { type ParsedItemRow } from '../../types/csvImport';
@@ -6,7 +7,7 @@ import type { CsvReference } from './reference';
 import { buildLocationIndex, resolveCsvLocation } from './locations';
 import { holdsStock } from '../locationHierarchy';
 import { parseItemLots } from './lots';
-import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
+import { catalogRowKind, POSITION_ALIASES, TRACKS_RUNTIME_ALIASES, getField, ITEM_NAME_ALIASES, CATEGORY_ALIASES, AMOUNT_ALIASES, parseNumber, MIN_STOCK_ALIASES, VALUE_ALIASES, SUBCATEGORY_ALIASES, SUPPLIER_ALIASES, PURCHASE_URL_ALIASES, HINT_ALIASES, DESCRIPTION_ALIASES, parseEventTypes, EVENT_TYPES_ALIASES, TRACKING_MODE_ALIASES, ASSET_CODE_ALIASES, parseBoolean, CONSUMABLE_ALIASES, LOCATION_ALIASES, CONTAINER_SIZE_ALIASES, CONTAINER_COUNT_ALIASES, CURRENT_OPERATING_HOURS_ALIASES, FUEL_CONSUMPTION_ALIASES, BATTERY_REPLACEMENT_DUE_ALIASES, BEST_BEFORE_DATE_ALIASES } from './core';
 
 function parseTrackingMode(val: string | undefined): 'bulk' | 'serialized' | 'lot_tracked' | undefined {
   if (!val) return undefined;
@@ -72,6 +73,7 @@ export function parseItemsFromCsv(
     const value = Math.max(0, parseNumber(getField(raw, VALUE_ALIASES), 0));
     const subcategory = getField(raw, SUBCATEGORY_ALIASES);
     const supplier = getField(raw, SUPPLIER_ALIASES);
+    const purchaseUrl = getField(raw, PURCHASE_URL_ALIASES) || undefined;
     const hint = getField(raw, HINT_ALIASES) || getField(raw, DESCRIPTION_ALIASES);
     const eventTypes = parseEventTypes(getField(raw, EVENT_TYPES_ALIASES), reference.eventTypes);
 
@@ -149,6 +151,7 @@ export function parseItemsFromCsv(
       positionDetails: getField(raw, POSITION_ALIASES) || undefined,
       subcategory,
       supplier,
+      purchaseUrl,
       hint,
       trackingMode: trackingMode || 'bulk',
       inventoryRole: isConsumable ? 'consumable' : 'returnable',
@@ -173,6 +176,8 @@ export function parseItemsFromCsv(
     const existing = candidates.length === 1 ? candidates[0] : undefined;
     const decimalsText = getField(raw, ['QuantityDecimals', 'Mengennachkommastellen']);
     const capacityText = getField(raw, ['UnitCapacity', 'Gebindeinhalt']);
+    // Rows without a link column keep the link the item already has.
+    data.purchaseUrl = purchaseUrl ?? existing?.purchaseUrl ?? undefined;
     data.unit = getField(raw, ['Unit', 'Einheit']) ?? existing?.unit ?? undefined;
     data.quantityDecimals = (decimalsText ? Number(decimalsText) : existing?.quantityDecimals ?? 0) as 0 | 2;
     data.unitCapacity = capacityText ? parseNumber(capacityText, NaN) : existing?.unitCapacity;
@@ -190,6 +195,9 @@ export function parseItemsFromCsv(
     if ([batteryReplacementDue, bestBeforeDate].some(value => value && !Number.isFinite(csvDate(value)))) {
       status = 'error';
       statusMessage = `Datum muss im Format ${DATE_FORMAT} angegeben werden`;
+    } else if (!validPurchaseUrl(data.purchaseUrl)) {
+      status = 'error';
+      statusMessage = 'Kauflink muss eine vollständige http(s)-Adresse sein (Purchase link must be a complete http(s) address)';
     } else if (lotError || locationError || identityError || quantityError) {
       status = 'error';
       statusMessage = lotError || locationError || identityError || quantityError;

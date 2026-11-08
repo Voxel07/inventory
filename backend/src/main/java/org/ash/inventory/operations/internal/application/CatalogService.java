@@ -390,6 +390,7 @@ public class CatalogService {
         item.category = input.category().trim();
         item.subcategory = input.subcategory();
         item.supplier = input.supplier();
+        item.purchaseUrl = PurchaseLinks.normalize(input.purchaseUrl());
         item.eventTags = input.eventTypes() == null ? new ArrayList<>() : new ArrayList<>(input.eventTypes());
         item.trackingMode = input.trackingMode() == null
                 ? (item.trackingMode != null ? item.trackingMode : DomainEnums.TrackingMode.bulk)

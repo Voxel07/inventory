@@ -15,7 +15,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Box, Card, CardContent, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useEventReports } from '../../hooks/useEvents';
@@ -67,9 +67,10 @@ export function PurchasingPanel() {
   </Stack>;
 }
 
-export function PurchaseDraft({ order, initialLines, itemRequestIds, eventId, onClose }: { order?: PurchaseOrder; initialLines?: PurchaseDraftLine[]; itemRequestIds?: string[]; eventId: string; onClose: () => void }) {
+/** `vendor` preselects the supplier of a new draft. */
+export function PurchaseDraft({ order, vendor, initialLines, itemRequestIds, eventId, onClose }: { order?: PurchaseOrder; vendor?: { id: string; name: string }; initialLines?: PurchaseDraftLine[]; itemRequestIds?: string[]; eventId: string; onClose: () => void }) {
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
-  const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
+  const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? vendor?.id ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
   const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? (initialLines?.length ? initialLines : [{ itemId: '', orderedQuantity: 1 }]).map((line) => ({ ...line, price: 0 })));
   const measures = useStockLookups(lines.map(line => String(line.itemId || '')));
   const [newVendor, setNewVendor] = useState(false);
@@ -80,7 +81,7 @@ export function PurchaseDraft({ order, initialLines, itemRequestIds, eventId, on
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
     <Fields values={header} onChange={setHeader} fields={[
-      { key: 'vendorId', label: t('common.supplier'), required: true, pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions, selectedLabel: order?.vendorName } },
+      { key: 'vendorId', label: t('common.supplier'), required: true, pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions, selectedLabel: order?.vendorName ?? vendor?.name } },
       { key: 'orderNumber', label: t('operations.purchasingOperations.referenceOptional') }, { key: 'orderDate', label: t('operations.purchasingOperations.orderDate'), type: 'date', required: true },
       { key: 'expectedDeliveryDate', label: t('operations.purchasingOperations.expectedDelivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('operations.purchasingOperations.eventOptional'), options: (events.data ?? []).map((event) => ({ value: event.id, label: `${event.name || event.eventType} · ${formatDate(event.eventDate)}` })) }, { key: 'notes', label: t('common.notes2'), multiline: true },
     ]} />
@@ -182,7 +183,7 @@ export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string })
 
 export function VendorsPanel() {
   const t = useT(); const vendors = useOperationList('vendors', getVendors); const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
-  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={vendor.name} status={vendor.active ? 'active' : 'inactive'}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
+  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={<>{vendor.name}{vendor.sourceHost && <Chip size="small" label={t('operations.vendorSources.generated')} sx={{ ml: 0.75 }} />}</>} status={vendor.active ? 'active' : 'inactive'}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
 }
 
 function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: () => void; onSaved?: (vendor: Vendor) => void }) {

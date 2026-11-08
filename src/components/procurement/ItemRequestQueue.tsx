@@ -37,6 +37,7 @@ import { useStorageLocations } from '../../hooks/useStorageLocations';
 import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { translate, useT } from '../../utils/naming';
 import { formatDate } from '../../utils/dateFormat';
+import { validPurchaseUrl } from '../../utils/purchaseLinks';
 
 type QueueDialog = { kind: 'create' | 'link' | 'decline' | 'order'; entry: ItemRequestQueueEntry } | null;
 
@@ -152,7 +153,9 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
           // Nothing is in stock yet: the purchase order brings it in.
           amount: 0,
           name: dialog.entry.request.name,
-          description: [dialog.entry.request.note, dialog.entry.request.link && translate('itemRequests.source', { link: dialog.entry.request.link })]
+          // A shop link becomes the item's purchase link; anything else stays a note in the description.
+          purchaseUrl: dialog.entry.request.link && validPurchaseUrl(dialog.entry.request.link) ? dialog.entry.request.link.trim() : undefined,
+          description: [dialog.entry.request.note, dialog.entry.request.link && !validPurchaseUrl(dialog.entry.request.link) && translate('itemRequests.source', { link: dialog.entry.request.link })]
             .filter(Boolean).join('\n'),
         }}
         onSubmit={(data) => createItem.mutate(data, {

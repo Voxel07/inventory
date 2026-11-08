@@ -149,6 +149,7 @@ public final class ApiResponses {
             String category,
             String subcategory,
             String supplier,
+            String purchaseUrl,
             List<String> eventTypes,
             @com.fasterxml.jackson.annotation.JsonProperty("isConsumable") boolean isConsumable,
             String trackingMode,

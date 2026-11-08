@@ -510,6 +510,7 @@ create table items (
     sku varchar(255) not null unique,
     subcategory varchar(255),
     supplier varchar(255),
+    purchase_url varchar(2048),
     tracking_mode varchar(255) not null check ((tracking_mode in ('bulk','serialized','lot_tracked'))),
     event_tags jsonb not null,
     primary key (id),
@@ -828,6 +829,28 @@ create table vendors (
     payment_notes varchar(255),
     phone varchar(255),
     website varchar(255),
+    source_host varchar(255) unique,
+    primary key (id)
+);
+
+create table vendor_item_sources (
+    created_at bigint not null,
+    updated_at bigint not null,
+    id uuid not null,
+    item_id uuid not null unique,
+    vendor_id uuid not null,
+    url varchar(2048) not null,
+    primary key (id)
+);
+
+create table vendor_source_scans (
+    created_vendors integer not null,
+    linked_items integer not null,
+    skipped_items integer not null,
+    created_at bigint not null,
+    updated_at bigint not null,
+    actor_id uuid not null,
+    id uuid not null,
     primary key (id)
 );
 
@@ -947,6 +970,8 @@ create index ix_damage_item_status on damage_reports (item_id, status);
 create index ix_asset_item_active on asset_instances (item_id, active);
 create index ix_schedule_item_active on maintenance_schedules (item_id, active);
 create index ix_images_item_order on item_images (item_id, display_order);
+create index ix_vendor_item_sources_vendor on vendor_item_sources (vendor_id);
+create index ix_vendor_source_scans_created on vendor_source_scans (created_at desc);
 create index ix_orders_kind_status on orders (kind, status);
 alter table order_lines add constraint fk_order_line_source foreign key (source_location_id) references storage_locations(id);
 create index ix_order_lines_item on order_lines (item_id);
@@ -1074,6 +1099,9 @@ alter table if exists vendor_documents add constraint FKeuhya1ea21gyq5odbrci7n1b
 alter table if exists vendor_documents add constraint FKsyyhv6b9ypn90u5s3sm6iyomf foreign key (purchase_order_id) references purchase_orders;
 alter table if exists vendor_documents add constraint FK9j7d2x57qgg7s6saes8n93fps foreign key (uploaded_by) references app_users;
 alter table if exists vendor_documents add constraint FKhjvyn99g3h3tuvfyh96d3erxx foreign key (vendor_id) references vendors;
+alter table if exists vendor_item_sources add constraint fk_vendor_item_sources_item foreign key (item_id) references items on delete cascade;
+alter table if exists vendor_item_sources add constraint fk_vendor_item_sources_vendor foreign key (vendor_id) references vendors on delete cascade;
+alter table if exists vendor_source_scans add constraint fk_vendor_source_scans_actor foreign key (actor_id) references app_users;
 alter table if exists event_attendee_roles add constraint fk_event_attendee_roles_faction foreign key (faction_id) references factions;
 create index member_requests_item_state on member_requests(item_id, kind, status);
 alter table damage_reports add constraint fk_damage_reports_assembly foreign key (assembly_id) references assemblies;

@@ -31,7 +31,16 @@ export type PurchaseDraftLine = { itemId: string; orderedQuantity: number };
 /** Still to order for a shortage: at least one unit. */
 export const shortageLine = (row: ProcurementDeficit): PurchaseDraftLine => ({ itemId: row.itemId, orderedQuantity: Math.max(1, row.netDeficit - row.orderedStock) });
 
-export type Vendor = { id: string; name: string; active: boolean; contactPerson?: string; email?: string; phone?: string; address?: string; website?: string; paymentNotes?: string; preferredVendor?: boolean; internalNotes?: string };
+export type Vendor = { id: string; name: string; active: boolean; contactPerson?: string; email?: string; phone?: string; address?: string; website?: string; paymentNotes?: string; preferredVendor?: boolean; internalNotes?: string;
+  /** Set when the item link scan generated this supplier. */
+  sourceHost?: string | null };
+/** `url` is the link at the last scan; `currentUrl` the item's link now (null when removed). */
+export type VendorSourceItem = { itemId: string; sku: string; itemName: string; url: string; currentUrl: string | null };
+export type VendorSourceGroup = { vendorId: string; vendorName: string; host: string; generated: boolean; active: boolean; items: VendorSourceItem[] };
+/** `changedLinks` counts item links added, changed or removed since the last scan. */
+export type VendorSources = { lastScannedAt: number | null; lastScannedBy: string | null; linkedItems: number; skippedItems: number; createdVendors: number; changedLinks: number; vendors: VendorSourceGroup[] };
+export const getVendorSources = () => apiRequest<VendorSources>('/api/vendors/sources');
+export const scanVendorSources = () => apiRequest<VendorSources>('/api/vendors/sources/scan', { method: 'POST' });
 type PurchaseOrderLine = { id: string; itemId: string; itemName: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPriceCents: number };
 export type PurchaseOrder = { id: string; orderNumber: string; vendorId: string; vendorName: string; eventOccurrenceId?: string; orderDate: number; expectedDeliveryDate?: number; status: string; createdById: string; createdByName: string; notes?: string; lines: PurchaseOrderLine[] };
 export const saveVendor = (data: object, id?: string) => apiRequest<Vendor>(`/api/vendors${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: data });

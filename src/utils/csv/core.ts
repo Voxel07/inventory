@@ -168,6 +168,7 @@ export const POSITION_ALIASES = ['positiondetails', 'position', 'positionimlager
 export const SUBCATEGORY_ALIASES = ['subcategory', 'unterkategorie', 'subkategorie'];
 
 export const SUPPLIER_ALIASES = ['supplier', 'lieferant', 'hersteller', 'vendor'];
+export const PURCHASE_URL_ALIASES = ['purchaseUrl', 'purchase_url', 'kauflink', 'bestelllink', 'shoplink', 'bezugsquelle', 'url', 'link'];
 
 export const EVENT_TYPES_ALIASES = ['eventtypes', 'event_types', 'events', 'event', 'veranstaltungen', 'benoetigtfuerevents'];
 

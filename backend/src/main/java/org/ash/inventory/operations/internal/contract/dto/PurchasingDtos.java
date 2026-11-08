@@ -21,9 +21,21 @@ public final class PurchasingDtos {
     public record VendorInput(@NotBlank @InputText String name, @InputText String contactPerson, @InputText String email, @InputText String phone,
             @InputText String address, @InputText String website, @InputText String paymentNotes, boolean preferredVendor,
             @InputText String internalNotes, Boolean active) {}
+    /** {@code sourceHost} is set when the item link scan generated this supplier. */
     public record VendorResponse(UUID id, String name, String contactPerson, String email, String phone,
             String address, String website, String paymentNotes, boolean preferredVendor,
-            String internalNotes, boolean active) {}
+            String internalNotes, boolean active, String sourceHost) {}
+
+    /** Items found under a supplier's shop host by the last item link scan. */
+    public record VendorSourceItem(UUID itemId, String sku, String itemName, String url, String currentUrl) {}
+    public record VendorSourceGroup(UUID vendorId, String vendorName, String host, boolean generated, boolean active,
+            List<VendorSourceItem> items) {}
+    /**
+     * Result of the last manual item link scan. {@code changedLinks} counts item links added, changed or removed since
+     * then; they only reach the suppliers with the next scan.
+     */
+    public record VendorSourcesResponse(Instant lastScannedAt, String lastScannedBy, int linkedItems, int skippedItems,
+            int createdVendors, long changedLinks, List<VendorSourceGroup> vendors) {}
 
     public record PurchaseOrderLineInput(@NotNull UUID itemId, @Min(1) int orderedQuantity,
             @Min(0) int unitPriceCents, @InputText String notes) {}

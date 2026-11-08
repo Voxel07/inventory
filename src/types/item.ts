@@ -107,6 +107,8 @@ export interface Item {
   category: string;
   subcategory?: string;
   supplier?: string;
+  /** Where to buy the item; the supplier link scan groups these by shop. */
+  purchaseUrl?: string | null;
   eventTypes?: EventType[];
   /** Null when the item has no storage location or the caller may not see it (`locationRestricted`). */
   storageLocation: string | null;
@@ -165,6 +167,8 @@ export interface ItemFormData {
   category: string;
   subcategory?: string;
   supplier?: string;
+  /** Where to buy the item; the supplier link scan groups these by shop. */
+  purchaseUrl?: string | null;
   eventTypes?: EventType[];
   storageLocation: string;
   positionDetails?: string;

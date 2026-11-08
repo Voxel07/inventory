@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.operations.internal.application.PurchasingService;
+import org.ash.inventory.operations.internal.application.VendorSourceService;
 import org.ash.inventory.operations.internal.contract.dto.PurchasingDtos;
 
 import jakarta.validation.Valid;
@@ -25,9 +26,11 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 public class PurchasingResource {
     private final PurchasingService service;
+    private final VendorSourceService sources;
 
-    public PurchasingResource(PurchasingService service) {
+    public PurchasingResource(PurchasingService service, VendorSourceService sources) {
         this.service = service;
+        this.sources = sources;
     }
 
     @Paged @GET @Path("/vendors")
@@ -42,6 +45,18 @@ public class PurchasingResource {
     public Response createVendor(@jakarta.validation.constraints.NotNull @Valid PurchasingDtos.VendorInput input) {
         var created = service.createVendor(input);
         return Response.created(URI.create("/api/vendors/" + created.id())).entity(created).build();
+    }
+
+    /** Suppliers and their orderable items from the last item link scan, with when it ran. */
+    @GET @Path("/vendors/sources")
+    public PurchasingDtos.VendorSourcesResponse vendorSources() {
+        return sources.sources();
+    }
+
+    /** Parses every item purchase link into suppliers; runs only on request. */
+    @POST @Path("/vendors/sources/scan")
+    public PurchasingDtos.VendorSourcesResponse scanVendorSources() {
+        return sources.scan();
     }
 
     @PUT @Path("/vendors/{id}")

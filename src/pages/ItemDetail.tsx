@@ -40,6 +40,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import { PurchaseLink } from '../components/items/PurchaseLink';
 import {
     ResponsiveContainer,
     LineChart,
@@ -423,6 +424,7 @@ export function ItemDetail() {
                             {item.quantityDecimals === 2 && <Field label={t('forms.itemForm.fullUnitContents')}>{formatQuantity(item, 100)}</Field>}
                             {item.tracksRuntime && <Field label={t('enum.value.operating_hours')}>{t('forms.itemForm.recordOperatingHoursOnReturn')}</Field>}
                             {item.supplier && <Field label={t('common.supplier')}>{item.supplier}</Field>}
+                            <Field label={t('pages.itemDetail.whereToBuy')}>{item.purchaseUrl ? <PurchaseLink url={item.purchaseUrl} /> : '—'}</Field>
                             <Field label={t('common.visibility')}>{item.access?.privateResource
                                 ? item.access.publicUse ? t('items.inventorySharing.publiclyAvailable') : t('pages.itemDetail.private')
                                 : t('enum.value.organization')}</Field>
