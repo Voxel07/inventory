@@ -5,6 +5,7 @@ import { formatCents } from '../../utils/money';
 import { OperationLines } from './OperationLines';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
+import { ItemAutocomplete } from '../shared/ItemAutocomplete';
 import { receiptInput, vendorDocumentInput } from '../../services/operationsInputs';
 import { lotFields } from './lotFields';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +16,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useEventReports } from '../../hooks/useEvents';
@@ -70,28 +71,36 @@ export function PurchasingPanel() {
 /** `vendor` preselects the supplier of a new draft. */
 export function PurchaseDraft({ order, vendor, initialLines, itemRequestIds, eventId, onClose }: { order?: PurchaseOrder; vendor?: { id: string; name: string }; initialLines?: PurchaseDraftLine[]; itemRequestIds?: string[]; eventId: string; onClose: () => void }) {
   const t = useT(); const events = useEventReports(); const command = useOperationCommand();
+  const theme = useTheme(); const mobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [header, setHeader] = useState<Values>(() => ({ vendorId: order?.vendorId ?? vendor?.id ?? '', orderNumber: order?.orderNumber ?? '', orderDate: order?.orderDate ?? calendarDate(), expectedDeliveryDate: order?.expectedDeliveryDate ?? '', eventOccurrenceId: order?.eventOccurrenceId ?? eventId, notes: order?.notes ?? '' }));
-  const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? (initialLines?.length ? initialLines : [{ itemId: '', orderedQuantity: 1 }]).map((line) => ({ ...line, price: 0 })));
+  const [lines, setLines] = useState<Values[]>(order?.lines.map((line) => ({ itemId: line.itemId, orderedQuantity: line.orderedQuantity, price: line.unitPriceCents / 100 })) ?? (initialLines?.length ? initialLines : [{ itemId: '', orderedQuantity: 1 }]).map((line) => ({ ...line })));
   const measures = useStockLookups(lines.map(line => String(line.itemId || '')));
-  const [newVendor, setNewVendor] = useState(false);
-  return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" onSubmit={(event) => {
+  // Resolve prefilled lines once their items arrive; explicit edits and saved draft prices take precedence.
+  const pricedLines: Values[] = lines.map(line => ({ ...line, price: line.price ?? measures.items.find(item => item.id === line.itemId)?.value ?? '' }));
+  const futureEvents = (events.data ?? []).filter(event => event.status === 'planned' && event.startDate > calendarDate()).sort((a, b) => a.startDate - b.startDate);
+  // Editing a saved draft must not silently remove its original event; past events cannot be selected anew.
+  const savedEvent = events.data?.find(event => event.id === order?.eventOccurrenceId);
+  const eventOptions = futureEvents.map(event => ({ value: event.id, label: `${event.name || event.eventType} · ${formatDate(event.eventDate)}`, disabled: false }));
+  if (savedEvent && !eventOptions.some(option => option.value === savedEvent.id)) eventOptions.push({ value: savedEvent.id, label: `${savedEvent.name || savedEvent.eventType} · ${formatDate(savedEvent.eventDate)}`, disabled: true });
+  const eventOccurrenceId = futureEvents.some(event => event.id === header.eventOccurrenceId) || header.eventOccurrenceId === order?.eventOccurrenceId ? header.eventOccurrenceId : '';
+  return <Dialog open fullWidth fullScreen={mobile} maxWidth="md" onClose={() => { if (!command.isPending) onClose(); }}><Box component="form" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, ...(mobile && { height: '100%' }) }} onSubmit={(event) => {
     event.preventDefault();
-    const data = { ...optionalValues(header), itemRequestIds, vendorId: String(header.vendorId), orderDate: Number(header.orderDate), lines: lines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
+    const data = { ...optionalValues({ ...header, eventOccurrenceId }), itemRequestIds, vendorId: String(header.vendorId), orderDate: Number(header.orderDate), lines: pricedLines.map((line) => ({ itemId: String(line.itemId), orderedQuantity: Number(line.orderedQuantity), unitPriceCents: Math.round(Number(line.price) * 100) })) };
     command.mutate(() => order ? updatePurchaseOrder(order.id, data) : createPurchaseOrder(data), { onSuccess: onClose });
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
-    <Fields values={header} onChange={setHeader} fields={[
+    <Fields values={{ ...header, eventOccurrenceId }} onChange={setHeader} fields={[
       { key: 'vendorId', label: t('common.supplier'), required: true, pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions, selectedLabel: order?.vendorName ?? vendor?.name } },
       { key: 'orderNumber', label: t('operations.purchasingOperations.referenceOptional') }, { key: 'orderDate', label: t('operations.purchasingOperations.orderDate'), type: 'date', required: true },
-      { key: 'expectedDeliveryDate', label: t('operations.purchasingOperations.expectedDelivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('operations.purchasingOperations.eventOptional'), options: (events.data ?? []).map((event) => ({ value: event.id, label: `${event.name || event.eventType} · ${formatDate(event.eventDate)}` })) }, { key: 'notes', label: t('common.notes2'), multiline: true },
+      { key: 'expectedDeliveryDate', label: t('operations.purchasingOperations.expectedDelivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('operations.purchasingOperations.eventOptional'), options: eventOptions }, { key: 'notes', label: t('common.notes2'), multiline: true },
     ]} />
-    <Button title={translate('operations.purchasingOperations.createANewSupplier')} onClick={() => setNewVendor(true)}>{t('operations.purchasingOperations.newSupplier')}</Button>
-    {lines.map((line, index) => <Card key={index}><CardContent><Stack spacing={1}><Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
-      { key: 'itemId', label: t('common.item'), type: 'item', required: true }, { key: 'orderedQuantity', label: t('common.quantity'), type: 'quantity', measure: measures.items.find(item => item.id === line.itemId), min: 1, required: true }, { key: 'price', label: usesPercentage(measures.items.find(item => item.id === line.itemId)) ? t('forms.itemForm.fullUnitValue') : t('operations.purchasingOperations.unitPrice2'), type: 'number', min: 0, step: 0.01, required: true },
+    {pricedLines.map((line, index) => <Card key={index} sx={{ minWidth: 0 }}><CardContent><Stack spacing={2}>
+      <ItemAutocomplete label={t('common.item')} required value={String(line.itemId || '')} onChange={item => setLines(current => current.map((entry, position) => position === index ? { ...entry, itemId: item?.id ?? '', price: item?.value ?? '' } : entry))} />
+      <Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
+      { key: 'orderedQuantity', label: t('common.quantity'), type: 'quantity', measure: measures.items.find(item => item.id === line.itemId), min: 1, required: true }, { key: 'price', label: usesPercentage(measures.items.find(item => item.id === line.itemId)) ? t('forms.itemForm.fullUnitValue') : t('operations.purchasingOperations.unitPrice2'), type: 'number', min: 0, step: 0.01, required: true },
     ]} /><Button title={translate('operations.purchasingOperations.removeThisLineFromThePurchaseDraft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('operations.purchasingOperations.removeLine')}</Button></Stack></CardContent></Card>)}
-    <Button title={translate('operations.purchasingOperations.addAnItemLineToThePurchaseDraft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1, price: 0 }])}>{t('common.addItem')}</Button>
+    <Button title={translate('operations.purchasingOperations.addAnItemLineToThePurchaseDraft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1 }])}>{t('common.addItem')}</Button>
   </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} disabled={command.isPending} onClick={onClose}>{t('common.cancel')}</Button><Button title={translate('operations.purchasingOperations.saveThePurchaseDraft')} variant="contained" type="submit" disabled={command.isPending}>{t('operations.purchasingOperations.saveDraft')}</Button></DialogActions></Box>
-    {newVendor && <VendorForm onClose={() => setNewVendor(false)} onSaved={(vendor) => setHeader({ ...header, vendorId: vendor.id })} />}
   </Dialog>;
 }
 
@@ -186,11 +195,11 @@ export function VendorsPanel() {
   return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={<>{vendor.name}{vendor.sourceHost && <Chip size="small" label={t('operations.vendorSources.generated')} sx={{ ml: 0.75 }} />}</>} status={vendor.active ? 'active' : 'inactive'}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
 }
 
-function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: () => void; onSaved?: (vendor: Vendor) => void }) {
+function VendorForm({ vendor, onClose }: { vendor?: Vendor; onClose: () => void }) {
   const t = useT();
   return <OperationForm title={t('common.supplier')} initial={vendor ? Object.fromEntries(Object.entries(vendor).filter(([, value]) => value != null)) as Values : { active: true, preferredVendor: false }} onClose={onClose} fields={[
     { key: 'name', label: t('profile.name'), required: true }, { key: 'contactPerson', label: t('operations.purchasingOperations.contactPerson') }, { key: 'email', label: 'Email' }, { key: 'phone', label: t('operations.purchasingOperations.phone') }, { key: 'address', label: t('operations.purchasingOperations.address'), multiline: true }, { key: 'website', label: 'Website' }, { key: 'paymentNotes', label: t('operations.purchasingOperations.paymentNotes'), multiline: true }, { key: 'internalNotes', label: t('operations.purchasingOperations.internalNotes'), multiline: true }, { key: 'preferredVendor', label: t('operations.purchasingOperations.preferred'), type: 'checkbox' }, { key: 'active', label: t('enum.value.active'), type: 'checkbox' },
-  ]} onSave={async (values) => { const saved = await saveVendor(optionalValues(values), vendor?.id); onSaved?.(saved); return saved; }} />;
+  ]} onSave={(values) => saveVendor(optionalValues(values), vendor?.id)} />;
 }
 
 function DocumentsPanel({ order }: { order: PurchaseOrder }) {

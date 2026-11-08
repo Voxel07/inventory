@@ -1513,6 +1513,11 @@ export default {
       purpose: 'Purpose',
     },
     vendorSources: {
+      backToVendors: 'Back to suppliers',
+      searchVendors: 'Search suppliers',
+      noMatchingVendors: 'No matching suppliers.',
+      itemCount_one: '{{count}} item',
+      itemCount_other: '{{count}} items',
       generate: 'Generate suppliers from item links',
       generateTitle: 'Read the purchase links of all organization items and group them into one supplier per shop',
       generating: 'Generating…',

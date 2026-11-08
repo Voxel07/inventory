@@ -1515,6 +1515,11 @@ export default {
       purpose: 'Zweck',
     },
     vendorSources: {
+      backToVendors: 'Zurück zu Lieferanten',
+      searchVendors: 'Lieferanten suchen',
+      noMatchingVendors: 'Keine passenden Lieferanten.',
+      itemCount_one: '{{count}} Artikel',
+      itemCount_other: '{{count}} Artikel',
       generate: 'Lieferanten aus Artikel-Links erzeugen',
       generateTitle: 'Kauflinks aller Organisationsartikel auslesen und je Shop einem Lieferanten zuordnen',
       generating: 'Wird erzeugt…',
