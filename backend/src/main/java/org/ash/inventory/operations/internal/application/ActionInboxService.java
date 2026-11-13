@@ -4,7 +4,6 @@ import org.ash.inventory.platform.api.InputText;
 
 import org.ash.inventory.operations.internal.model.ActionReminder;
 import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.persistence.ActionInboxOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;

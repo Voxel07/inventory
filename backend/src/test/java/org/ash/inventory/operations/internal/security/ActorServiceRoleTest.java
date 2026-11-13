@@ -2,8 +2,6 @@ package org.ash.inventory.operations.internal.security;
 
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.operations.internal.persistence.UserOrm;
-import org.ash.inventory.platform.api.ApiException;
 
 import org.junit.jupiter.api.Test;
 

@@ -4,9 +4,7 @@ import org.ash.inventory.blobs.api.BlobStore.StoredDocument;
 
 import org.ash.inventory.blobs.api.BlobStore;
 
-import org.ash.inventory.operations.internal.application.InventoryMediaService;
 
-import org.ash.inventory.operations.internal.application.MediaCleanupService;
 
 import org.ash.inventory.platform.api.ApiException;
 

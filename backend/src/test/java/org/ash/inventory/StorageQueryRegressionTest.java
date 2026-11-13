@@ -7,7 +7,6 @@ import org.ash.inventory.operations.internal.model.InventoryAccessGroup;
 import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
-import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.InventoryAccessOrm;

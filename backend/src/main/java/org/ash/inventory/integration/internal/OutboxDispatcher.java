@@ -2,7 +2,6 @@ package org.ash.inventory.integration.internal;
 
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.integration.api.EventBroadcaster;
-import org.ash.inventory.platform.runtime.WorkerRoles;
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
 import io.quarkus.scheduler.Scheduled;

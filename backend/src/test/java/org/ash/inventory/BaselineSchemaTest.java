@@ -1,6 +1,5 @@
 package org.ash.inventory;
 
-import org.ash.inventory.operations.internal.model.Faction;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;

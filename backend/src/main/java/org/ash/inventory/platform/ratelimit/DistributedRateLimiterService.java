@@ -1,6 +1,5 @@
 package org.ash.inventory.platform.ratelimit;
 
-import org.ash.inventory.platform.ratelimit.RateLimiter.Result;
 
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 

@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.notification.api.NotificationService;
-import org.ash.inventory.platform.runtime.WorkerRoles;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.adapter.rest;
 
-import org.ash.inventory.operations.internal.application.CustodyBalanceService;
 import org.ash.inventory.operations.internal.application.MemberService;
 
 import jakarta.inject.Inject;

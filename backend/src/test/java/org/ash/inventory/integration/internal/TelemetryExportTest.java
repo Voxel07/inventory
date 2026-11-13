@@ -1,10 +1,6 @@
 package org.ash.inventory.integration.internal;
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
-import org.ash.inventory.integration.api.DomainEventService;
-import org.ash.inventory.integration.api.OutboxStatus;
-import org.ash.inventory.integration.internal.DomainEvent;
-import org.ash.inventory.integration.internal.OutboxTelemetry;
 
 import com.sun.net.httpserver.HttpServer;
 import io.opentelemetry.api.trace.Span;

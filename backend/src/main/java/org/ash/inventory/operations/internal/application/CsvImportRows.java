@@ -7,13 +7,11 @@ import jakarta.inject.Inject;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.EventLogisticsDtos;
 import org.ash.inventory.operations.internal.model.CsvImportJob;
-import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.EpochTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 @ApplicationScoped
 public class CsvImportRows {

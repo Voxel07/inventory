@@ -2,12 +2,10 @@ package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.operations.internal.application.ApiQueryService;
 import org.ash.inventory.operations.internal.application.CatalogService;
-import org.ash.inventory.operations.internal.application.RuntimeService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.projection.ApiMapper;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.platform.api.PageBounds;
 
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -218,10 +216,6 @@ public class CatalogResource {
 
     private String cacheKey(String value) {
         return value == null ? "" : value;
-    }
-
-    private Response catalogResponse(String json) {
-        return Response.ok(json, MediaType.APPLICATION_JSON_TYPE).build();
     }
 
 }

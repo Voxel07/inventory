@@ -12,7 +12,6 @@ import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.OrderPickupOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;

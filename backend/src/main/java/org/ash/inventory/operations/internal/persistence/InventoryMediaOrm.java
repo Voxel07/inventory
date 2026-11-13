@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.internal.persistence;
 
 import org.ash.inventory.operations.internal.model.InventoryMediaObject;
-import org.ash.inventory.operations.internal.model.UserAccount;
 
 import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped

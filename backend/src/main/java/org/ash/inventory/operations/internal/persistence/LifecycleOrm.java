@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.internal.persistence;
 
-import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.model.RepairCase;
 

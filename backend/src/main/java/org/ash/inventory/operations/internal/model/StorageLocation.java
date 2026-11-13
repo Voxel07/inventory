@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.internal.model;
 
-import org.ash.inventory.operations.internal.application.LocationHierarchyService;
 import org.ash.inventory.platform.persistence.BaseEntity;
 
 import jakarta.persistence.Column;

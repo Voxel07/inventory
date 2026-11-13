@@ -1,9 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
-import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.CategoryMaintenancePolicy;
 import org.ash.inventory.operations.internal.model.Item;
-import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;

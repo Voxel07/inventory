@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.operations.internal.contract.dto.CustodyDtos;
-import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.persistence.CustodyOrm;
 import org.ash.inventory.operations.internal.persistence.OrderOrm;
 import org.ash.inventory.platform.api.ApiException;

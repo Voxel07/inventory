@@ -2,10 +2,7 @@ package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
-import org.ash.inventory.operations.internal.contract.dto.CountDtos;
-import org.ash.inventory.operations.internal.contract.dto.TransferDtos;
 import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.persistence.SyncAuditOrm;
 import org.ash.inventory.operations.internal.projection.ApiMapper;
 import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.platform.api.ApiException;

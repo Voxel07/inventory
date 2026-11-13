@@ -9,7 +9,6 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.RuntimeEntry;
 import org.ash.inventory.operations.internal.persistence.RuntimeOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.PageBounds;
 

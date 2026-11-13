@@ -9,7 +9,6 @@ import org.ash.inventory.operations.internal.model.Faction;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.ItemImage;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDate;

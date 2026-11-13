@@ -7,7 +7,6 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceRecord;
 import org.ash.inventory.operations.internal.model.ReturnSubmission;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.operations.internal.persistence.CatalogOrm;
 import org.ash.inventory.operations.internal.persistence.InventoryMediaOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.platform.api.ApiException;

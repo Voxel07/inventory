@@ -1,11 +1,8 @@
 package org.ash.inventory.operations.adapter.rest;
 
-import org.ash.inventory.operations.internal.application.ApiQueryService;
 import org.ash.inventory.operations.internal.application.CatalogService;
-import org.ash.inventory.operations.internal.persistence.SourceRevisionOrm;
 import org.ash.inventory.operations.internal.projection.ApiMapper;
 import org.ash.inventory.platform.api.ApiException;
-import org.ash.inventory.platform.persistence.ConsistentRead;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

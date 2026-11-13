@@ -1,8 +1,6 @@
 package org.ash.inventory.operations.adapter.rest;
 
-import org.ash.inventory.blobs.api.BlobStore;
 import org.ash.inventory.blobs.api.MediaTypes;
-import org.ash.inventory.operations.internal.application.InventoryMediaService;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.media.MediaService;
 import org.ash.inventory.operations.internal.security.ActorService;
@@ -62,7 +60,7 @@ public class MediaResource {
         var content = blobs.read(key);
         var context = io.opentelemetry.context.Context.current();
         StreamingOutput output = target -> {
-            try (var scope = context.makeCurrent(); var activity = telemetry.start("media", "download", "api");
+            try (var _ = context.makeCurrent(); var activity = telemetry.start("media", "download", "api");
                     var source = content.stream()) {
                 try {
                     long bytes = source.transferTo(target);

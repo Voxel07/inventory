@@ -1,15 +1,11 @@
 package org.ash.inventory.operations.internal.application;
 
-import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.platform.runtime.WorkerRoles;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import io.quarkus.security.identity.SecurityIdentity;
-import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;

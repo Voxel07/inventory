@@ -10,11 +10,8 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MemberRequest;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.operations.internal.persistence.MemberOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
-import org.ash.inventory.platform.api.PageBounds;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

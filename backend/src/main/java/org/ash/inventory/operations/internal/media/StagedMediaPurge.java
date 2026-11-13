@@ -1,8 +1,6 @@
 package org.ash.inventory.operations.internal.media;
 
-import org.ash.inventory.blobs.api.BlobStore;
 import org.ash.inventory.operations.internal.application.InventoryMediaService;
-import org.ash.inventory.platform.runtime.WorkerRoles;
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
 import io.opentelemetry.api.common.Attributes;

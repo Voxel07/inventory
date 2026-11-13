@@ -4,7 +4,6 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.LockModeType;
 import java.util.*;
 
 /** Persistence queries for the LocationHierarchy use cases. Business rules remain in the service. */

@@ -1,6 +1,5 @@
 package org.ash.inventory;
 
-import org.ash.inventory.operations.adapter.rest.CatalogResponses;
 import org.ash.inventory.operations.internal.application.ApiQueryService;
 import org.ash.inventory.operations.internal.application.CatalogService;
 import org.ash.inventory.operations.internal.application.InventoryAccessService;
@@ -23,7 +22,6 @@ import org.ash.inventory.operations.internal.model.InventoryPosition;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.model.MemberRequest;
-import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.StockReservation;
 import org.ash.inventory.operations.internal.model.StockTransaction;
 import org.ash.inventory.operations.internal.model.StorageLocation;

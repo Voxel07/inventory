@@ -1,7 +1,5 @@
 package org.ash.inventory.operations.internal.persistence;
 
-import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;

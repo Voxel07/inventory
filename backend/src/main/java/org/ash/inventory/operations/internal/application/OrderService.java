@@ -24,10 +24,8 @@ import org.ash.inventory.operations.internal.model.StockReservation;
 import org.ash.inventory.operations.internal.model.StockTransaction;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.operations.internal.persistence.ItemLocks;
 import org.ash.inventory.operations.internal.persistence.OrderOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;

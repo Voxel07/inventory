@@ -16,14 +16,12 @@ import org.ash.inventory.operations.internal.model.Vendor;
 import org.ash.inventory.operations.internal.model.VendorDocument;
 import org.ash.inventory.operations.internal.persistence.PurchasingOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;
 import org.ash.inventory.platform.api.PageBounds;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -513,10 +511,6 @@ public class PurchasingService {
                 : requested.trim();
         if (orm.receiptNumberExists(number)) throw ApiException.conflict("Receipt number already exists");
         return number;
-    }
-
-    private UUID derivedKey(UUID base, String suffix) {
-        return UUID.nameUUIDFromBytes((base + ":" + suffix).getBytes(StandardCharsets.UTF_8));
     }
 
     private String requiredText(String value, String field) {

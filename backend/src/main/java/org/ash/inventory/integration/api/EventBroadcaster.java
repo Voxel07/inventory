@@ -1,6 +1,5 @@
 package org.ash.inventory.integration.api;
 
-import org.ash.inventory.platform.runtime.WorkerRoles;
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
 import com.fasterxml.jackson.core.type.TypeReference;

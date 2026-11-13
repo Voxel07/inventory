@@ -17,7 +17,6 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.reporting.internal.OperationalReport;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;

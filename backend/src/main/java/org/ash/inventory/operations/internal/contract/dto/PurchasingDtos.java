@@ -2,7 +2,6 @@ package org.ash.inventory.operations.internal.contract.dto;
 
 import org.ash.inventory.platform.api.InputText;
 
-import org.ash.inventory.operations.internal.model.DomainEnums;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;

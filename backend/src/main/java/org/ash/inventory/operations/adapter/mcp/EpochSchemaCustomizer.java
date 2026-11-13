@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @Singleton
 public class EpochSchemaCustomizer implements SchemaGeneratorConfigCustomizer {
     @Override public void customize(SchemaGeneratorConfigBuilder builder) {
-        builder.with((CustomDefinitionProviderV2) (type, context) -> {
+        builder.forTypesInGeneral().withCustomDefinitionProvider((CustomDefinitionProviderV2) (type, context) -> {
             var javaType = type.getErasedType();
             if (javaType != Instant.class && javaType != LocalDate.class) return null;
             var schema = builder.getObjectMapper().createObjectNode();

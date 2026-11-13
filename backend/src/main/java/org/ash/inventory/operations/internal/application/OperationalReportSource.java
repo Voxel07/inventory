@@ -10,11 +10,8 @@ import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.model.PurchaseOrderLine;
 import org.ash.inventory.operations.internal.model.RepairCase;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.operations.internal.persistence.ReportSourceOrm;
-import org.ash.inventory.operations.internal.persistence.SourceRevisionOrm;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;
-import org.ash.inventory.platform.persistence.ConsistentRead;
 import org.ash.inventory.reporting.api.ReportDefinitions;
 import org.ash.inventory.reporting.api.ReportSource;
 

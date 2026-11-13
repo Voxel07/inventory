@@ -6,7 +6,6 @@ import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.PlanningOverride;
 import org.ash.inventory.operations.internal.model.PurchaseOrderLine;
-import org.ash.inventory.operations.internal.security.ActorService;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;

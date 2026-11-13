@@ -1,9 +1,6 @@
 package org.ash.inventory.operations.internal.application;
 
-import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.operations.internal.persistence.LocationHierarchyOrm;
-import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;

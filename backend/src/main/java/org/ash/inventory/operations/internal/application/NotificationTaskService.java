@@ -4,7 +4,6 @@ import org.ash.inventory.notification.api.NotificationService;
 import org.ash.inventory.operations.internal.model.ActionReminder;
 import org.ash.inventory.platform.api.BusinessTime;
 import org.ash.inventory.platform.api.EpochTime;
-import org.ash.inventory.platform.runtime.WorkerRoles;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

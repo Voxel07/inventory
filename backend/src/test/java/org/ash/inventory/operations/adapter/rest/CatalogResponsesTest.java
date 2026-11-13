@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.integration.api.EventBroadcaster;
-import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.cache.*;
@@ -17,6 +16,7 @@ class CatalogResponsesTest {
     static class Backend {
         final Map<Object, String> values = new HashMap<>();
         boolean failedLoad, failedEviction;
+        @SuppressWarnings("unchecked") // the proxy receives Cache.get's Function<K, V> loader as Object
         final Cache cache = (Cache) Proxy.newProxyInstance(Cache.class.getClassLoader(), new Class[]{Cache.class}, (proxy, method, args) -> {
             return switch (method.getName()) {
                 case "getName" -> "factions-cache";

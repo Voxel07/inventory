@@ -28,26 +28,17 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class BlobStore {
-    private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(BlobStore.class);
-    private static final Pattern STAGED_IMAGE = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-image\\.webp");
-    private static final Pattern STAGED_UPLOAD = Pattern.compile("[0-9]{4}-[0-9a-f-]{36}-.+");
-
     private final InventoryTelemetry telemetry;
     private final String mode;
     private final String localDirectory;

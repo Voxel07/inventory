@@ -3,14 +3,9 @@ package org.ash.inventory.operations.internal.application;
 import org.ash.inventory.platform.api.InputText;
 
 import org.ash.inventory.integration.api.DomainEventService;
-import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.CategoryMaintenancePolicy;
-import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.model.Item;
-import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.persistence.CategoryMaintenanceOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 
 import jakarta.enterprise.context.ApplicationScoped;

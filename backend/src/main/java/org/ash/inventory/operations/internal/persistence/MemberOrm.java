@@ -6,7 +6,6 @@ import org.ash.inventory.operations.internal.model.InventoryPosition;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MemberRequest;
 import org.ash.inventory.operations.internal.model.ReturnSubmission;
-import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
 
 import jakarta.enterprise.context.ApplicationScoped;

@@ -11,7 +11,6 @@ import org.ash.inventory.operations.internal.model.InventoryAccessPolicy;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
-import org.ash.inventory.operations.internal.persistence.CatalogOrm;
 import org.ash.inventory.operations.internal.persistence.InventoryAccessOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.operations.internal.security.InventoryAccess;

@@ -2,7 +2,6 @@ package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.operations.internal.application.OperationalReportService;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.reporting.api.ReportApi;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;

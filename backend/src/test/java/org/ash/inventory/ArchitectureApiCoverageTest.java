@@ -4,7 +4,6 @@ import org.ash.inventory.integration.api.EventBroadcaster;
 import org.ash.inventory.integration.api.OutboxStatus;
 import org.ash.inventory.integration.internal.DomainEvent;
 import org.ash.inventory.notification.internal.Notification;
-import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.platform.api.BusinessTime;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;

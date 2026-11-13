@@ -7,9 +7,7 @@ import org.ash.inventory.operations.internal.application.OrderService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.contract.dto.CustodyDtos;
-import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
-import org.ash.inventory.operations.internal.persistence.OrderOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
 
 import jakarta.transaction.Transactional;

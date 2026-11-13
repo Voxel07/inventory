@@ -46,7 +46,7 @@ class CsvImportApiTest {
         var factory = em.getEntityManagerFactory().unwrap(SessionFactoryImplementor.class);
         var mapping = factory.getMappingMetamodel().getEntityDescriptor(CsvImportJob.class);
         for (String attribute : new String[]{"work", "context", "result", "authorization"}) {
-            var type = (BasicType<?>) mapping.getPropertyType(attribute);
+            var type = (BasicType<?>) mapping.getPropertyTypes()[mapping.findAttributeMapping(attribute).getStateArrayPosition()];
             var mutability = assertInstanceOf(JsonNodeMutabilityPlan.class,
                     type.getJavaTypeDescriptor().getMutabilityPlan(), attribute);
             var nested = json.createObjectNode();

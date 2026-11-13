@@ -19,7 +19,7 @@ public class StockFactsOrm {
         var reservations = new HashMap<UUID, Long>();
         var memberDamage = new HashSet<UUID>();
         if (ids.isEmpty()) return new Facts(totals, damage, reservations, memberDamage);
-        var query = em.createNativeQuery("""
+        org.hibernate.query.NativeQuery<?> query = em.createNativeQuery("""
                 with scope as (select id from items where id in (:ids))
                 select 'ledger' as kind, t.item_id, t.type as subtype,
                     sum(case when t.type = 'missing' and t.related_entity_type = 'inventory_transfer' then 0 else t.quantity end) as quantity,

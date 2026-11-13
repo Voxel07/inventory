@@ -4,7 +4,6 @@ import org.ash.inventory.operations.internal.application.ReturnSubmissionService
 import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.model.ReturnSubmission;
 import org.ash.inventory.operations.internal.projection.ApiMapper;
 
 import jakarta.validation.Valid;

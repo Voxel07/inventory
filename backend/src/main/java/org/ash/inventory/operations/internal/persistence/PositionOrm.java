@@ -5,7 +5,6 @@ import org.ash.inventory.operations.internal.model.InventoryLot;
 import org.ash.inventory.operations.internal.model.InventoryPosition;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.operations.internal.security.ActorService;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;

@@ -8,9 +8,7 @@ import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.EquipmentCommitment;
 import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.operations.internal.model.Item;
-import org.ash.inventory.operations.internal.persistence.EquipmentOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;
 
@@ -58,7 +56,7 @@ public class EquipmentService {
         var event = eventId == null ? null : orm.find(EventOccurrence.class, eventId);
         if (eventId != null && event == null) throw ApiException.notFound("Event not found");
         var result = new LinkedHashMap<UUID, Availability>();
-        var items = orm.activeItems().stream().filter(i -> actors.canViewItem(i, actor) && !policy.freelyAvailable(i)).toList();
+        var items = orm.activeItems().stream().filter(i -> actors.canViewItem(i, actor) && !EquipmentPolicy.freelyAvailable(i)).toList();
         var stock = stockReads.readStock(items);
         for (var item : items) {
             var read = stock.get(item.id);

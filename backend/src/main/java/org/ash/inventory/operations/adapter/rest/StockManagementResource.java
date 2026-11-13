@@ -1,13 +1,9 @@
 package org.ash.inventory.operations.adapter.rest;
 
-import org.ash.inventory.operations.internal.application.EquipmentPolicy;
-import org.ash.inventory.operations.internal.application.PositionService;
 import org.ash.inventory.operations.internal.application.StockManagementService;
-import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
 import org.ash.inventory.operations.internal.contract.dto.StockDtos;
 import org.ash.inventory.operations.internal.model.InventoryLot;
 import org.ash.inventory.operations.internal.model.InventoryPosition;
-import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.projection.ApiMapper;
 
 import jakarta.validation.Valid;

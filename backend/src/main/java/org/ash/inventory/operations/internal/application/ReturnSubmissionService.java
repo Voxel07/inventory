@@ -7,7 +7,6 @@ import org.ash.inventory.operations.internal.media.MediaService;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DamageReport;
 import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MemberRequest;
@@ -16,7 +15,6 @@ import org.ash.inventory.operations.internal.model.RuntimeEntry;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.ReturnSubmissionOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.Inputs;
 

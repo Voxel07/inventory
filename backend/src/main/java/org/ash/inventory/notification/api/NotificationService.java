@@ -84,8 +84,9 @@ public class NotificationService {
     }
     public List<String> personalData(UUID recipient,int offset,int limit){
         if(offset<0 || limit<1 || limit>100)throw ApiException.badRequest("Invalid export bounds");
-        return em.createNativeQuery("select cast(row_to_json(n) as text) from notifications n where n.recipient_id=:id order by n.created_at,n.id offset :offset limit :limit")
-            .setParameter("id",recipient).setParameter("offset",offset).setParameter("limit",limit).getResultList().stream().map(Object::toString).toList();
+        List<?> rows=em.createNativeQuery("select cast(row_to_json(n) as text) from notifications n where n.recipient_id=:id order by n.created_at,n.id offset :offset limit :limit")
+            .setParameter("id",recipient).setParameter("offset",offset).setParameter("limit",limit).getResultList();
+        return rows.stream().map(Object::toString).toList();
     }
     public void erase(UUID recipient){em.createQuery("delete from Notification n where n.recipientId=:id").setParameter("id",recipient).executeUpdate();}
     public int purge(int days){return em.createNativeQuery("delete from notifications where id in (select id from notifications where created_at<(extract(epoch from now()) * 1000)::bigint - cast(:days as bigint) * 86400000 and delivery_status in ('sent','skipped','failed') order by created_at limit 1000)").setParameter("days",days).executeUpdate();}

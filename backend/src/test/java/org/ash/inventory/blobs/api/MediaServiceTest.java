@@ -1,7 +1,6 @@
 package org.ash.inventory.blobs.api;
 
 import org.ash.inventory.platform.api.ApiException;
-import org.ash.inventory.platform.telemetry.InventoryTelemetry;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;

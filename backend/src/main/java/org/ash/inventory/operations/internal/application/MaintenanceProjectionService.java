@@ -5,7 +5,6 @@ import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.contract.dto.ApiResponses;
-import org.ash.inventory.platform.api.BusinessTime;
 
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;

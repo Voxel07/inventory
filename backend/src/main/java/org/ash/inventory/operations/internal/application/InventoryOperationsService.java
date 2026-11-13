@@ -2,13 +2,11 @@ package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
-import org.ash.inventory.operations.internal.media.MediaService;
 import org.ash.inventory.operations.internal.model.Assembly;
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.CustodyHandover;
 import org.ash.inventory.operations.internal.model.DamageReport;
 import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.MaintenanceRecord;
@@ -17,24 +15,18 @@ import org.ash.inventory.operations.internal.model.RuntimeEntry;
 import org.ash.inventory.operations.internal.model.StockTransaction;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.CustodyOrm;
-import org.ash.inventory.operations.internal.persistence.ItemLocks;
 import org.ash.inventory.operations.internal.persistence.OperationsOrm;
-import org.ash.inventory.operations.internal.persistence.PurchasingOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
-import org.ash.inventory.platform.api.BusinessTime;
 import org.ash.inventory.platform.api.Inputs;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Comparator;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -54,13 +46,11 @@ public class InventoryOperationsService {
             DomainEnums.TransactionType.added,
             DomainEnums.TransactionType.adjusted);
     private final OperationsOrm orm;
-    private final PurchasingOrm purchasingOrm;
     private final ActorService actors;
     private final DomainEventService events;
 
-    public InventoryOperationsService(OperationsOrm orm, PurchasingOrm purchasingOrm, ActorService actors, DomainEventService events) {
+    public InventoryOperationsService(OperationsOrm orm, ActorService actors, DomainEventService events) {
         this.orm = orm;
-        this.purchasingOrm = purchasingOrm;
         this.actors = actors;
         this.events = events;
     }

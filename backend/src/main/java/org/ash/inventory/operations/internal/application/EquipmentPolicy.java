@@ -8,7 +8,6 @@ import org.ash.inventory.operations.internal.model.InventoryPosition;
 import org.ash.inventory.operations.internal.model.Item;
 import org.ash.inventory.operations.internal.model.LoanArrangement;
 import org.ash.inventory.operations.internal.model.StorageLocation;
-import org.ash.inventory.operations.internal.persistence.EquipmentOrm;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;
 

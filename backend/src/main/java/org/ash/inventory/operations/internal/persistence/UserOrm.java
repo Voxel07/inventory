@@ -82,7 +82,8 @@ public class UserOrm {
                 + " order by name, email, id", UserAccount.class);
         if (searching) query.setParameter("search", search.trim().toLowerCase(java.util.Locale.ROOT));
         if (role != null) query.setParameter("role", role.name());
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        List<?> rows = query.setFirstResult(offset).setMaxResults(limit).getResultList();
+        return rows.stream().map(UserAccount.class::cast).toList();
     }
     public long admins() {
         return entityManager.createQuery("select count(u) from UserAccount u where u.active = true and u.role = :role", Long.class)

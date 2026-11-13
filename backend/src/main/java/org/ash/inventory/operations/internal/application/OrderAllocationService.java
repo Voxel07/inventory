@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.operations.internal.model.AssetInstance;
-import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.EventOccurrence;
 import org.ash.inventory.operations.internal.model.Item;
 

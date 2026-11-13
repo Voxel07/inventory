@@ -11,10 +11,8 @@ import org.ash.inventory.operations.internal.model.PlanningOverride;
 import org.ash.inventory.operations.internal.model.PurchaseOrderLine;
 import org.ash.inventory.operations.internal.persistence.PlanningOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.api.BusinessTime;
-import org.ash.inventory.platform.persistence.ConsistentRead;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;

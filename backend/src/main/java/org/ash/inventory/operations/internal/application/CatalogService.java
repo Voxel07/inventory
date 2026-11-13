@@ -2,8 +2,6 @@ package org.ash.inventory.operations.internal.application;
 
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
-import org.ash.inventory.operations.internal.contract.dto.LifecycleDtos;
-import org.ash.inventory.operations.internal.media.MediaService;
 import org.ash.inventory.operations.internal.model.Assembly;
 import org.ash.inventory.operations.internal.model.AssemblyItem;
 import org.ash.inventory.operations.internal.model.AssemblyItemId;
@@ -19,11 +17,8 @@ import org.ash.inventory.operations.internal.model.StockTransaction;
 import org.ash.inventory.operations.internal.model.StorageLocation;
 import org.ash.inventory.operations.internal.model.UserAccount;
 import org.ash.inventory.operations.internal.persistence.CatalogOrm;
-import org.ash.inventory.operations.internal.persistence.CategoryMaintenanceOrm;
 import org.ash.inventory.operations.internal.security.ActorService;
-import org.ash.inventory.operations.internal.security.PrivateInventoryCommand;
 import org.ash.inventory.platform.api.ApiException;
-import org.ash.inventory.platform.api.Inputs;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;

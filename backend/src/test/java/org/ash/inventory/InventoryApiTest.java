@@ -3,7 +3,6 @@ package org.ash.inventory;
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.integration.api.OutboxStatus;
 import org.ash.inventory.integration.internal.DomainEvent;
-import org.ash.inventory.operations.internal.model.DomainEnums;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;

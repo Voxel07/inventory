@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.internal.application;
 
-import org.ash.inventory.operations.internal.persistence.InventoryAccessOrm.ReferenceAccess;
 
 import org.ash.inventory.operations.internal.model.UserAccount;
 

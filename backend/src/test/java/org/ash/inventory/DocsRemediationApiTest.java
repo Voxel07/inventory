@@ -1,12 +1,5 @@
 package org.ash.inventory;
 
-import org.ash.inventory.notification.internal.Notification;
-import org.ash.inventory.notification.internal.NotificationDeliveryService;
-import org.ash.inventory.operations.internal.model.ActionReminder;
-import org.ash.inventory.operations.internal.model.CustodyHandover;
-import org.ash.inventory.operations.internal.model.DomainEnums;
-import org.ash.inventory.operations.internal.model.InventoryOrder;
-import org.ash.inventory.operations.internal.model.UserAccount;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.narayana.jta.QuarkusTransaction;

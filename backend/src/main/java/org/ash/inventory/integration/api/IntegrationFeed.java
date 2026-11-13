@@ -106,7 +106,8 @@ public class IntegrationFeed {
     @Transactional
     public List<UUID> deadLetters(String consumer,int limit){
         validate(consumer);if(limit<1 || limit>100)throw ApiException.badRequest("Invalid consumer page size");
-        return em.createNativeQuery("select event_id from integration_deliveries where consumer=:consumer and state='dead_letter' order by event_id limit :limit",UUID.class).setParameter("consumer",consumer).setParameter("limit",limit).getResultList();
+        List<?> rows=em.createNativeQuery("select event_id from integration_deliveries where consumer=:consumer and state='dead_letter' order by event_id limit :limit",UUID.class).setParameter("consumer",consumer).setParameter("limit",limit).getResultList();
+        return rows.stream().map(UUID.class::cast).toList();
     }
     @Transactional
     public void remove(String consumer){validate(consumer);em.createNativeQuery("delete from integration_subscriptions where name=:consumer").setParameter("consumer",consumer).executeUpdate();}

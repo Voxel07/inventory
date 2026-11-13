@@ -56,7 +56,8 @@ class InventoryFlowApiTest {
 
     @Test void fefoCheckoutAndPartialRestockPreserveBothLots() {
         String place = location(), item = item(0, place, "lot_tracked", true);
-        String late = lot(item, 3, place, 1956528000000L), early = lot(item, 2, place, 1893456000000L);
+        lot(item, 3, place, 1956528000000L);
+        String early = lot(item, 2, place, 1893456000000L);
         String checkout = movement(item, "checkout", 4, place, null);
         request().queryParam("itemId", item).get("/api/inventory-positions").then()
                 .body("find { it.lotId == '" + early + "' }.quantityOnHand", equalTo(0));

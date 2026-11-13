@@ -2,7 +2,6 @@ package org.ash.inventory.operations.internal.persistence;
 
 import org.ash.inventory.operations.internal.model.Assembly;
 import org.ash.inventory.operations.internal.model.AssemblyItem;
-import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.Faction;
 import org.ash.inventory.operations.internal.model.InventoryOrder;
 import org.ash.inventory.operations.internal.model.Item;
@@ -11,7 +10,6 @@ import org.ash.inventory.operations.internal.model.OrderItemRequest;
 import org.ash.inventory.operations.internal.model.OrderLine;
 import org.ash.inventory.operations.internal.model.OrderLineAssetAssignment;
 import org.ash.inventory.operations.internal.model.StockReservation;
-import org.ash.inventory.operations.internal.model.UserAccount;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;

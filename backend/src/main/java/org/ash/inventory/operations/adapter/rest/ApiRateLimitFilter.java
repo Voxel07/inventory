@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.adapter.rest;
 
-import org.ash.inventory.platform.ratelimit.ApiBudget;
 import org.ash.inventory.platform.ratelimit.RateLimiter;
 
 import io.quarkus.security.identity.SecurityIdentity;

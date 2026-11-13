@@ -1,6 +1,5 @@
 package org.ash.inventory.operations.internal.contract.dto;
 
-import org.ash.inventory.operations.internal.application.InventoryAccessService;
 import org.ash.inventory.operations.internal.model.MobileNavigation;
 
 import com.fasterxml.jackson.annotation.JsonInclude;

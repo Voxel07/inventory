@@ -1,7 +1,6 @@
 package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.integration.api.EventBroadcaster;
-import org.ash.inventory.operations.internal.application.AuthSessionService;
 import org.ash.inventory.operations.internal.security.ActorService;
 import org.ash.inventory.platform.api.ApiException;
 import org.ash.inventory.platform.telemetry.InventoryTelemetry;
