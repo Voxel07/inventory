@@ -26,9 +26,16 @@ public class PersonalWebhookPublisher {
     @Inject ObjectMapper json;
     @Inject Vertx vertx;
 
+    /** Safe to show to the owner or log: contains no endpoint URL, response body or underlying exception message. */
+    public static final class DeliveryException extends IOException {
+        private DeliveryException(String message) { super(message); }
+    }
+
     /** True once the webhook acknowledged; Slack-style receivers read {@code text}, Discord-style ones {@code content}. */
     public boolean publish(String url, UUID id, String subject, String text, String link) throws IOException, InterruptedException {
-        var target = target(url);
+        Target target;
+        try { target = target(url); }
+        catch (IllegalArgumentException invalid) { throw new DeliveryException(invalid.getMessage()); }
         var uri = target.uri();
         int port = uri.getPort() == -1 ? 443 : uri.getPort();
         String path = uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
@@ -37,20 +44,40 @@ public class PersonalWebhookPublisher {
         var options = new RequestOptions().setMethod(HttpMethod.POST).setSsl(true).setHost(uri.getHost())
                 .setPort(port).setURI(path).setFollowRedirects(false).setTimeout(10_000)
                 .setServer(SocketAddress.inetSocketAddress(port, target.address().getHostAddress()));
-        String body = json.writeValueAsString(Map.of("id", id, "subject", subject, "text", text, "content", text + "\n" + link, "url", link));
+        String body = json.writeValueAsString(payload(id, subject, text, link));
         var client = vertx.createHttpClient(new HttpClientOptions().setConnectTimeout(5_000)
                 .setVerifyHost(true).setTrustAll(false).setKeepAlive(false).setMaxHeaderSize(8192));
         try {
             int status = client.request(options).compose(request -> request.putHeader("Content-Type", "application/json")
                     .putHeader("Idempotency-Key", id.toString()).send(Buffer.buffer(body)))
                     .map(response -> response.statusCode()).toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
-            return status >= 200 && status < 300;
+            if (status < 200 || status >= 300) throw new DeliveryException("Webhook endpoint returned HTTP " + status);
+            return true;
         } catch (ExecutionException | TimeoutException failure) {
-            throw new IOException("Webhook delivery failed", failure);
+            throw failure(failure);
         } finally {
             // A receiver cannot make us buffer an unlimited response body or retain an idle connection.
             client.close();
         }
+    }
+
+    static Map<String, Object> payload(UUID id, String subject, String text, String link) {
+        String message = subject.equals(text) ? subject : subject + "\n\n" + text;
+        message += "\n\n" + link;
+        // Hookshot and Slack display text; Discord displays content. All must include the title and destination.
+        return Map.of("id", id, "subject", subject, "text", message, "content", message, "url", link);
+    }
+
+    static DeliveryException failure(Throwable failure) {
+        var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
+        for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
+            if (cause instanceof javax.net.ssl.SSLException) return new DeliveryException("Webhook TLS connection failed; check the server certificate and HTTPS configuration");
+            if (cause instanceof UnknownHostException) return new DeliveryException("Webhook host could not be resolved");
+            if (cause instanceof ConnectException) return new DeliveryException("Webhook connection failed; check that the endpoint is reachable from the backend");
+            if (cause instanceof TimeoutException || cause instanceof java.net.SocketTimeoutException)
+                return new DeliveryException("Webhook request timed out");
+        }
+        return new DeliveryException("Webhook request failed");
     }
 
     /** The normalized URL; {@link IllegalArgumentException} names the problem without echoing the URL. */

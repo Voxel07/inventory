@@ -311,6 +311,7 @@ export default {
     },
     notifications: {
       title: 'Notification delivery',
+      help: 'Receive your inbox notifications for requests, order preparation and pickup, reminders and task summaries. Saving does not send a message or resend older notifications. New notifications are checked for delivery every 30 seconds.',
       saved: 'Notification settings saved.',
     },
     ntfy: {
@@ -326,6 +327,8 @@ export default {
       url: 'Webhook URL',
       urlHelp: 'Must start with https:// and point to a public host. Leave empty to turn webhook delivery off.',
       invalid: 'The URL must start with https://',
+      test: 'Send webhook test',
+      testSent: 'The webhook accepted the test notification. Check your connected service.',
     },
     roles: {
       admin: 'Inventory admin',

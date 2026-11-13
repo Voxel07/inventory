@@ -7,7 +7,7 @@ import { AlertsManager, type AlertsManagerHandle } from './AlertsManager';
 import { useAuth } from '../../hooks/useAuth';
 import { useT } from '../../utils/naming';
 import { queryKeys } from '../../utils/queryKeys';
-import { getNotificationSettings, sendNtfyTest, updateNotificationSettings, type NotificationSettings } from '../../services/notificationService';
+import { getNotificationSettings, sendNtfyTest, sendWebhookTest, updateNotificationSettings, type NotificationSettings } from '../../services/notificationService';
 
 const TOPIC = /^[A-Za-z0-9_-]{1,64}$/;
 const WEBHOOK = /^https:\/\/[^\s/?#]+\S*$/i;
@@ -44,17 +44,29 @@ function NotificationSettingsForm({ settings, userId }: { settings: Notification
     onSuccess: () => alerts.current?.showAlert('success', t('profile.ntfy.testSent')),
     onError: (error) => alerts.current?.showAlert('error', error.message),
   });
+  const webhookTest = useMutation({
+    mutationFn: sendWebhookTest,
+    onSuccess: () => alerts.current?.showAlert('success', t('profile.webhook.testSent')),
+    onError: (error) => alerts.current?.showAlert('error', error.message),
+  });
   const server = settings.ntfyServer?.replace(/\/+$/, '');
 
   return (
     <Paper variant="outlined" sx={{ mt: 3, p: 2.5, width: '100%' }}>
       <Stack spacing={1.5}>
         <Typography variant="h6">{t('profile.notifications.title')}</Typography>
+        <Typography variant="body2" color="text.secondary">{t('profile.notifications.help')}</Typography>
         <Typography variant="subtitle1">{t('profile.webhook.title')}</Typography>
         <TextField fullWidth size="small" type="url" label={t('profile.webhook.url')} value={webhook} error={webhookInvalid} disabled={save.isPending}
           placeholder="https://" helperText={webhookInvalid ? t('profile.webhook.invalid') : t('profile.webhook.urlHelp')}
           slotProps={{ htmlInput: { maxLength: 2048, autoComplete: 'off', spellCheck: false } }}
-          onChange={(event) => { setWebhook(event.target.value); save.reset(); }} />
+          onChange={(event) => { setWebhook(event.target.value); save.reset(); webhookTest.reset(); }} />
+        {settings.webhookUrl && (
+          <Button title={t('profile.webhook.test')} variant="outlined" startIcon={<SendIcon />} sx={{ alignSelf: 'flex-start' }}
+            disabled={webhookTest.isPending || save.isPending || trimmedWebhook !== settings.webhookUrl} onClick={() => webhookTest.mutate()}>
+            {t('profile.webhook.test')}
+          </Button>
+        )}
         {server && (
           <>
             <Divider />

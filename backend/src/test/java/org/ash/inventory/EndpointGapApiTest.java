@@ -248,6 +248,7 @@ class EndpointGapApiTest {
         actor("settings", "read_only").get("/api/notifications/settings").then().statusCode(200)
                 .body("ntfyTopic", nullValue()).body("webhookUrl", nullValue());
         actor("settings", "read_only").post("/api/notifications/settings/ntfy-test").then().statusCode(400);
+        actor("settings", "read_only").post("/api/notifications/settings/webhook-test").then().statusCode(400);
         actor("settings", "read_only").post("/api/auth/logout").then().statusCode(204);
     }
 }

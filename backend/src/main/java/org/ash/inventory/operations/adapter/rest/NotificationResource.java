@@ -1,6 +1,7 @@
 package org.ash.inventory.operations.adapter.rest;
 
 import org.ash.inventory.notification.api.NtfyPublisher;
+import org.ash.inventory.notification.api.PersonalWebhookPublisher;
 import org.ash.inventory.operations.internal.application.ApiQueryService;
 import org.ash.inventory.operations.internal.application.UserService;
 import org.ash.inventory.operations.internal.contract.ApiModels;
@@ -33,6 +34,8 @@ public class NotificationResource {
     private final ActorService actors;
     private final NtfyPublisher ntfy;
     @jakarta.inject.Inject org.ash.inventory.operations.internal.application.NtfyTopicFeed adminTopics;
+    @jakarta.inject.Inject PersonalWebhookPublisher webhooks;
+    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "inventory.public-url", defaultValue = "http://localhost:5173") String publicUrl;
 
     public NotificationResource(ApiQueryService queries, UserService users, ActorService actors, NtfyPublisher ntfy) {
         this.queries = queries;
@@ -77,6 +80,24 @@ public class NotificationResource {
     @PUT @Path("/settings") @Consumes(MediaType.APPLICATION_JSON)
     public ApiResponses.NotificationSettingsResponse updateSettings(@jakarta.validation.constraints.NotNull @Valid ApiModels.NotificationSettingsInput input) {
         return settings(users.updateNotificationSettings(input));
+    }
+
+    /** Uses the same publisher as queued notifications, and only the current user's saved target. */
+    @POST @Path("/settings/webhook-test")
+    public void webhookTest() {
+        var url = actors.current().webhookUrl;
+        if (url == null) throw ApiException.badRequest("Save a webhook URL first");
+        try {
+            webhooks.publish(url, UUID.randomUUID(), "Inventory test notification",
+                    "Your webhook notifications are set up correctly.", publicUrl.replaceAll("/+$", "") + "/profile");
+        } catch (PersonalWebhookPublisher.DeliveryException exception) {
+            throw new ApiException(502, exception.getMessage());
+        } catch (IOException exception) {
+            throw new ApiException(502, "The webhook request failed");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(503, "The test notification was interrupted");
+        }
     }
 
     /** Publishes a fixed test message to the current user's saved ntfy topic so they can check their subscription. */

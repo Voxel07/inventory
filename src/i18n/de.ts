@@ -313,6 +313,7 @@ export default {
     },
     notifications: {
       title: 'Benachrichtigungszustellung',
+      help: 'Erhalten Sie Ihre Posteingangsbenachrichtigungen zu Anfragen, Bestellvorbereitung und Abholung, Erinnerungen und Aufgabenübersichten. Speichern sendet keine Nachricht und versendet ältere Benachrichtigungen nicht erneut. Neue Benachrichtigungen werden alle 30 Sekunden zur Zustellung geprüft.',
       saved: 'Benachrichtigungseinstellungen gespeichert.',
     },
     ntfy: {
@@ -328,6 +329,8 @@ export default {
       url: 'Webhook-URL',
       urlHelp: 'Muss mit https:// beginnen und auf einen öffentlichen Host zeigen. Leer lassen, um Webhook-Benachrichtigungen auszuschalten.',
       invalid: 'Die URL muss mit https:// beginnen',
+      test: 'Webhook-Test senden',
+      testSent: 'Der Webhook hat die Testbenachrichtigung angenommen. Prüfen Sie den verbundenen Dienst.',
     },
     roles: {
       admin: 'Inventar-Admin',

@@ -61,7 +61,10 @@ public class NotificationDeliveryService {
             var delivery = notifications.claim(); if (delivery == null) return;
             RecipientPolicy.Decision recipient;
             try { recipient=audience.resolve(delivery.recipientId(),delivery.orderId(),delivery.itemId()); }
-            catch(RuntimeException unavailable) { notifications.finish(delivery, NotificationService.Outcome.RETRY, delivery.delivered()); continue; }
+            catch(RuntimeException unavailable) {
+                LOG.warnf("Notification %s recipient lookup failed (%s); delivery will retry", delivery.id(), unavailable.getClass().getSimpleName());
+                notifications.finish(delivery, NotificationService.Outcome.RETRY, delivery.delivered()); continue;
+            }
             // The shared gateway gets generic text only; the recipient's own topic and webhook get what happened.
             var notice = NotificationText.of(delivery.type(), delivery.payload(), delivery.orderId());
             String link = publicUrl.replaceAll("/+$", "") + notice.path();
@@ -74,9 +77,16 @@ public class NotificationDeliveryService {
             var delivered = new TreeSet<>(delivery.delivered());
             for (var channel : channels.entrySet()) {
                 if (delivered.contains(channel.getKey())) continue;
-                try { if (channel.getValue().call()) delivered.add(channel.getKey()); }
+                try {
+                    if (channel.getValue().call()) delivered.add(channel.getKey());
+                    else LOG.warnf("Notification %s channel %s did not acknowledge delivery", delivery.id(), channel.getKey());
+                }
                 catch (InterruptedException exception) { Thread.currentThread().interrupt(); break; }
-                catch (Exception exception) { /* Persist only a safe error; never credentials, URLs or gateway responses. */ }
+                catch (Exception exception) {
+                    // Never log raw exception messages/stack traces: they can contain webhook secrets or response bodies.
+                    String reason = exception instanceof PersonalWebhookPublisher.DeliveryException ? exception.getMessage() : exception.getClass().getSimpleName();
+                    LOG.warnf("Notification %s channel %s failed: %s", delivery.id(), channel.getKey(), reason);
+                }
             }
             boolean sent = delivered.containsAll(channels.keySet());
             notifications.finish(delivery, sent ? NotificationService.Outcome.SENT : NotificationService.Outcome.RETRY, delivered);
