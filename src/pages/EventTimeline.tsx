@@ -11,6 +11,6 @@ export function EventTimeline() {
   return <Box>
     <PageHeader title={t('common.eventTimeline')} description={t('pages.eventTimeline.gameActionsAndEventPreparationAtAGlanceTwoSchedules')} />
     <EventWorkspace workspace={workspace} page="timeline" />
-    {workspace.event && !workspace.query.error && <TimelineSchedule key={workspace.event.id} eventId={workspace.event.id} startDate={workspace.event.startDate} endDate={workspace.event.endDate} />}
+    {workspace.event && !workspace.query.error && <TimelineSchedule key={workspace.event.id} event={workspace.event} />}
   </Box>;
 }

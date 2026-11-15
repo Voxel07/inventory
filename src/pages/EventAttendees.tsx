@@ -18,6 +18,7 @@ import { Dialog } from '../components/shared/ClosableDialog';
 import { Field, FieldGrid } from '../components/items/CompactDetail';
 import { QueryFeedback } from '../components/common/QueryFeedback';
 import { EventWorkspace } from '../components/events/EventWorkspace';
+import { EventPrintButton } from '../components/events/EventPrintButton';
 import { StatStrip } from '../components/shared/StatStrip';
 import { EventPeopleDirectory } from '../components/events/EventPeopleDirectory';
 import { TimelineSchedule } from '../components/events/EventTimelineSchedule';
@@ -160,7 +161,7 @@ function AttendeeList({ event }: { event: EventReport }) {
       ]} />
       <CateringRates eventId={eventId} canEdit={canEdit} />
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
+        <Stack direction="row" useFlexGap spacing={2} sx={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField size="small" label={t('pages.eventAttendees.searchAttendees')} value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.eventAttendees.nameRoleOrFaction')} sx={{ width: { xs: '100%', sm: 300 } }}
@@ -170,10 +171,19 @@ function AttendeeList({ event }: { event: EventReport }) {
               {ATTENDEE_ROLES.map((role) => <MenuItem key={role} value={role}>{roleLabels[role]}</MenuItem>)}
             </TextField>
           </Stack>
-          {canEdit && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button variant="outlined" startIcon={<GroupsOutlinedIcon />} onClick={() => setDirectoryOpen(true)}>{t('pages.eventAttendees.peopleList')}</Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => { save.reset(); setPickedPerson(undefined); setEditing('new'); }}>{t('pages.eventAttendees.addPerson')}</Button>
-          </Stack>}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <EventPrintButton event={event} title={t('common.eventAttendees')}
+              summary={t('pages.eventAttendees.visibleCountOfAttendeeCountPeople', { visibleCount: String(visible.length), attendeeCount: String(attendees.length) })}
+              columns={[t('enum.value.person'), t('pages.eventAttendees.roles'), t('pages.eventAttendees.arrival'), t('pages.eventAttendees.departure'),
+                t('pages.eventAttendees.mainMealStamps'), t('pages.eventAttendees.breakfastStamps'), t('pages.eventAttendees.issued'), t('common.notes')]}
+              rows={visible.map((attendee) => [attendee.person.name, attendee.roles.map((role) => roleText(role, roleLabels)).join('\n'),
+                formatDateTime(attendee.arrivesAt, t('pages.eventAttendees.toConfirm')), formatDateTime(attendee.leavesAt, t('pages.eventAttendees.toConfirm')),
+                String(attendee.mainMealStamps), String(attendee.breakfastStamps), t(attendee.foodStampsIssued ? 'pages.eventAttendees.issued2' : 'pages.eventAttendees.needed'), attendee.notes ?? '—'])} />
+            {canEdit && <>
+              <Button variant="outlined" startIcon={<GroupsOutlinedIcon />} onClick={() => setDirectoryOpen(true)}>{t('pages.eventAttendees.peopleList')}</Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => { save.reset(); setPickedPerson(undefined); setEditing('new'); }}>{t('pages.eventAttendees.addPerson')}</Button>
+            </>}
+          </Stack>
         </Stack>
       </Paper>
       {!attendees.length ? <Alert severity="info">{t('pages.eventAttendees.noAttendeesYetAddTheFirstPeopleToPlanRoles')}</Alert>
@@ -220,7 +230,7 @@ function AttendeeList({ event }: { event: EventReport }) {
           </TableContainer>
         </>}
     </>}
-    <Box sx={{ mt: 3 }}><TimelineSchedule eventId={eventId} startDate={event.startDate} endDate={event.endDate} fixedCategory="catering" /></Box>
+    <Box sx={{ mt: 3 }}><TimelineSchedule event={event} fixedCategory="catering" /></Box>
     <FormDialog open={editing !== null} maxWidth="md" onClose={() => { if (!save.isPending) setEditing(null); }}>
       {editing && <AttendeeForm attendee={editing === 'new' ? undefined : editing} initialPerson={pickedPerson} eventType={eventType} startDate={event.startDate} endDate={event.endDate}
         attendingPersonIds={attendees.map((attendee) => attendee.person.id)} pending={save.isPending} error={save.error?.message}

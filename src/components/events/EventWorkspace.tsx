@@ -1,4 +1,4 @@
-import { Alert, Box, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Button } from '../shared/ActionButtons';
 import { QueryFeedback } from '../common/QueryFeedback';
@@ -15,12 +15,15 @@ export function EventWorkspace({ workspace, page }: {
   return <Box sx={{ mb: 3 }}>
     <Paper sx={{ p: 2 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
-        <TextField select fullWidth label={t('events.eventWorkspace.selectEvent')} value={event?.id ?? ''}
-          disabled={query.isLoading || !reports.length} onChange={(e) => selectEvent(e.target.value)} sx={{ maxWidth: { md: 520 } }}>
-          {reports.map((report) => <MenuItem key={report.id} value={report.id}>
-            {report.name} · {report.eventType} · {formatDate(report.startDate)}
-          </MenuItem>)}
-        </TextField>
+        <Autocomplete fullWidth disableClearable={Boolean(event)} options={reports} value={event ?? null}
+          disabled={query.isLoading || !reports.length} sx={{ maxWidth: { md: 520 } }}
+          getOptionKey={(report) => report.id}
+          getOptionLabel={(report) => `${report.name} · ${report.eventType} · ${formatDate(report.startDate)}`}
+          isOptionEqualToValue={(option, value) => option.id === value.id}
+          onChange={(_, report) => { if (report) selectEvent(report.id); }}
+          noOptionsText={t('events.eventWorkspace.noMatchingEvents')}
+          renderInput={(params) => <TextField {...params} label={t('events.eventWorkspace.selectEvent')}
+            placeholder={t('events.eventWorkspace.searchEvents')} />} />
         {event && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button component={RouterLink} to={`/events/${event.id}`}>{t('common.eventPlanning')}</Button>
           <Button component={RouterLink} to={`/events/${page === 'attendees' ? 'timeline' : 'attendees'}?eventId=${event.id}`}>

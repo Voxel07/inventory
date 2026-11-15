@@ -152,6 +152,8 @@ export default {
     codeNotFound: 'Code not found: {{code}}',
   },
   common: {
+    print: 'Print',
+    couldNotPrint: 'Could not open the print dialog. Please try again.',
     cancel: 'Cancel',
     open: 'Open',
     save: 'Save',
@@ -733,6 +735,8 @@ export default {
     },
     eventWorkspace: {
       selectEvent: 'Select event',
+      searchEvents: 'Search by name, type or date',
+      noMatchingEvents: 'No matching events.',
       openTimeline: 'Open timeline',
       openAttendees: 'Open attendees',
       allTimesAreLocalToTheEvent: 'All times are local to the event.',

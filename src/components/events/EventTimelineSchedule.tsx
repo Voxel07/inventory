@@ -17,12 +17,14 @@ import { FormDialog, DialogForm } from '../shared/FormDialog';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { QueryFeedback } from '../common/QueryFeedback';
 import { StatStrip } from '../shared/StatStrip';
+import { EventPrintButton } from './EventPrintButton';
 import { timelineHooks } from '../../hooks/useEventLogistics';
 import { useAuth } from '../../hooks/useAuth';
 import { canEditEvents } from '../../utils/access';
 import { useT } from '../../utils/naming';
 import { useUIStore } from '../../store/uiStore';
 import type { EventTimelineEntry, EventTimelineInput, TimelineCategory, TimelineStatus } from '../../types/eventLogistics';
+import type { EventReport } from '../../types';
 
 const statusColors = { planned: 'default', in_progress: 'info', completed: 'success' } as const;
 
@@ -31,7 +33,8 @@ function useStatusLabels(): Record<TimelineStatus, string> {
   return { planned: t('common.planned'), in_progress: t('pages.eventTimeline.inProgress'), completed: t('common.completed') };
 }
 
-export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }: { eventId: string; startDate: number; endDate: number; fixedCategory?: TimelineCategory }) {
+export function TimelineSchedule({ event, fixedCategory }: { event: EventReport; fixedCategory?: TimelineCategory }) {
+  const { id: eventId, startDate, endDate } = event;
   const t = useT();
   const statusLabels = useStatusLabels();
   const { user } = useAuth();
@@ -51,6 +54,7 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
   const days = [...new Set(schedule.map((entry) => calendarDate(new Date(entry.startsAt))))];
   const completed = schedule.filter((entry) => entry.status === 'completed').length;
   const ready = !query.isLoading && !query.error;
+  const title = category === 'catering' ? t('pages.eventTimeline.crewCatering') : category === 'in_game' ? t('pages.eventTimeline.whatHappensInGame') : t('pages.eventTimeline.gettingTheEventReady');
   const lastEnd = schedule.reduce((latest, entry) => (entry.endsAt ?? entry.startsAt) > latest ? (entry.endsAt ?? entry.startsAt) : latest, -Infinity);
 
   function changeCategory(value: TimelineCategory) {
@@ -85,13 +89,20 @@ export function TimelineSchedule({ eventId, startDate, endDate, fixedCategory }:
     <Box role={fixedCategory ? 'region' : 'tabpanel'} id={`timeline-panel-${category}`} aria-labelledby={fixedCategory ? `timeline-heading-${category}` : `timeline-tab-${category}`}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
         <Box>
-          <Typography id={`timeline-heading-${category}`} variant="h5" component="h2">{category === 'catering' ? t('pages.eventTimeline.crewCatering') : category === 'in_game' ? t('pages.eventTimeline.whatHappensInGame') : t('pages.eventTimeline.gettingTheEventReady')}</Typography>
+          <Typography id={`timeline-heading-${category}`} variant="h5" component="h2">{title}</Typography>
           <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>{category === 'in_game'
             ? t('pages.eventTimeline.briefingsMissionsAndPlannedGameActionsInChronologicalOrder')
             : category === 'catering' ? t('pages.eventTimeline.cateringDescription') : t('pages.eventTimeline.setupPreparationAndTeardownIncludingBeforeAndAfterTheEvent')}</Typography>
         </Box>
-        {canEdit && <Button variant="contained" startIcon={<AddIcon />} disabled={!ready} sx={{ flexShrink: 0 }}
-          onClick={() => { save.reset(); setEditing('new'); }}>{category === 'catering' ? t('pages.eventTimeline.addCateringPeriod') : category === 'in_game' ? t('pages.eventTimeline.addAction') : t('pages.eventTimeline.addTask')}</Button>}
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
+          <EventPrintButton event={event} title={`${t('common.eventTimeline')} · ${title}`} disabled={!ready}
+            columns={[t('pages.eventTimeline.start'), t('pages.eventTimeline.endOptional'), t('pages.eventTimeline.title'),
+              t('pages.eventTimeline.responsiblePersonTeam'), t('pages.eventTimeline.locationEventArea'), t('common.status'), t('common.description')]}
+            rows={schedule.map((entry) => [formatDateTime(entry.startsAt), formatDateTime(entry.endsAt), entry.title,
+              entry.owner ?? '—', entry.location ?? '—', statusLabels[entry.status], entry.description ?? '—'])} />
+          {canEdit && <Button variant="contained" startIcon={<AddIcon />} disabled={!ready}
+            onClick={() => { save.reset(); setEditing('new'); }}>{category === 'catering' ? t('pages.eventTimeline.addCateringPeriod') : category === 'in_game' ? t('pages.eventTimeline.addAction') : t('pages.eventTimeline.addTask')}</Button>}
+        </Stack>
       </Stack>
       <QueryFeedback isLoading={query.isLoading} error={query.error} />
       {ready && <>

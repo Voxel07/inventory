@@ -154,6 +154,8 @@ export default {
     codeNotFound: 'Code nicht gefunden: {{code}}',
   },
   common: {
+    print: 'Drucken',
+    couldNotPrint: 'Der Druckdialog konnte nicht geöffnet werden. Bitte erneut versuchen.',
     cancel: 'Abbrechen',
     open: 'Öffnen',
     save: 'Speichern',
@@ -735,6 +737,8 @@ export default {
     },
     eventWorkspace: {
       selectEvent: 'Event auswählen',
+      searchEvents: 'Nach Name, Typ oder Datum suchen',
+      noMatchingEvents: 'Keine passenden Events.',
       openTimeline: 'Zeitplan öffnen',
       openAttendees: 'Teilnehmer öffnen',
       allTimesAreLocalToTheEvent: 'Alle Uhrzeiten sind Ortszeit am Event.',
