@@ -49,13 +49,15 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
   const invalidCoordinates = (form.latitude == null) !== (form.longitude == null)
     || (form.latitude != null && (!Number.isFinite(form.latitude) || Math.abs(form.latitude) > 90))
     || (form.longitude != null && (!Number.isFinite(form.longitude) || Math.abs(form.longitude) > 180));
+  // The server keeps a building outline only together with a map position.
+  const outlineWithoutPosition = !invalidCoordinates && Boolean(form.mapOutline?.length) && form.latitude == null;
 
   const mapLatitude = !invalidCoordinates ? form.latitude ?? parent?.latitude ?? location.latitude : parent?.latitude ?? location.latitude;
   const mapLongitude = !invalidCoordinates ? form.longitude ?? parent?.longitude ?? location.longitude : parent?.longitude ?? location.longitude;
 
   return <FormDialog open onClose={update.isPending ? () => {} : onClose} maxWidth="md">
     <DialogForm title={t('pages.storageLocations.editStorageLocation')} onSubmit={submit} onCancel={onClose} noValidate
-      pending={update.isPending} submitDisabled={!form.name.trim() || invalidCoordinates || drawing}>
+      pending={update.isPending} submitDisabled={!form.name.trim() || invalidCoordinates || outlineWithoutPosition || drawing}>
       <Stack spacing={2}>
         <LocationPicker locations={parentChoices} value={form.parentLocationId} stockOnly={false} label={t('pages.storageLocations.insideOf')}
           helperText={form.keepParent ? t('review.hiddenHierarchy') : t(`pages.storageLocations.roleHelp.${locationRole({ depth })}`)}
@@ -90,6 +92,7 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
           {ownsMap && location.mapOverlay && !form.removeMapOverlay && <Button title={translate('pages.storageLocations.removeTheSavedMapOverlay')} color="error"
             onClick={() => setForm({ ...form, removeMapOverlay: true, mapOverlayFile: undefined })}>{t('pages.storageLocations.removeExistingMapOverlay')}</Button>}
           {invalidCoordinates && <Alert severity="warning">{t('maps.storageLocationMap.invalidCoordinates')}</Alert>}
+          {outlineWithoutPosition && <Alert severity="warning">{t('maps.storageLocationMap.outlineNeedsPosition')}</Alert>}
           <StorageLocationMap editable onDrawingChange={setDrawing} latitude={mapLatitude} longitude={mapLongitude}
             showPoint={!invalidCoordinates && form.latitude != null && form.longitude != null} outline={form.mapOutline}
             onOutlineChange={(mapOutline) => setForm((current) => ({ ...current, mapOutline }))}

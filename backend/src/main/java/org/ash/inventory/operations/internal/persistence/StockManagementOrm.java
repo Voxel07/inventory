@@ -21,7 +21,9 @@ public class StockManagementOrm extends EntityOrm {
                 .search(filters.search, "lot.lotNumber", "lot.item.name", "lot.item.sku");
         if (itemIds != null && !itemIds.isEmpty()) predicates.parameter("itemIds", itemIds).where("lot.item.id in :itemIds");
         if (filters.locationId != null) predicates.parameter("locationId", filters.locationId)
-                .where("exists (select p.id from InventoryPosition p where p.lot = lot and p.location.id = :locationId and (p.quantityOnHand > 0 or p.quantityInTransit > 0) and " + InventoryAccessOrm.visible("p.location.accessPolicy") + ")");
+                // Not "p": InventoryAccessOrm.visible declares its own "p" for the policy subquery.
+                .where("exists (select position.id from InventoryPosition position where position.lot = lot and position.location.id = :locationId"
+                        + " and (position.quantityOnHand > 0 or position.quantityInTransit > 0) and " + InventoryAccessOrm.visible("position.location.accessPolicy") + ")");
         var query = predicates.bind(entityManager.createQuery(predicates.ordered("lot.expiryDate nulls last, lot.lotNumber, lot.id"), InventoryLot.class));
         return visible(query, actor).setFirstResult(offset).setMaxResults(limit).getResultList();
     }

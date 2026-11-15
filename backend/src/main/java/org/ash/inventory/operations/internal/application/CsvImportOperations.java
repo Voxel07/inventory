@@ -8,6 +8,7 @@ import org.ash.inventory.operations.internal.contract.ApiModels;
 import org.ash.inventory.operations.internal.contract.dto.CountDtos;
 import org.ash.inventory.operations.internal.contract.dto.LifecycleDtos;
 import org.ash.inventory.operations.internal.contract.dto.PurchasingDtos;
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
 import org.ash.inventory.operations.internal.contract.dto.TransferDtos;
 import org.ash.inventory.operations.internal.model.CsvImportJob;
 import org.ash.inventory.operations.internal.model.DomainEnums;
@@ -94,11 +95,11 @@ public class CsvImportOperations {
             }
             case "loan" -> {
                 var input = csv.input(data, LoanService.Input.class);
-                var existing = CsvImportSupport.all(loans::list).stream().filter(entry -> entry.commitmentId().equals(input.commitmentId())).findFirst();
+                var existing = CsvImportSupport.all((page, size) -> loans.list(new TaskFilters(), page, size)).stream().filter(entry -> entry.commitmentId().equals(input.commitmentId())).findFirst();
                 result = existing.isPresent() ? existing.get().id() : loans.create(input).id();
             }
             case "loan_collect" -> {
-                var loan = CsvImportSupport.all(loans::list).stream().filter(entry -> entry.id().equals(CsvImportSupport.id(data.path("loanId")))).findFirst()
+                var loan = CsvImportSupport.all((page, size) -> loans.list(new TaskFilters(), page, size)).stream().filter(entry -> entry.id().equals(CsvImportSupport.id(data.path("loanId")))).findFirst()
                         .orElseThrow(() -> ApiException.badRequest("Loan agreement not found"));
                 data.put("revision", loan.revision());
                 result = loan.collected() >= loan.quantity() ? loan.id() : loans.move(loan.id(), csv.input(data, LoanService.Movement.class), false).id();
@@ -115,7 +116,7 @@ public class CsvImportOperations {
                 result = transfer.id();
             }
             case "count" -> {
-                var existing = CsvImportSupport.all((page, size) -> counts.list(new org.ash.inventory.operations.internal.contract.dto.TaskFilters(), page, size)).stream()
+                var existing = CsvImportSupport.all((page, size) -> counts.list(new TaskFilters(), page, size)).stream()
                         .filter(entry -> entry.sessionNumber().equals(data.path("sessionNumber").asText())).findFirst();
                 result = existing.isPresent() ? existing.get().id() : counts.create(csv.input(data, CountDtos.CountInput.class)).id();
             }
@@ -138,10 +139,10 @@ public class CsvImportOperations {
 
     private UUID purchase(ObjectNode data) {
         String name = data.path("vendorName").asText();
-        var existing = CsvImportSupport.all((page, size) -> purchasing.vendors(null, page, size)).stream().filter(vendor -> vendor.name().equals(name)).findFirst();
+        var existing = CsvImportSupport.all((page, size) -> purchasing.vendors(new TaskFilters(), page, size)).stream().filter(vendor -> vendor.name().equals(name)).findFirst();
         var vendor = existing.orElseGet(() -> purchasing.createVendor(csv.input(csv.object().put("name", name), PurchasingDtos.VendorInput.class)));
         data.put("vendorId", vendor.id().toString());
-        var known = CsvImportSupport.all((page, size) -> purchasing.purchaseOrders(null, page, size)).stream()
+        var known = CsvImportSupport.all((page, size) -> purchasing.purchaseOrders(new TaskFilters(), page, size)).stream()
                 .filter(order -> order.orderNumber().equals(data.path("orderNumber").asText())).findFirst();
         var order = known.orElseGet(() -> purchasing.createPurchaseOrder(csv.input(data, PurchasingDtos.PurchaseOrderInput.class)));
         if (data.path("status").asText().equals("ordered") && order.status().equals("draft")) order = purchasing.transitionPurchaseOrder(order.id(),
@@ -150,7 +151,7 @@ public class CsvImportOperations {
     }
 
     private UUID receipt(ObjectNode data) {
-        var order = CsvImportSupport.all((page, size) -> purchasing.purchaseOrders(null, page, size)).stream()
+        var order = CsvImportSupport.all((page, size) -> purchasing.purchaseOrders(new TaskFilters(), page, size)).stream()
                 .filter(entry -> entry.id().equals(CsvImportSupport.id(data.path("purchaseOrderId")))).findFirst()
                 .orElseThrow(() -> ApiException.badRequest("Purchase order not found"));
         for (var source : data.path("lines")) {

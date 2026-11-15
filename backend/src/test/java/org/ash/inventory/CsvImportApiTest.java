@@ -246,6 +246,27 @@ class CsvImportApiTest {
         assertEquals(Map.of(itemId, 2), saved.path("[0].returnedQuantities"));
     }
 
+    /** The second row finds the vendor and the purchase order the first one created instead of failing or duplicating them. */
+    @Test void purchaseRowsReuseExistingVendorsAndOrders() {
+        String owner = "csv-purchase-" + UUID.randomUUID();
+        var plan = plan("combined");
+        plan.withArray("parsedItems").add(item(1, owner));
+        for (int index = 2; index <= 3; index++) {
+            var operation = plan.withArray("parsedOperations").addObject().put("index", index)
+                    .put("name", owner + " purchase " + index).put("operation", "purchase").put("status", "valid");
+            var data = operation.putObject("data").put("vendorName", owner + " vendor").put("orderNumber", owner)
+                    .put("orderDate", "@date:0").put("status", "ordered");
+            data.putArray("lines").addObject().put("itemId", "@item:" + owner).put("orderedQuantity", 2).put("unitPriceCents", 100);
+        }
+        String id = request(owner).body(upload(plan)).post("/api/csv-imports").then().statusCode(202).extract().path("id");
+        for (int i = 0; i < 3; i++) assertTrue(steps.next());
+        status(owner, id).then().body("status", equalTo("completed")).body("result.successOperations", equalTo(2))
+                .body("result.errors", hasSize(0));
+        request(owner).queryParam("search", owner).queryParam("status", "ordered").get("/api/purchase-orders").then().statusCode(200)
+                .body("", hasSize(1));
+        request(owner).queryParam("search", owner + " vendor").get("/api/vendors").then().statusCode(200).body("", hasSize(1));
+    }
+
     private ObjectNode plan(String tab) {
         var plan = json.createObjectNode().put("tabType", tab).put("updateExistingItems", false).put("autoCreateLocations", true);
         for (String section : new String[]{"newFactions", "parsedItems", "parsedAssemblies", "parsedEvents", "parsedOrders",

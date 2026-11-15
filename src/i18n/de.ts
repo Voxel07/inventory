@@ -1369,6 +1369,7 @@ export default {
       selectedLocationHelp: 'Kartenwerkzeuge ändern den ausgewählten Lagerort. Andere Gebäude oder Lagerplätze in der Liste oder auf der Karte auswählen.',
       clearPlacement: 'Genaue Position entfernen',
       invalidCoordinates: 'Beide Koordinaten angeben: Breitengrad −90 bis 90 und Längengrad −180 bis 180.',
+      outlineNeedsPosition: 'Ein Gebäudeumriss braucht eine Kartenposition. Punkt setzen oder Umriss entfernen.',
       overview: 'Standortkarte',
       openEditor: 'Karten- und Gebäudeeditor',
       clickTheMapToSetTheExactPickupPoint: 'Klicken Sie auf die Karte, um den genauen Abholpunkt zu setzen.',

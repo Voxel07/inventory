@@ -1367,6 +1367,7 @@ export default {
       selectedLocationHelp: 'Map tools change the selected location. Select another building or storage place in the list or on the map.',
       clearPlacement: 'Clear exact placement',
       invalidCoordinates: 'Enter both coordinates: latitude −90 to 90 and longitude −180 to 180.',
+      outlineNeedsPosition: 'A building outline needs a map position. Set a point or remove the outline.',
       overview: 'Site map',
       openEditor: 'Map & building editor',
       clickTheMapToSetTheExactPickupPoint: 'Click the map to set the exact pickup point.',

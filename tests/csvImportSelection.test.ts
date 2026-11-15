@@ -67,8 +67,8 @@ test('admin combined import bootstraps the sample from an empty reference catalo
     storageLocations: [], updateExistingItems: false, reference: { eventTypes: [], factions: [] }, autoCreateReferences: true });
   expect(result.totalErrorsCount).toBe(0);
   expect(result.validEventsCount).toBe(31);
-  expect(result.validOrdersCount).toBe(77);
-  expect(result.validGeneralOrdersCount).toBe(86);
+  expect(result.validOrdersCount).toBe(107);
+  expect(result.validGeneralOrdersCount).toBe(90);
   expect(result.validCheckoutsCount).toBe(countType('Ausleihe'));
   expect(result.validCheckoutsCount).toBeGreaterThan(0);
   expect(result.newFactions.map((faction) => `${faction.eventType}:${faction.name}`).sort()).toEqual(

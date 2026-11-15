@@ -114,5 +114,13 @@ class PerformanceSecurityReviewApiTest {
         admin().queryParam("itemId", items.get(0)).queryParam("itemId", items.get(1)).get("/api/inventory-lots").then().statusCode(200)
                 .body("id", containsInAnyOrder(lots.toArray()));
         admin().queryParam("itemId", items.get(1)).get("/api/inventory-lots").then().statusCode(200).body("id", containsInAnyOrder(lots.get(1)));
+        // The location filter runs the access subquery for the position's location as well.
+        admin().queryParam("itemId", items.get(0)).queryParam("itemId", items.get(1)).queryParam("locationId", shelf).get("/api/inventory-lots")
+                .then().statusCode(200).body("id", containsInAnyOrder(lots.toArray()));
+        String elsewhere = TestLocations.section(PerformanceSecurityReviewApiTest::admin, Map.of("name", "Empty lot shelf " + UUID.randomUUID()));
+        admin().queryParam("itemId", items.get(0)).queryParam("locationId", elsewhere).get("/api/inventory-lots")
+                .then().statusCode(200).body("size()", equalTo(0));
+        actor("review-reader-" + UUID.randomUUID(), "read_only").queryParam("itemId", items.get(0)).queryParam("locationId", shelf)
+                .get("/api/inventory-lots").then().statusCode(200).body("id", containsInAnyOrder(lots.get(0)));
     }
 }
