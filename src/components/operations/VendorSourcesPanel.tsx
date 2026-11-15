@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Box, Chip, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
@@ -17,17 +17,23 @@ import { getVendorSources, scanVendorSources, type VendorSourceGroup, type Vendo
 import { queryKeys } from '../../utils/queryKeys';
 import { formatDateTime } from '../../utils/dateFormat';
 import { useAppLanguage, useT } from '../../utils/naming';
+import { TaskToolbar } from './TaskToolbar';
+import { taskSearch, useTaskFilters, useTaskPage } from '../../hooks/useWarehouseTasks';
 
 /** Suppliers derived from item purchase links; the scan runs only when the button is pressed. */
 export function VendorSourcesPanel() {
   const t = useT();
   const sources = useQuery({ queryKey: queryKeys.operations('vendor-sources'), queryFn: getVendorSources });
   const command = useOperationCommand();
-  const [vendorId, setVendorId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const filters = useTaskFilters('vendor-sources');
+  const vendorId = filters.values.vendorId;
+  const setVendorId = (id: string | null) => filters.set('vendorId', id ?? '');
   const data = sources.data;
   const selected = data?.vendors.find(group => group.vendorId === vendorId);
-  const vendors = data?.vendors.filter(group => `${group.vendorName} ${group.host}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const vendors = (data?.vendors ?? []).filter(group => taskSearch(filters.values.search, group.vendorName, group.host, group.items.flatMap(item => [item.itemName, item.sku]))
+    && (!filters.values.status || group.active === (filters.values.status === 'active'))
+    && (!filters.values.kind || group.generated === (filters.values.kind === 'generated')));
+  const page = useTaskPage(vendors, JSON.stringify(filters.values));
   return <Stack spacing={2} sx={{ minWidth: 0 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}>
       <Button variant="contained" title={t('operations.vendorSources.generateTitle')} disabled={command.isPending || sources.isLoading}
@@ -55,11 +61,14 @@ export function VendorSourcesPanel() {
         <PurchaseLink url={`https://${selected.host}`} label={selected.host} />
       </Stack>
       <VendorSourceItems key={selected.vendorId} group={selected} />
-    </> : !!data?.vendors.length && <>
-      <TextField type="search" size="small" fullWidth label={t('operations.vendorSources.searchVendors')} value={search} onChange={event => setSearch(event.target.value)} />
-      <QueryFeedback isLoading={false} isEmpty={!vendors?.length} emptyMessage={t('operations.vendorSources.noMatchingVendors')} />
+    </> : <>
+      <TaskToolbar state={filters} searchLabel={t('operations.tasks.purchaseSearch')} count={vendors.length} loading={sources.isFetching} filters={[
+        { key: 'status', label: t('common.status'), options: [{ value: '', label: t('operations.tasks.allStatuses') }, { value: 'active', label: t('enum.value.active') }, { value: 'inactive', label: t('enum.value.inactive') }] },
+        { key: 'kind', label: t('operations.tasks.supplierType'), options: [{ value: '', label: t('operations.tasks.allTypes') }, { value: 'generated', label: t('operations.tasks.generated') }, { value: 'manual', label: t('operations.tasks.manual') }] },
+      ]} />
+      <QueryFeedback isLoading={sources.isLoading} isEmpty={!!data?.vendors.length && !vendors.length} emptyMessage={t('operations.vendorSources.noMatchingVendors')} />
       {!!vendors?.length && <Paper variant="outlined" component="ul" aria-label={t('common.supplier')} sx={{ listStyle: 'none', m: 0, p: 0, overflow: 'hidden' }}>
-        {vendors.map(group => <Box component="li" key={group.vendorId} sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
+        {page.rows.map(group => <Box component="li" key={group.vendorId} sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
           <ListItemButton onClick={() => setVendorId(group.vendorId)} sx={{ gap: 1, minHeight: 48 }}>
             <Stack direction="row" useFlexGap sx={{ flex: 1, minWidth: 0, gap: 0.75, alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{group.vendorName}</Typography>
@@ -72,6 +81,7 @@ export function VendorSourcesPanel() {
           <Box sx={{ px: 2, pb: 1, minWidth: 0 }}><PurchaseLink url={`https://${group.host}`} label={group.host} /></Box>
         </Box>)}
       </Paper>}
+      {page.control}
     </>}
   </Stack>;
 }
@@ -81,9 +91,10 @@ function VendorSourceItems({ group }: { group: VendorSourceGroup }) {
   const t = useT();
   const language = useAppLanguage();
   const compact = useCompactCatalog();
-  const [search, setSearch] = useState('');
+  const filters = useTaskFilters('source-items-' + group.vendorId);
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
-  const rows = group.items.filter(item => `${item.itemName} ${item.sku} ${item.url}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const rows = group.items.filter(item => taskSearch(filters.values.search, item.itemName, item.sku, item.url)
+    && (!filters.values.status || (filters.values.status === 'changed' ? item.currentUrl !== item.url : item.currentUrl === item.url)));
   const page = Math.min(pagination.page, Math.max(0, Math.ceil(rows.length / pagination.pageSize) - 1));
   const link = (item: VendorSourceItem) => <Stack spacing={0.25} sx={{ minWidth: 0, maxWidth: '100%' }}>
     <PurchaseLink url={item.url} label={item.url.replace(/^https?:\/\/(www\.)?/i, '')} />
@@ -98,8 +109,8 @@ function VendorSourceItems({ group }: { group: VendorSourceGroup }) {
     { field: 'url', headerName: t('operations.vendorSources.link'), flex: 1.5, minWidth: 200, renderCell: ({ row }) => link(row) },
   ];
   return <Stack spacing={1.5} sx={{ minWidth: 0 }}>
-    <TextField type="search" size="small" fullWidth label={t('common.searchItems')} value={search}
-      onChange={event => { setSearch(event.target.value); setPagination(current => ({ ...current, page: 0 })); }} />
+    <TaskToolbar state={{ ...filters, set: (key, value) => { filters.set(key, value); setPagination(current => ({ ...current, page: 0 })); } }} searchLabel={t('common.searchItems')} count={rows.length}
+      filters={[{ key: 'status', label: t('operations.tasks.links'), options: [{ value: '', label: t('operations.tasks.allStatuses') }, { value: 'changed', label: t('operations.tasks.changedLinks') }, { value: 'current', label: t('operations.tasks.currentLinks') }] }]} />
     {compact ? <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
       <QueryFeedback isLoading={false} isEmpty={!rows.length} emptyMessage={t('lists.itemsList.noMatchingItems')} />
       <Box component="ul" aria-label={t('operations.vendorSources.itemsToOrder')} sx={{ listStyle: 'none', m: 0, p: 0 }}>

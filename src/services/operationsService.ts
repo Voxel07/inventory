@@ -12,12 +12,12 @@ export const operationsApi = {
   positions: (query: ApiQuery = {}) => list<Position>('inventory-positions', query),
   lots: (query: ApiQuery = {}) => list<Lot>('inventory-lots', query),
   updateLot: (id: string, data: LotInput) => save<Lot>('inventory-lots', data, id),
-  transfers: list<Transfer>('transfers'),
+  transfers: (query: ApiQuery = {}) => list<Transfer>('transfers', query),
   createTransfer: (data: TransferInput) => save<Transfer>('transfers', data),
   transferCommand: <A extends keyof TransferCommands>(id: string, action: A, data: TransferCommands[A]) => action === 'receive'
     ? fieldCommand<Transfer>({ type: 'transfer.receive', payload: { transferId: id, input: data as TransferCommands['receive'] } }, data.idempotencyKey)
     : apiRequest<Transfer>(`/api/transfers/${id}/${action}`, { method: 'POST', body: data }),
-  counts: list<Count>('inventory-counts'),
+  counts: (query: ApiQuery = {}) => list<Count>('inventory-counts', query),
   createCount: (data: CountInput) => save<Count>('inventory-counts', data),
   countCommand: <A extends keyof CountCommands>(id: string, action: A, data: CountCommands[A]) => action === 'submit' || action === 'recount'
     ? fieldCommand<Count>({ type: action === 'submit' ? 'count.submit' : 'count.recount', payload: { countId: id, input: data as CountCommands['submit'] } })
@@ -28,7 +28,7 @@ export const operationsApi = {
   repairs: list<Repair>('repairs'),
   createRepair: (data: RepairInput) => save<Repair>('repairs', data),
   repairCommand: (id: string, data: RepairTransitionInput) => save<Repair>(`repairs/${id}/transitions`, data),
-  receipts: (purchaseOrderId?: string) => list<Receipt>('goods-receipts', { purchaseOrderId }),
+  receipts: (purchaseOrderId?: string, query: ApiQuery = {}) => list<Receipt>('goods-receipts', { ...query, purchaseOrderId }),
   receive: (data: ReceiptInput) => save<Receipt>('goods-receipts', data),
   documents: (purchaseOrderId?: string) => list<VendorDocument>('vendor-documents', { purchaseOrderId }),
   async attachDocument(file: File, data: VendorDocumentInput) {

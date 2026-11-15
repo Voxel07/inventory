@@ -1,3 +1,7 @@
+import { TaskToolbar } from './TaskToolbar';
+import { useTaskFilters } from '../../hooks/useWarehouseTasks';
+import { OperationHistory } from './OperationListEntry';
+import { QueryFeedback } from '../common/QueryFeedback';
 import { formatDateTime, formatDate } from '../../utils/dateFormat';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
@@ -10,24 +14,32 @@ import { useLoans } from '../../hooks/useLoans';
 import type { Loan } from '../../types/loan';
 import { inputChoice, inputNumber, inputText } from '../../utils/inputValues';
 import { operationsApi } from '../../services/operationsService';
-import { useOperationList } from '../../hooks/useOperations';
+import { useCompleteList } from '../../hooks/usePagedList';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { translate, useT } from '../../utils/naming';
 import { Fields, OperationForm } from './OperationForm';
 
 export function LoansPanel() {
   const t = useT(); const lookup = useStockLookups();
-  const loans = useLoans();
-  const transfers = useOperationList('transfers', operationsApi.transfers);
+  const filters = useTaskFilters('loans', { status: 'open' });
+  const loans = useLoans(filters.query);
   const [itemId, setItemId] = useState(''); const [create, setCreate] = useState(false);
   const profile = useEquipmentProfile(itemId);
   const [action, setAction] = useState<{ loan: Loan; type: 'collect' | 'return' | 'extend' } | null>(null);
+  const transferScope = { status: 'received', itemId: action?.loan.itemId, locationId: action?.loan.providerLocationId };
+  const transfers = useCompleteList(['operations', 'transfers:loan', transferScope], operationsApi.transfers(transferScope), { enabled: Boolean(action && action.type !== 'extend') });
   return <Stack spacing={2}>
-    <Typography variant="h6">{t('operations.loansPanel.borrowingRentalArrangements')}</Typography>
-    <Alert severity="info">{t('operations.loansPanel.recordExternalOrPrivateEquipmentAsASeparateItemWith')}</Alert>
-    <Fields fields={[{ key: 'itemId', label: t('common.item'), options: lookup.items.map(i => ({ value: i.id, label: i.name })) }]} values={{ itemId }} onChange={v => setItemId(String(v.itemId))} />
+    <TaskToolbar state={filters} count={loans.data?.length} more={loans.hasNextPage} loading={loans.isFetching}
+      filters={[{ key: 'status', label: t('common.status'), options: [
+        { value: 'open', label: t('operations.tasks.open') }, { value: 'collect', label: t('operations.tasks.collect') },
+        { value: 'return', label: t('operations.tasks.return') }, { value: '', label: t('operations.tasks.allStatuses') },
+        { value: 'history', label: t('operations.tasks.history') },
+      ] }]} />
+    <Typography variant="body2" color="text.secondary">{t('operations.loansPanel.recordExternalOrPrivateEquipmentAsASeparateItemWith')}</Typography>
+    <Fields fields={[{ key: 'itemId', label: t('common.item'), type: 'item' }]} values={{ itemId }} onChange={v => setItemId(String(v.itemId))} />
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><Button title={translate('operations.loansPanel.createANewLoanArrangement')} disabled={!itemId || !profile.data} onClick={() => setCreate(true)}>{t('operations.loansPanel.newArrangement')}</Button>{itemId && <Button title={translate('operations.loansPanel.openOwnershipDetailsAndAvailabilityCommitments')} component={Link} to={`/items/${itemId}`}>{t('operations.loansPanel.editOwnershipCommitment')}</Button>}<Button title={translate('operations.loansPanel.openTheTransportAndTransferOverview')} component={Link} to="/operations?tab=transfers">{t('operations.loansPanel.recordTransport')}</Button></Stack>
-    {(loans.isLoading || profile.isLoading) && <LinearProgress />}{(loans.error || profile.error || transfers.error || lookup.error) && <Alert severity="error">{(loans.error || profile.error || transfers.error || lookup.error)?.message}</Alert>}
+    {(profile.isLoading || transfers.isFetching) && <LinearProgress />}{(profile.error || transfers.error || lookup.error) && <Alert severity="error">{(profile.error || transfers.error || lookup.error)?.message}</Alert>}
+    <QueryFeedback isLoading={loans.isLoading} error={loans.error} isEmpty={!loans.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
     {loans.data?.map(l => <OperationListEntry key={l.id} actions={['returned', 'cancelled'].includes(l.status) ? undefined : [
         l.collected < l.quantity && { key: 'collect', label: t('operations.loansPanel.recordCollection'), title: translate('operations.loansPanel.recordCollectionAndHandoverOfTheLoan'),
           pinned: true, onClick: () => setAction({ loan: l, type: 'collect' }) },
@@ -39,7 +51,7 @@ export function LoansPanel() {
       <Typography>{t('operations.loansPanel.committedCollectedReturned')}: {l.quantity} / {l.collected} / {l.returned}</Typography>
       <Typography>{t('operations.loansPanel.collectionAvailableThroughReturnDue')}: {formatDate(l.collectionDate)} / {formatDate(l.availableUntil)} / {formatDate(l.returnDue)}</Typography>
       {!!l.assetCodes.length && <Typography sx={{ overflowWrap: 'anywhere' }}>{t('operations.loansPanel.assets')}: {l.assetCodes.join(', ')}</Typography>}
-      {l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{formatDateTime(h.at)} · {h.actor} · {h.action} · {h.notes}</Typography>)}
+      <OperationHistory title={t('common.history')} count={l.history.length}>{l.history.map((h, index) => <Typography key={index} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{formatDateTime(h.at)} · {h.actor} · {h.action} · {h.notes}</Typography>)}</OperationHistory>
     </OperationListEntry>)}
     {loans.hasNextPage && <Button title={t('operations.loansPanel.loadMoreArrangements')} disabled={loans.isFetchingNextPage} onClick={() => { void loans.fetchNextPage(); }}>{t('operations.loansPanel.loadMore')}</Button>}
     {create && <OperationForm title={t('operations.loansPanel.newArrangement2')} onClose={() => setCreate(false)} initial={{ kind: 'borrow', provider: profile.data?.ownerName ?? '' }} fields={[

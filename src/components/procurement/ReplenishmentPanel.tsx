@@ -1,6 +1,8 @@
+import { TaskToolbar } from '../operations/TaskToolbar';
+import { taskSearch, useTaskFilters, useTaskPage } from '../../hooks/useWarehouseTasks';
+import { OperationHistory } from '../operations/OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { ActionBar } from '../shared/ActionBar';
-import { StatStrip } from '../shared/StatStrip';
 import { useFactionCatalog } from '../../hooks/useFactionCatalog';
 import { SupplierDraft } from './SupplierDraft';
 import { useState } from 'react';
@@ -32,16 +34,11 @@ import {
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import CategoryIcon from '@mui/icons-material/Category';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link } from '@mui/material';
 import { getProcurementDeficits, shortageLine, type ProcurementDeficit } from '../../services/procurementService';
 import { PurchaseDraft } from '../operations/PurchasingOperations';
 import { PlanningDetails } from './PlanningDetails';
-import { ItemRequestQueue } from './ItemRequestQueue';
-import { useItemRequestQueue } from '../../hooks/useItemRequestQueue';
 import { useEventReports } from '../../hooks/useEvents';
 import { translate, useT } from '../../utils/naming';
 import { formatDate } from '../../utils/dateFormat';
@@ -55,19 +52,24 @@ export function ReplenishmentPanel() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const [eventId, setEventId] = useState('');
+  const filters = useTaskFilters('replenishment', { status: 'needed' });
+  const eventId = filters.values.eventId;
+  const setEventId = (value: string) => filters.set('eventId', value);
   const [orderItem, setOrderItem] = useState<ProcurementDeficit | null>(null);
   const { data: events = [] } = useEventReports();
   const { data: deficits = [], isPending, isFetching, fetchStatus, error } = useQuery({
     queryKey: ['procurement-deficits', eventId],
     queryFn: () => getProcurementDeficits(eventId || undefined),
   });
-  // Requests for things the inventory does not hold have no item yet; the exports list the waiting ones too.
-  const openRequests = (useItemRequestQueue(eventId).data ?? []).filter((entry) => entry.request.status === 'open' || entry.request.status === 'item_created');
-
+  const filtered = deficits.filter(row => taskSearch(filters.values.search, row.name, row.sku, row.supplier, row.category)
+    && (!filters.values.kind || row.classification === filters.values.kind)
+    && (!filters.values.vendorId || (row.supplier || t('common.unassigned')) === filters.values.vendorId)
+    && (filters.values.status === 'needed' ? toOrder(row) > 0 : filters.values.status === 'covered' ? toOrder(row) === 0 : true))
+    .sort((a, b) => (a.supplier || t('common.unassigned')).localeCompare(b.supplier || t('common.unassigned')) || a.name.localeCompare(b.name));
+  const page = useTaskPage(filtered, JSON.stringify(filters.values));
   const groups = (() => {
     const result = new Map<string, typeof deficits>();
-    for (const row of deficits) {
+    for (const row of page.rows) {
       const supplier = row.supplier || t('common.unassigned');
       const rows = result.get(supplier);
       if (rows) rows.push(row);
@@ -76,16 +78,13 @@ export function ReplenishmentPanel() {
     return [...result.entries()].sort(([a], [b]) => a.localeCompare(b));
   })();
 
-  // KPI Calculations
-  const totalDeficitUnits = deficits.reduce((sum, row) => sum + row.netDeficit, 0);
-  const consumableDeficitUnits = deficits.filter((r) => r.classification === 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
-  const assetDeficitUnits = deficits.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
-
-  const kpiValue = (value: number) => isPending ? <Skeleton variant="text" width={48} /> : error ? '—' : value;
+  // Totals and exports describe every filtered result, across all visible pages.
+  const consumableDeficitUnits = filtered.filter((r) => r.classification === 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
+  const assetDeficitUnits = filtered.filter((r) => r.classification !== 'consumable').reduce((sum, r) => sum + toOrder(r), 0);
 
   function exportCsv() {
     const header = ['supplier', 'sku', 'name', 'classification', 'demand', 'available', 'projected', 'deficit', 'ordered', 'to_order', 'action'];
-    const rows = deficits.map((row) => [
+    const rows = filtered.map((row) => [
       row.supplier,
       row.sku,
       row.name,
@@ -98,10 +97,7 @@ export function ReplenishmentPanel() {
       toOrder(row),
       row.recommendedAction,
     ]);
-    const requestRows = openRequests.map(({ request, orderLabel }) => [
-      '', '', request.name, 'request', request.quantity, '', '', '', '', request.quantity - request.receivedQuantity, [orderLabel, request.link].filter(Boolean).join(' · '),
-    ]);
-    const csv = [header, ...rows, ...requestRows]
+    const csv = [header, ...rows]
       .map((row) => row.map(csvCell).join(','))
       .join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -136,13 +132,18 @@ export function ReplenishmentPanel() {
     );
     y += 5;
     doc.text(
-      `${t('pages.procurement.stillToOrder')}: ${consumableDeficitUnits + assetDeficitUnits} ${t('pages.procurement.units')} · ${groups.length} ${t('pages.procurement.suppliers')}`,
+      `${t('pages.procurement.stillToOrder')}: ${consumableDeficitUnits + assetDeficitUnits} ${t('pages.procurement.units')} · ${new Set(filtered.map(row => row.supplier)).size} ${t('pages.procurement.suppliers')}`,
       14,
       y
     );
     y += 8;
 
-    for (const [supplier, rows] of groups) {
+    const exportGroups = new Map<string, ProcurementDeficit[]>();
+    for (const row of filtered) {
+      const supplier = row.supplier || t('common.unassigned');
+      exportGroups.set(supplier, [...(exportGroups.get(supplier) ?? []), row]);
+    }
+    for (const [supplier, rows] of exportGroups) {
       if (y > 260) {
         doc.addPage();
         y = 18;
@@ -188,31 +189,6 @@ export function ReplenishmentPanel() {
       y += 4;
     }
 
-    if (openRequests.length) {
-      if (y > 250) {
-        doc.addPage();
-        y = 18;
-      }
-      doc.setFillColor(255, 243, 224);
-      doc.rect(14, y - 4, 182, 7, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text(`${t('itemRequests.openRequests')} (${openRequests.length})`, 16, y + 1);
-      y += 8;
-      doc.setFontSize(8);
-      for (const { request, orderLabel } of openRequests) {
-        if (y > 275) {
-          doc.addPage();
-          y = 18;
-        }
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${request.quantity - request.receivedQuantity} × ${request.name}`, 14, y + 2);
-        doc.setFont('helvetica', 'normal');
-        const detail = doc.splitTextToSize([orderLabel, request.link, request.note].filter(Boolean).join(' · '), 110);
-        doc.text(detail, 86, y + 2);
-        y += Math.max(6, detail.length * 4);
-      }
-    }
 
     doc.save(`beschaffung-${eventId || 'alle-events'}.pdf`);
   }
@@ -223,22 +199,23 @@ export function ReplenishmentPanel() {
         <Typography color="text.secondary">{t('pages.procurement.activeDemandAndMinimumStockShortagesGroupedBySupplier')}</Typography>
         <ActionBar actions={[
           { key: 'csv', label: t('pages.procurement.cSV'), title: translate('pages.procurement.downloadTheCurrentShortagesAsCSV'), icon: <DownloadIcon />,
-            disabled: !deficits.length && !openRequests.length, onClick: exportCsv },
+            disabled: !filtered.length, onClick: exportCsv },
           { key: 'pdf', label: t('pages.procurement.purchaseOrderPDF'), title: translate('pages.procurement.downloadThePurchaseOrderSheetAsPDF'), icon: <PrintIcon />,
-            variant: 'contained', pinned: true, disabled: !deficits.length && !openRequests.length, onClick: exportPdf },
+            variant: 'contained', pinned: true, disabled: !filtered.length, onClick: exportPdf },
         ]} />
       </Stack>
 
-      <StatStrip sx={{ mb: { xs: 2, md: 3 } }} stats={[
-        { label: t('pages.procurement.totalDeficit'), detail: t('pages.procurement.missingUnits'), value: kpiValue(totalDeficitUnits),
-          color: totalDeficitUnits ? 'error.main' : undefined, icon: <WarningAmberIcon />, accent: 'error.main' },
-        { label: t('pages.procurement.consumables'), detail: t('pages.procurement.stillToPurchase'), value: kpiValue(consumableDeficitUnits),
-          icon: <CategoryIcon />, accent: 'warning.main' },
-        { label: t('pages.procurement.assetsGear'), detail: t('pages.procurement.stillToRentOrBuy'), value: kpiValue(assetDeficitUnits),
-          icon: <ShoppingCartIcon />, accent: 'info.main' },
-        { label: t('pages.procurement.suppliers2'), detail: t('pages.procurement.affectedSources'), value: kpiValue(groups.length),
-          icon: <LocalShippingIcon />, accent: 'primary.main' },
-      ]} />
+      <TaskToolbar state={filters} count={filtered.length} loading={isFetching} searchLabel={t('operations.tasks.purchaseSearch')}
+        filters={[
+          { key: 'status', label: t('operations.tasks.demand'), options: [
+            { value: 'needed', label: t('operations.tasks.needed') }, { value: 'covered', label: t('operations.tasks.covered') }, { value: '', label: t('operations.tasks.allShortages') },
+          ] },
+          { key: 'kind', label: t('common.type'), options: [{ value: '', label: t('operations.tasks.allTypes') }, { value: 'consumable', label: t('pages.procurement.consumable') }, { value: 'asset', label: t('pages.procurement.asset') }] },
+          { key: 'vendorId', label: t('common.supplier'), options: [{ value: '', label: t('operations.tasks.allSuppliers') }, ...[...new Set(deficits.map(row => row.supplier || t('common.unassigned')))].sort().map(value => ({ value, label: value }))] },
+        ]} />
+      <Typography variant="body2" color="text.secondary" sx={{ my: 1.5 }}>
+        {t('pages.procurement.stillToOrder')}: {consumableDeficitUnits + assetDeficitUnits} {t('pages.procurement.units')}
+      </Typography>
 
       <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 260 }, mb: { xs: 2, md: 3 } }}>
         <InputLabel shrink>{t('pages.procurement.eventScope')}</InputLabel>
@@ -254,15 +231,13 @@ export function ReplenishmentPanel() {
         </Select>
       </FormControl>
 
-      <ItemRequestQueue eventId={eventId} />
-
       {error && (
         <Alert severity="error">
           {error instanceof Error ? error.message : t('pages.procurement.couldNotLoadDeficits')}
         </Alert>
       )}
-      {!isPending && !error && !deficits.length && (
-        <Alert severity="success">{t('pages.procurement.noShortagesInTheSelectedScope')}</Alert>
+      {!isPending && !error && !filtered.length && (
+        <Alert severity="info">{t(deficits.length ? 'operations.tasks.noMatches' : 'pages.procurement.noShortagesInTheSelectedScope')}</Alert>
       )}
 
       <Stack spacing={2}>
@@ -292,7 +267,7 @@ export function ReplenishmentPanel() {
         </Typography>}
         {groups.map(([supplier, rows]) => (
           <Paper key={supplier}>
-            <SupplierDraft rows={rows} eventId={eventId} />
+            <SupplierDraft rows={filtered.filter(row => (row.supplier || t('common.unassigned')) === supplier)} eventId={eventId} />
             <Stack
               direction="row"
               spacing={1}
@@ -443,7 +418,8 @@ export function ReplenishmentPanel() {
           </Paper>
         ))}
       </Stack>
-      {!isPending && <PlanningDetails rows={deficits} eventId={eventId} />}
+      {page.control}
+      {!isPending && <OperationHistory title={t('procurement.planningDetails.demand')} count={filtered.length}><PlanningDetails rows={page.rows} eventId={eventId} /></OperationHistory>}
       {orderItem && <PurchaseDraft key={orderItem.itemId} initialLines={[shortageLine(orderItem)]} eventId={eventId} onClose={() => setOrderItem(null)} />}
     </Box>
   );

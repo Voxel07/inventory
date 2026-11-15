@@ -8,7 +8,7 @@ import { changeOrderStatus, prepareOrder, reconcileOrder } from './orderCommands
 import type { AssetReturnOutcome, ReturnLineInput, OrderTransitionInput } from '../types/orderCommands';
 export type { AssetReturnOutcome, ReturnLineInput } from '../types/orderCommands';
 
-type FactionOrderFilters = { eventType?: string; faction?: string; orderCode?: string; status?: readonly FactionOrderStatus[]; eventId?: string };
+type FactionOrderFilters = { eventType?: string; faction?: string; orderCode?: string; status?: readonly FactionOrderStatus[]; eventId?: string; search?: string };
 
 /** List rows are summaries: they carry no history, and nothing pretends otherwise. */
 export function getFactionOrders(filters: FactionOrderFilters | undefined, page: number, size: number): Promise<Page<FactionOrderSummary>> {

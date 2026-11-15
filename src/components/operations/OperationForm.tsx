@@ -13,7 +13,7 @@ import { useT } from '../../utils/naming';
 
 export function Fields({ fields, values, onChange }: { fields: Field[]; values: Values; onChange: (values: Values) => void }) {
   const t = useT();
-  return <Stack spacing={2}>{fields.map((field) => {
+  return <Stack spacing={2} useFlexGap>{fields.map((field) => {
     const value = values[field.key] ?? '';
     const update = (next: string | number | boolean) => onChange({ ...values, ...field.reset, [field.key]: next });
     if (field.type === 'quantity') {

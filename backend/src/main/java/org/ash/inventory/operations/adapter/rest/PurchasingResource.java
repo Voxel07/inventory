@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.adapter.rest;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.application.PurchasingService;
 import org.ash.inventory.operations.internal.application.VendorSourceService;
 import org.ash.inventory.operations.internal.contract.dto.PurchasingDtos;
@@ -35,10 +37,10 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/vendors")
     public List<PurchasingDtos.VendorResponse> vendors(
-            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
+            @Valid @jakarta.ws.rs.BeanParam TaskFilters filters,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.vendors(search, page, size);
+        return service.vendors(filters, page, size);
     }
 
     @POST @Path("/vendors")
@@ -73,10 +75,10 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/purchase-orders")
     public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(
-            @QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
+            @Valid @jakarta.ws.rs.BeanParam TaskFilters filters,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.purchaseOrders(status, page, size);
+        return service.purchaseOrders(filters, page, size);
     }
 
     @POST @Path("/purchase-orders")
@@ -99,10 +101,11 @@ public class PurchasingResource {
 
     @Paged @GET @Path("/goods-receipts")
     public List<PurchasingDtos.GoodsReceiptResponse> receipts(
+            @Valid @jakarta.ws.rs.BeanParam TaskFilters filters,
             @QueryParam("purchaseOrderId") UUID purchaseOrderId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.receipts(purchaseOrderId, page, size);
+        return service.receipts(purchaseOrderId, filters, page, size);
     }
 
     @POST @Path("/goods-receipts")

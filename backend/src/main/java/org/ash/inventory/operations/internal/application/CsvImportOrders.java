@@ -32,7 +32,7 @@ public class CsvImportOrders {
         var quantities = csv.quantities(job, row.path("requestedItems"));
         data.set("requestedQuantities", quantities);
         data.put("idempotencyKey", key(job, row, "create").toString());
-        var existing = CsvImportSupport.all((page, size) -> queries.orders(null, null, null, List.of(), null, page, size)).stream()
+        var existing = CsvImportSupport.all((page, size) -> queries.orders(null, null, null, null, List.of(), null, page, size)).stream()
                 .filter(order -> order.eventType().equals(data.path("eventType").asText())
                         && order.faction().equalsIgnoreCase(data.path("faction").asText())
                         && EpochTime.millis(order.eventDate()) == data.path("eventDate").asLong()

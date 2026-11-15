@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.dto.StockDtos;
 import org.ash.inventory.operations.internal.model.AssetInstance;
@@ -32,13 +34,13 @@ public class StockManagementService {
     }
 
     public List<InventoryLot> lots(UUID itemId, int page, int size) {
-        return lots(itemId == null ? List.of() : List.of(itemId), page, size);
+        return lots(itemId == null ? List.of() : List.of(itemId), new TaskFilters(), page, size);
     }
 
     /** Lots of the given items (all visible lots when empty), one page in a stable order. */
-    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, int page, int size) {
+    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, TaskFilters filters, int page, int size) {
         actors.current();
-        return orm.lots(itemIds, PageBounds.of(page, size).offset(), size, actors.current());
+        return orm.lots(itemIds, filters, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
     /**

@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.dto.TransferDtos;
 import org.ash.inventory.operations.internal.model.AssetInstance;
@@ -46,9 +48,9 @@ public class TransferService {
     }
 
     @Transactional
-    public List<TransferDtos.TransferResponse> list(String status, int page, int size) {
+    public List<TransferDtos.TransferResponse> list(TaskFilters filters, int page, int size) {
         actors.current();
-        try { return responses(orm.transfers(status, PageBounds.of(page, size).offset(), size)); }
+        try { return responses(orm.transfers(filters, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown transfer status"); }
     }
 

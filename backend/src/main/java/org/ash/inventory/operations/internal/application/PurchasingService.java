@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.dto.PurchasingDtos;
 import org.ash.inventory.operations.internal.media.MediaService;
@@ -50,9 +52,9 @@ public class PurchasingService {
     }
 
     @Transactional
-    public List<PurchasingDtos.VendorResponse> vendors(String search, int page, int size) {
+    public List<PurchasingDtos.VendorResponse> vendors(TaskFilters filters, int page, int size) {
         actors.requireWarehouse();
-        return orm.vendors(search, PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
+        return orm.vendors(filters, PageBounds.of(page, size).offset(), size).stream().map(this::vendor).toList();
     }
 
     @Transactional
@@ -88,11 +90,11 @@ public class PurchasingService {
     }
 
     @Transactional
-    public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(String status, int page, int size) {
+    public List<PurchasingDtos.PurchaseOrderResponse> purchaseOrders(TaskFilters filters, int page, int size) {
         actors.requireWarehouse();
         List<PurchaseOrder> values;
         try {
-            values = orm.purchaseOrders(status, PageBounds.of(page, size).offset(), size);
+            values = orm.purchaseOrders(filters, PageBounds.of(page, size).offset(), size);
         } catch (IllegalArgumentException exception) {
             throw ApiException.badRequest("Unknown purchase order status");
         }
@@ -173,9 +175,9 @@ public class PurchasingService {
     }
 
     @Transactional
-    public List<PurchasingDtos.GoodsReceiptResponse> receipts(UUID purchaseOrderId, int page, int size) {
+    public List<PurchasingDtos.GoodsReceiptResponse> receipts(UUID purchaseOrderId, TaskFilters filters, int page, int size) {
         actors.requireWarehouse();
-        return receiptResponses(orm.receipts(purchaseOrderId, PageBounds.of(page, size).offset(), size));
+        return receiptResponses(orm.receipts(purchaseOrderId, filters, PageBounds.of(page, size).offset(), size));
     }
 
     @Transactional
@@ -460,7 +462,7 @@ public class PurchasingService {
     }
 
     private PurchasingDtos.GoodsReceiptResponse receipt(GoodsReceipt value, List<GoodsReceiptLine> lines) {
-        return new PurchasingDtos.GoodsReceiptResponse(value.id, value.receiptNumber, value.purchaseOrder.id,
+        return new PurchasingDtos.GoodsReceiptResponse(value.id, value.receiptNumber, value.purchaseOrder.id, value.purchaseOrder.orderNumber, value.purchaseOrder.vendor.name,
                 value.receivedBy.id, value.receivedAt, value.receivingLocation.id, value.status.name(),
                 value.idempotencyKey, value.notes,
                 lines.stream().map(line -> new PurchasingDtos.GoodsReceiptLineResponse(line.id,

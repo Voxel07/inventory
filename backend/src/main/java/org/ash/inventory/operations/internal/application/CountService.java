@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.integration.api.DomainEventService;
 import org.ash.inventory.operations.internal.contract.dto.CountDtos;
 import org.ash.inventory.operations.internal.model.AssetInstance;
@@ -43,9 +45,9 @@ public class CountService {
     }
 
     @Transactional
-    public List<CountDtos.CountResponse> list(String status, int page, int size) {
+    public List<CountDtos.CountResponse> list(TaskFilters filters, int page, int size) {
         actors.current();
-        try { return responses(orm.sessions(status, PageBounds.of(page, size).offset(), size)); }
+        try { return responses(orm.sessions(filters, PageBounds.of(page, size).offset(), size)); }
         catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown count status"); }
     }
 

@@ -1,8 +1,10 @@
 import { calendarDate, formatDate } from '../../utils/dateFormat';
 import { formatQuantity } from '../../utils/stock';
 import { Dialog } from '../shared/ClosableDialog';
-import { CollapsibleOperationLines, OperationLines } from './OperationLines';
-import { OperationHistory, OperationListEntry } from './OperationListEntry';
+import { CollapsibleOperationLines } from './OperationLines';
+import { OperationListEntry } from './OperationListEntry';
+import { TaskToolbar } from './TaskToolbar';
+import { taskSearch, taskStatusFilter, useTaskFilters } from '../../hooks/useWarehouseTasks';
 import { Button } from '../shared/ActionButtons';
 import { optionalText, inputNumber } from '../../utils/inputValues';
 import { transferInput, countInput } from '../../services/operationsInputs';
@@ -10,7 +12,7 @@ import { QueryFeedback } from '../common/QueryFeedback';
 import { useStockLookups } from '../../hooks/useStockLookups';
 import { optionalValues } from '../../utils/operationForm';
 import { useState } from 'react';
-import { Alert, Card, CardContent, DialogActions, DialogContent, DialogTitle, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Alert, Card, CardContent, DialogActions, DialogContent, DialogTitle, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useItemAssets, useItemCategories, useItemsByIds } from '../../hooks/useItems';
 import { useCompleteList } from '../../hooks/usePagedList';
@@ -81,7 +83,8 @@ export function StockPositions({ itemId, locationId }: { itemId?: string; locati
 export function TransfersPanel() {
   const [params] = useSearchParams();
   const t = useT();
-  const transfers = useOperationList('transfers', operationsApi.transfers);
+  const filters = useTaskFilters('transfers', { status: 'open' });
+  const transfers = useOperationList(`transfers:${JSON.stringify(filters.query)}`, operationsApi.transfers(filters.query), { size: 25 });
   const [chooseItem, setChooseItem] = useState(false);
   const [itemId, setItemId] = useState('');
   const lookup = useStockLookups([...new Set([...(itemId ? [itemId] : []), ...(transfers.data ?? []).flatMap(transfer => transfer.lines.map(line => line.itemId))])]);
@@ -89,8 +92,11 @@ export function TransfersPanel() {
   const [action, setAction] = useState<{ transfer: Transfer; type: 'dispatch' | 'receive' | 'cancel'; key: string } | null>(null);
   const [createKey, setCreateKey] = useState('');
   return <Stack spacing={2}>
-    <Button title={translate('operations.stockOperations.createATransferBetweenStorageLocations')} variant="contained" onClick={() => setChooseItem(true)}>{t('operations.stockOperations.newTransfer')}</Button>
-    <QueryFeedback isLoading={transfers.isLoading} error={transfers.error} isEmpty={!transfers.data?.length} emptyMessage={t('operations.stockOperations.noTransfersYet')} />
+    <TaskToolbar state={filters} searchLabel={t('operations.tasks.stockSearch')} count={transfers.data?.length} more={transfers.hasNextPage} loading={transfers.isFetching}
+      action={<Button title={translate('operations.stockOperations.createATransferBetweenStorageLocations')} variant="contained" onClick={() => setChooseItem(true)}>{t('operations.stockOperations.newTransfer')}</Button>}
+      filters={[taskStatusFilter(t, ['requested', 'picking', 'in_transit', 'partially_received', 'received', 'cancelled']),
+        { key: 'locationId', label: t('operations.tasks.location'), options: [{ value: '', label: t('operations.tasks.allLocations') }, ...lookup.locationOptions] }]} />
+    <QueryFeedback isLoading={transfers.isLoading} error={transfers.error} isEmpty={!transfers.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
     {transfers.data?.map((transfer) => <OperationListEntry key={transfer.id} actions={[
         ['requested', 'picking'].includes(transfer.status) && { key: 'dispatch', label: t('operations.stockOperations.dispatch'), title: translate('operations.stockOperations.recordDispatchOfThisTransfer'),
           pinned: true, onClick: () => setAction({ transfer, type: 'dispatch', key: crypto.randomUUID() }) },
@@ -100,7 +106,7 @@ export function TransfersPanel() {
           title: translate('operations.stockOperations.recordTheQuantitiesReceivedInThisTransfer'), pinned: true, onClick: () => setAction({ transfer, type: 'receive', key: crypto.randomUUID() }) },
       ]} title={<>{transfer.transferNumber}</>} status={transfer.status}>
       <Typography>{lookup.locations.find((value) => value.id === transfer.sourceLocationId)?.name} → {lookup.locations.find((value) => value.id === transfer.destinationLocationId)?.name}</Typography>
-      <OperationLines label={t('operations.stockOperations.transferLines')} headers={[t('operations.stockOperations.itemAsset'), t('enum.value.requested'), t('enum.value.received'), t('operations.stockOperations.discrepancy')]} rows={transfer.lines.map(line => ({ id: line.id, cells: [<Link component={RouterLink} to={`/items/${line.itemId}`} key={line.id}>{line.itemName} {line.assetCode}{line.discrepancyNotes && <Typography variant="caption" sx={{ display: 'block' }}>{line.discrepancyNotes}</Typography>}</Link>, ...[line.requestedQuantity, line.receivedQuantity, line.discrepancyQuantity].map(quantity => formatQuantity(lookup.items.find(item => item.id === line.itemId), quantity))] }))} />
+      <CollapsibleOperationLines summary={t('operations.tasks.itemPreview', { count: transfer.lines.length, items: transfer.lines.slice(0, 3).map(line => line.itemName).join(', ') })} label={t('operations.stockOperations.transferLines')} headers={[t('operations.stockOperations.itemAsset'), t('enum.value.requested'), t('enum.value.received'), t('operations.stockOperations.discrepancy')]} rows={transfer.lines.map(line => ({ id: line.id, cells: [<Link component={RouterLink} to={`/items/${line.itemId}`} key={line.id}>{line.itemName} {line.assetCode}{line.discrepancyNotes && <Typography variant="caption" sx={{ display: 'block' }}>{line.discrepancyNotes}</Typography>}</Link>, ...[line.requestedQuantity, line.receivedQuantity, line.discrepancyQuantity].map(quantity => formatQuantity(lookup.items.find(item => item.id === line.itemId), quantity))] }))} />
       {transfer.notes && <Typography>{transfer.notes}</Typography>}
 
     </OperationListEntry>)}
@@ -163,13 +169,12 @@ function TransferItemForm({ item, sourceLocationId, idempotencyKey, onClose }: {
 
 export function CountsPanel() {
   const t = useT(); const { user } = useAuth(); const categories = useItemCategories();
-  const counts = useOperationList('counts', operationsApi.counts);
+  const filters = useTaskFilters('counts', { status: 'open' });
+  const counts = useOperationList(`counts:${JSON.stringify(filters.query)}`, operationsApi.counts(filters.query), { size: 25 });
   const lookup = useStockLookups([...new Set((counts.data ?? []).flatMap(count => count.lines.map(line => line.itemId)))]);
   const [create, setCreate] = useState(false);
+  const [countSearch, setCountSearch] = useState('');
   const [action, setAction] = useState<{ count: Count; type: 'submit' | 'recount' | 'approve' | 'post' | 'cancel' } | null>(null);
-  const finished = (count: Count) => ['posted', 'cancelled'].includes(count.status);
-  const activeCounts = (counts.data ?? []).filter((count) => !finished(count));
-  const finishedCounts = (counts.data ?? []).filter(finished);
   const countSummary = (count: Count) => {
     const counted = count.lines.filter((line) => line.countedQuantity != null).length;
     const variances = count.lines.filter((line) => line.varianceQuantity != null && line.varianceQuantity !== 0).length;
@@ -192,10 +197,12 @@ export function CountsPanel() {
       <CollapsibleOperationLines summary={countSummary(count)} label={t('operations.stockOperations.countLines')} headers={[t('operations.stockOperations.itemLocation'), t('operations.stockOperations.expected'), t('operations.stockOperations.counted'), t('operations.stockOperations.recount2'), t('operations.stockOperations.variance')]} rows={count.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName} {line.assetCode}</Typography><Typography variant="caption" color="text.secondary">{lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}</Typography></Stack>, ...[line.expectedQuantity, line.countedQuantity, line.recountedQuantity, line.varianceQuantity].map(quantity => quantity == null ? '—' : formatQuantity(lookup.items.find(item => item.id === line.itemId), quantity))] }))} />
     </OperationListEntry>;
   return <Stack spacing={2}>
-    <Button title={translate('operations.stockOperations.createANewStockCount')} variant="contained" onClick={() => setCreate(true)}>{t('operations.stockOperations.newStockCount')}</Button>
-    <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('operations.stockOperations.noStockCountsYet')} />
-    {activeCounts.map(countEntry)}
-    <OperationHistory title={t('operations.stockOperations.completedStockCounts')} count={finishedCounts.length}>{finishedCounts.map(countEntry)}</OperationHistory>
+    <TaskToolbar state={filters} count={counts.data?.length} more={counts.hasNextPage} loading={counts.isFetching}
+      action={<Button title={translate('operations.stockOperations.createANewStockCount')} variant="contained" onClick={() => setCreate(true)}>{t('operations.stockOperations.newStockCount')}</Button>}
+      filters={[taskStatusFilter(t, ['counting', 'awaiting_recount', 'awaiting_approval', 'approved', 'posted', 'cancelled']),
+        { key: 'locationId', label: t('operations.tasks.location'), options: [{ value: '', label: t('operations.tasks.allLocations') }, ...lookup.locationOptions] }]} />
+    <QueryFeedback isLoading={counts.isLoading} error={counts.error} isEmpty={!counts.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
+    {counts.data?.map(countEntry)}
     <LoadMore list={counts} />
     {create && <OperationForm title={t('operations.stockOperations.newStockCount2')} initial={{ blindCount: false }} fields={[
       { key: 'locationId', label: t('operations.stockOperations.locationEmptyAll'), options: lookup.locationOptions },
@@ -203,19 +210,21 @@ export function CountsPanel() {
       { key: 'category', label: t('operations.stockOperations.categoryEmptyAll'), options: (categories.data ?? []).map((value) => ({ value, label: value })) },
       { key: 'blindCount', label: t('operations.stockOperations.blindCount2'), type: 'checkbox' },
     ]} onSave={(values) => operationsApi.createCount(countInput(optionalValues(values)))} onClose={() => setCreate(false)} />}
-    {action && <OperationForm title={`${action.count.sessionNumber} · ${action.type}`} onClose={() => setAction(null)}
+    {action && <OperationForm title={`${action.count.sessionNumber} · ${formatStatus(action.type)}`} onClose={() => { setAction(null); setCountSearch(''); }}
       submitLabel={['submit', 'recount'].includes(action.type) ? t('operations.stockOperations.saveProgress') : undefined}
       initial={Object.fromEntries(action.count.lines.flatMap(line => [
         [`quantity:${line.id}`, (action.type === 'recount' ? line.recountedQuantity : line.countedQuantity) ?? ''],
         [`note:${line.id}`, line.notes ?? ''],
       ]))} fields={[
-      ...(['submit', 'recount'].includes(action.type) ? action.count.lines.flatMap((line): Field[] => [
+      ...(['submit', 'recount'].includes(action.type) ? action.count.lines.filter(line => taskSearch(countSearch, line.itemName, line.assetCode, lookup.locationOptions.find(location => location.value === line.locationId)?.label)).flatMap((line): Field[] => [
         { key: `quantity:${line.id}`, label: `${line.itemName} ${line.assetCode ?? ''} · ${lookup.locationOptions.find(location => location.value === line.locationId)?.label ?? '—'}`, type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.assetCode ? 1 : undefined, help: [line.expectedQuantity != null && `${t('operations.stockOperations.expected')}: ${formatQuantity(lookup.items.find(item => item.id === line.itemId), line.expectedQuantity)}`, line.lotId && `${t('enum.value.lot')}: ${line.lotId}`].filter(Boolean).join(' · ') || undefined }, { key: `note:${line.id}`, label: t('operations.stockOperations.lineNotes') },
       ]) : []), { key: 'notes', label: t('operations.stockOperations.notesApprovalReason'), multiline: true },
     ]} onSave={(values) => {
       if (['submit', 'recount'].includes(action.type) && !action.count.lines.some(line => values[`quantity:${line.id}`] !== '' && values[`quantity:${line.id}`] !== undefined)) return Promise.reject(new Error(t('operations.stockOperations.enterAtLeastOneCountedQuantity')));
       return operationsApi.countCommand(action.count.id, action.type, { notes: optionalText(values.notes), ...(['submit', 'recount'].includes(action.type) ? { lines: action.count.lines.filter(line => values[`quantity:${line.id}`] !== '' && values[`quantity:${line.id}`] !== undefined).map((line) => ({ lineId: line.id, quantity: inputNumber(values[`quantity:${line.id}`]), notes: optionalText(values[`note:${line.id}`]) })) } : {}) });
-    }} />}
+    }}>
+      {['submit', 'recount'].includes(action.type) && <TextField type="search" fullWidth label={t('operations.tasks.countSearch')} value={countSearch} onChange={event => setCountSearch(event.target.value)} helperText={t('operations.tasks.countSearchHelp')} />}
+    </OperationForm>}
   </Stack>;
 }
 
@@ -226,21 +235,24 @@ export function CountsPanel() {
  */
 export function LotsPanel({ itemId, canEdit = true }: { itemId?: string; canEdit?: boolean } = {}) {
   const t = useT();
-  const lots = useOperationList(`lots:${itemId ?? ''}`, operationsApi.lots({ itemId }));
+  const filters = useTaskFilters(`lots-${itemId ?? 'all'}`);
+  const lots = useOperationList(`lots:${itemId ?? ''}:${JSON.stringify(filters.query)}`, operationsApi.lots({ ...filters.query, itemId }), { size: 25 });
   const items = useItemsByIds(itemId ? [itemId] : (lots.data ?? []).map(lot => lot.itemId));
   const quantityLabel = (itemId: string, quantity: number) => {
     const item = items.data?.find(item => item.id === itemId);
     return item ? formatQuantity(item, quantity) : '—';
   };
   return <Stack spacing={2}>
-    {canEdit && <Alert severity="info">{t('operations.stockOperations.lotsAreCreatedWhenStockIsAdded')}</Alert>}
-    <QueryFeedback isLoading={lots.isLoading || items.isLoading} error={lots.error || items.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.stockOperations.noLotsYet')} />
+    <TaskToolbar state={filters} searchLabel={t('operations.tasks.lotSearch')} count={lots.data?.length} more={lots.hasNextPage} loading={lots.isFetching}
+      filters={[taskStatusFilter(t, ['available', 'hold', 'recalled', 'expired', 'depleted'], false)]} />
+    {canEdit && <Typography variant="body2" color="text.secondary">{t('operations.stockOperations.lotsAreCreatedWhenStockIsAdded')}</Typography>}
+    <QueryFeedback isLoading={lots.isLoading || items.isLoading} error={lots.error || items.error} isEmpty={!lots.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
     {lots.data?.map((lot) => <OperationListEntry key={lot.id} status={lot.status} title={<>
         {!itemId && <><Link component={RouterLink} to={`/items/${lot.itemId}`} underline="hover">{lot.itemName}</Link>{lot.itemSku ? ` (${lot.itemSku})` : ''}{!lot.itemActive && ` · ${t('operations.stockOperations.retired')}`} · </>}{lot.lotNumber}
         {lot.empty && <Typography component="span" variant="caption" color="text.secondary"> · {t('operations.stockOperations.noStock')}</Typography>}
       </>}>
       <Typography>{t('operations.stockOperations.expiry')}: {formatDate(lot.expiryDate)}</Typography>
-      {lot.stock.length > 0 && <OperationLines label={t('operations.stockOperations.stockOfThisLot')}
+      {lot.stock.length > 0 && <CollapsibleOperationLines label={t('operations.stockOperations.stockOfThisLot')}
         headers={[t('enum.value.location'), t('operations.stockOperations.onHand'), t('enum.itemStatus.available'), t('enum.transactionType.reserved'), t('enum.itemStatus.damaged'), t('enum.value.quarantine'), t('enum.value.in_transit')]}
         rows={lot.stock.map((row, index) => ({ id: `${lot.id}:${row.locationId ?? index}`, cells: [row.locationName ?? t('operations.stockOperations.restrictedLocation'), ...[row.onHand, row.available, row.reserved, row.damaged, row.quarantined, row.inTransit].map(quantity => quantityLabel(lot.itemId, quantity))] }))} />}
     </OperationListEntry>)}

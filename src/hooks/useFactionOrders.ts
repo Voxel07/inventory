@@ -21,12 +21,12 @@ import { canViewOrganization } from '../utils/access';
 import { closeFactionOrder } from '../services/factionOrderService';
 
 
-export function useFactionOrders(eventType?: EventType, faction?: string, status?: readonly FactionOrderStatus[], eventId?: string) {
+export function useFactionOrders(eventType?: EventType, faction?: string, status?: readonly FactionOrderStatus[], eventId?: string, search?: string) {
   const { user } = useAuth();
   // Tenants have no access to organization orders; skip the request instead of failing.
   return usePagedList<FactionOrderSummary>(
-    ['faction-orders', eventType, faction, status, eventId],
-    (page, size) => getFactionOrders({ eventType, faction, status, eventId }, page, size),
+    ['faction-orders', eventType, faction, status, eventId, search],
+    (page, size) => getFactionOrders({ eventType, faction, status, eventId, search }, page, size),
     { enabled: canViewOrganization(user) },
   );
 }

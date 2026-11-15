@@ -13,7 +13,7 @@ export function SupplierDraft({ rows, eventId }: { rows: ProcurementDeficit[]; e
   const [selected, setSelected] = useState<ProcurementDeficit[] | null>(null);
   const eligible = rows.filter((row) => row.recommendedAction !== 'obtain_commitment' && row.netDeficit > row.orderedStock);
   return <>
-    <Button title={translate('procurement.supplierDraft.selectShortagesForACombinedPurchaseDraft')} disabled={!eligible.length} onClick={() => setSelect(true)}>{t('procurement.supplierDraft.draftPurchaseForSeveralItems')}</Button>
+    <Button title={translate('procurement.supplierDraft.selectShortagesForACombinedPurchaseDraft')} disabled={!eligible.length} onClick={() => setSelect(true)}>{t('procurement.supplierDraft.draftPurchaseForSeveralItems')} ({eligible.length})</Button>
     {select && <OperationForm title={t('procurement.supplierDraft.selectShortages')} fields={eligible.map((row) => ({ key: row.itemId, label: `${row.name} · ${row.netDeficit - row.orderedStock}`, type: 'checkbox' }))} initial={Object.fromEntries(eligible.map((row) => [row.itemId, true]))} onClose={() => setSelect(false)} onSave={async (values) => {
       const choice = eligible.filter((row) => values[row.itemId]);
       if (!choice.length) throw new Error(t('procurement.supplierDraft.selectAtLeastOneItem'));

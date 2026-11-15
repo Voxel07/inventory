@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.model.EquipmentCommitment;
 import org.ash.inventory.operations.internal.model.InventoryTransfer;
 import org.ash.inventory.operations.internal.model.InventoryTransferLine;
@@ -14,10 +16,17 @@ import java.util.stream.Stream;
 @ApplicationScoped
 public class LoanOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm access;
-    public List<LoanArrangement> arrangements(int offset, int limit) {
-
-        var query = entityManager.createQuery("from LoanArrangement l join fetch l.commitment c join fetch c.item join fetch l.providerLocation where 1 = 1"
-                + InventoryAccessOrm.scope("loan", "l") + " order by l.createdAt desc, l.id desc", LoanArrangement.class);
+    public List<LoanArrangement> arrangements(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("from LoanArrangement l join fetch l.commitment c join fetch c.item join fetch l.providerLocation where 1=1"
+                + InventoryAccessOrm.scope("loan", "l"))
+                .search(filters.search, "c.item.name", "c.item.sku", "l.provider", "l.contact")
+                .equal("l.providerLocation.id", "locationId", filters.locationId);
+        if ("open".equals(filters.status)) predicates.where("c.cancelled = false and l.returned < c.quantity");
+        else if ("history".equals(filters.status)) predicates.where("(c.cancelled = true or l.returned = c.quantity)");
+        else if ("collect".equals(filters.status)) predicates.where("c.cancelled = false and l.collected < c.quantity");
+        else if ("return".equals(filters.status)) predicates.where("c.cancelled = false and l.returned < l.collected");
+        else if (filters.status != null && !filters.status.isBlank()) throw org.ash.inventory.platform.api.ApiException.badRequest("Unknown loan task");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("c.returnDue, l.createdAt desc, l.id desc"), LoanArrangement.class));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

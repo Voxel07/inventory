@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.application;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.platform.api.InputText;
 
 import org.ash.inventory.integration.api.DomainEventService;
@@ -33,9 +35,9 @@ public class LoanService {
     public record View(UUID id, UUID itemId, String item, UUID commitmentId, UUID providerLocationId, String kind, String provider,
             String contact, String terms, int quantity, int collected, int returned, List<String> assetCodes,
             LocalDate collectionDate, LocalDate availableUntil, LocalDate returnDue, String status, long revision, List<Map<String,Object>> history) {}
-    @Transactional public List<View> list(int page, int size) {
+    @Transactional public List<View> list(TaskFilters filters, int page, int size) {
         actors.requireWarehouse(); var bounds = org.ash.inventory.platform.api.PageBounds.of(page, size);
-        var loans = orm.arrangements(bounds.offset(), bounds.limit());
+        var loans = orm.arrangements(filters, bounds.offset(), bounds.limit());
         var codes = orm.assetCodes(loans.stream().flatMap(l -> l.commitment.assetIds.stream()).distinct().toList());
         return loans.stream().map(l -> view(l, codes)).toList();
     }

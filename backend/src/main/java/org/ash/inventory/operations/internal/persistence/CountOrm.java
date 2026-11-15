@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.InventoryCountLine;
@@ -19,14 +21,15 @@ import java.util.Locale;
 public class CountOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
-    public List<InventoryCountSession> sessions(String status, int offset, int limit) {
-
-        var jpql = status == null || status.isBlank()
-                ? "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where 1=1" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc"
-                : "select session from InventoryCountSession session left join fetch session.location left join fetch session.item join fetch session.createdBy left join fetch session.approvedBy where session.status = :status" + InventoryAccessOrm.scope("count", "session") + " order by session.createdAt desc";
-        if (!accessActor.atLeast(org.ash.inventory.operations.internal.model.DomainEnums.UserRole.warehouse_crew)) jpql = jpql.replace(" order by", " and not exists (select l.id from InventoryCountLine l where l.session = session and (l.item.accessPolicy is null or l.location.accessPolicy is null)) order by");
-        var query = entityManager.createQuery(jpql, InventoryCountSession.class);
-        if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.CountStatus.valueOf(status));
+    public List<InventoryCountSession> sessions(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("select session from InventoryCountSession session left join fetch session.location countLocation left join fetch session.item countItem join fetch session.createdBy left join fetch session.approvedBy where 1=1"
+                + InventoryAccessOrm.scope("count", "session"));
+        if (!accessActor.atLeast(DomainEnums.UserRole.warehouse_crew)) predicates.where("not exists (select l.id from InventoryCountLine l where l.session = session and (l.item.accessPolicy is null or l.location.accessPolicy is null))");
+        predicates.status("session.status", filters.status, DomainEnums.CountStatus.class,
+                List.of(DomainEnums.CountStatus.posted, DomainEnums.CountStatus.cancelled));
+        predicates.searchWhere(filters.search, "(lower(session.sessionNumber) like :search escape '!' or lower(countLocation.name) like :search escape '!' or lower(countItem.name) like :search escape '!' or exists (select line.id from InventoryCountLine line left join line.assetInstance asset left join line.lot lot where line.session = session and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!' or lower(asset.assetCode) like :search escape '!' or lower(lot.lotNumber) like :search escape '!')))");
+        if (filters.locationId != null) predicates.parameter("locationId", filters.locationId).where("(session.location.id = :locationId or exists (select line.id from InventoryCountLine line where line.session = session and line.location.id = :locationId))");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("session.createdAt desc, session.id desc"), InventoryCountSession.class));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryCountLine> lines(Collection<InventoryCountSession> sessions) {

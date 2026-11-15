@@ -2,7 +2,9 @@ import { formatQuantity, usesPercentage } from '../../utils/stock';
 import { calendarDate, formatDate, formatDateTime } from '../../utils/dateFormat';
 import { Dialog } from '../shared/ClosableDialog';
 import { formatCents } from '../../utils/money';
-import { OperationLines } from './OperationLines';
+import { CollapsibleOperationLines } from './OperationLines';
+import { TaskToolbar } from './TaskToolbar';
+import { taskStatusFilter, useTaskFilters } from '../../hooks/useWarehouseTasks';
 import { OperationListEntry } from './OperationListEntry';
 import { Button } from '../shared/ActionButtons';
 import { ItemAutocomplete } from '../shared/ItemAutocomplete';
@@ -31,18 +33,28 @@ import { vendorOptions } from '../../services/assignmentOptions';
 import { Fields, OperationForm } from './OperationForm';
 import type { Field, Values } from '../../types/operationForm';
 import { formatStatus } from '../../utils/formatters';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
+import { IconButton } from '../shared/ActionButtons';
 
-export function PurchasingPanel() {
+export function PurchasingPanel({ receiving = false }: { receiving?: boolean } = {}) {
   const t = useT(); const { user } = useAuth();
-  const orders = useOperationList('purchases', getPurchaseOrders);
+  const filters = useTaskFilters(receiving ? 'incoming' : 'purchases', { status: receiving ? 'incoming' : 'open' });
+  const orders = useOperationList(`purchases:${JSON.stringify(filters.query)}`, (page, size) => getPurchaseOrders(page, size, filters.query), { size: 25 });
+  const events = useEventReports();
   const measures = useStockLookups([...new Set((orders.data ?? []).flatMap(order => order.lines.map(line => line.itemId)))]);
   const [edit, setEdit] = useState<PurchaseOrder | 'new' | null>(null);
   const [receive, setReceive] = useState<PurchaseOrder | null>(null);
   const [transition, setTransition] = useState<{ order: PurchaseOrder; status: 'ordered' | 'cancelled' } | null>(null);
   const [history, setHistory] = useState<string | null>(null);
   return <Stack spacing={2}>
-    <Button title={translate('operations.purchasingOperations.createANewPurchaseDraft')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newPurchaseDraft')}</Button>
-    <QueryFeedback isLoading={orders.isLoading} error={orders.error} isEmpty={!orders.data?.length} emptyMessage={t('operations.purchasingOperations.noPurchaseOrdersYet')} />
+    <TaskToolbar state={filters} searchLabel={t('operations.tasks.purchaseSearch')} count={orders.data?.length} more={orders.hasNextPage} loading={orders.isFetching}
+      action={!receiving && <Button title={translate('operations.purchasingOperations.createANewPurchaseDraft')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newPurchaseDraft')}</Button>}
+      filters={[receiving ? { key: 'status', label: t('common.status'), options: [
+        { value: 'incoming', label: t('operations.tasks.incoming') }, { value: 'ordered', label: t('enum.value.ordered') },
+        { value: 'partially_received', label: formatStatus('partially_received') },
+      ] } : taskStatusFilter(t, ['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
+        { key: 'eventId', label: t('operations.reportsPanel.event'), options: [{ value: '', label: t('operations.tasks.allEvents') }, ...(events.data ?? []).map(event => ({ value: event.id, label: event.name }))] }]} />
+    <QueryFeedback isLoading={orders.isLoading} error={orders.error} isEmpty={!orders.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
     {orders.data?.map((order) => <OperationListEntry key={order.id} actions={[
         order.status === 'draft' && { key: 'ordered', label: t('operations.purchasingOperations.markOrdered'), title: translate('operations.purchasingOperations.markThisPurchaseAsOrdered'),
           pinned: true, onClick: () => setTransition({ order, status: 'ordered' }) },
@@ -55,8 +67,8 @@ export function PurchasingPanel() {
         canOperateWarehouse(user) && { key: 'history', label: t('operations.purchasingOperations.receiptsDocuments'),
           title: translate('operations.purchasingOperations.showOrHideGoodsReceiptsAndTheirDocuments'), onClick: () => setHistory(history === order.id ? null : order.id) },
       ]} title={<>{order.orderNumber} · {order.vendorName}</>} status={order.status}><Typography>{t('operations.purchasingOperations.orderDate')}: {formatDate(order.orderDate)} · {t('operations.purchasingOperations.expected')}: {formatDate(order.expectedDeliveryDate)}</Typography>
-      <Typography>{t('operations.purchasingOperations.createdBy')}: {order.createdByName}</Typography>
-      <OperationLines label={t('operations.purchasingOperations.purchaseLines')} headers={[t('common.item'), t('enum.value.ordered'), t('enum.value.received'), t('common.remaining'), t('operations.purchasingOperations.unitPrice')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, ...[line.orderedQuantity, line.receivedQuantity, line.remainingQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity)), `${formatCents(line.unitPriceCents)} / ${formatQuantity(measures.items.find(item => item.id === line.itemId), usesPercentage(measures.items.find(item => item.id === line.itemId)) ? 100 : 1)}`] }))} />
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('operations.tasks.outstanding', { count: order.lines.filter(line => line.remainingQuantity > 0).length })}</Typography>
+      <CollapsibleOperationLines summary={order.lines.slice(0, 3).map(line => line.itemName).join(', ')} label={t('operations.purchasingOperations.purchaseLines')} headers={[t('common.item'), t('enum.value.ordered'), t('enum.value.received'), t('common.remaining'), t('operations.purchasingOperations.unitPrice')]} rows={order.lines.map(line => ({ id: line.id, cells: [<Link key={line.id} to={`/items/${line.itemId}`}>{line.itemName}</Link>, ...[line.orderedQuantity, line.receivedQuantity, line.remainingQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity)), `${formatCents(line.unitPriceCents)} / ${formatQuantity(measures.items.find(item => item.id === line.itemId), usesPercentage(measures.items.find(item => item.id === line.itemId)) ? 100 : 1)}`] }))} />
       {order.notes && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{order.notes}</Typography>}
 
       {history === order.id && <><ReceiptsPanel purchaseOrderId={order.id} /><DocumentsPanel order={order} /></>}
@@ -89,16 +101,18 @@ export function PurchaseDraft({ order, vendor, initialLines, itemRequestIds, eve
     command.mutate(() => order ? updatePurchaseOrder(order.id, data) : createPurchaseOrder(data), { onSuccess: onClose });
   }}><DialogTitle>{t('operations.purchasingOperations.purchaseDraft')}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     {command.error && <Alert severity="error">{command.error.message}</Alert>}
-    <Fields values={{ ...header, eventOccurrenceId }} onChange={setHeader} fields={[
+    <Box sx={{ '& > .MuiStack-root': { display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } } }}><Fields values={{ ...header, eventOccurrenceId }} onChange={setHeader} fields={[
       { key: 'vendorId', label: t('common.supplier'), required: true, pagedOptions: { queryKey: ['operations', 'vendors'], getPage: vendorOptions, selectedLabel: order?.vendorName ?? vendor?.name } },
       { key: 'orderNumber', label: t('operations.purchasingOperations.referenceOptional') }, { key: 'orderDate', label: t('operations.purchasingOperations.orderDate'), type: 'date', required: true },
       { key: 'expectedDeliveryDate', label: t('operations.purchasingOperations.expectedDelivery'), type: 'date' }, { key: 'eventOccurrenceId', label: t('operations.purchasingOperations.eventOptional'), options: eventOptions }, { key: 'notes', label: t('common.notes2'), multiline: true },
-    ]} />
-    {pricedLines.map((line, index) => <Card key={index} sx={{ minWidth: 0 }}><CardContent><Stack spacing={2}>
+    ]} /></Box>
+    {pricedLines.map((line, index) => <Card key={index} variant="outlined" sx={{ minWidth: 0 }}><CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}><Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1.5fr) minmax(0, 1fr) auto' }, gap: 1.5, alignItems: 'start', '& > *': { minWidth: 0 } }}>
+      <Box sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
       <ItemAutocomplete label={t('common.item')} required value={String(line.itemId || '')} onChange={item => setLines(current => current.map((entry, position) => position === index ? { ...entry, itemId: item?.id ?? '', price: item?.value ?? '' } : entry))} />
-      <Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
+      </Box>
+      <Box sx={{ '& > .MuiStack-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, '& > *': { minWidth: 0 } } }}><Fields values={line} onChange={(value) => setLines(lines.map((entry, current) => current === index ? value : entry))} fields={[
       { key: 'orderedQuantity', label: t('common.quantity'), type: 'quantity', measure: measures.items.find(item => item.id === line.itemId), min: 1, required: true }, { key: 'price', label: usesPercentage(measures.items.find(item => item.id === line.itemId)) ? t('forms.itemForm.fullUnitValue') : t('operations.purchasingOperations.unitPrice2'), type: 'number', min: 0, step: 0.01, required: true },
-    ]} /><Button title={translate('operations.purchasingOperations.removeThisLineFromThePurchaseDraft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}>{t('operations.purchasingOperations.removeLine')}</Button></Stack></CardContent></Card>)}
+    ]} /></Box><IconButton title={translate('operations.purchasingOperations.removeThisLineFromThePurchaseDraft')} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, current) => current !== index))}><DeleteOutlineIcon /></IconButton></Box></CardContent></Card>)}
     <Button title={translate('operations.purchasingOperations.addAnItemLineToThePurchaseDraft')} onClick={() => setLines([...lines, { itemId: '', orderedQuantity: 1 }])}>{t('common.addItem')}</Button>
   </Stack></DialogContent><DialogActions><Button title={translate('common.discardChangesAndClose')} disabled={command.isPending} onClick={onClose}>{t('common.cancel')}</Button><Button title={translate('operations.purchasingOperations.saveThePurchaseDraft')} variant="contained" type="submit" disabled={command.isPending}>{t('operations.purchasingOperations.saveDraft')}</Button></DialogActions></Box>
   </Dialog>;
@@ -143,16 +157,24 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
   });
   return <OperationForm title={`${t('operations.purchasingOperations.receiveDelivery2')} · ${order.orderNumber}`} initial={initial} onClose={onClose} fields={values => [
     { key: 'receivingLocationId', label: t('operations.purchasingOperations.receivingLocation'), options: lookup.locationOptions, required: true },
-    { key: 'receiptNumber', label: t('operations.purchasingOperations.deliveryReference') },
-    { key: 'receivedAt', label: t('operations.purchasingOperations.receivedAt'), type: 'datetime-local', required: true },
+    { key: 'details', label: t('operations.tasks.deliveryDetails'), type: 'checkbox' },
+    ...(values.details ? [
+      { key: 'receiptNumber', label: t('operations.purchasingOperations.deliveryReference') },
+      { key: 'receivedAt', label: t('operations.purchasingOperations.receivedAt'), type: 'datetime-local' as const, required: true },
+      { key: 'notes', label: t('operations.purchasingOperations.notesOptional'), multiline: true },
+    ] : []),
     ...lines.flatMap((line): Field[] => {
       const tracking = trackingOf(line.itemId);
       const received = Number(values[`accepted:${line.id}`] || 0) + Number(values[`damaged:${line.id}`] || 0);
       const newLot = values[`lot:${line.id}`] === '__new__';
       return [
         { key: `accepted:${line.id}`, label: `${line.itemName} · ${t('operations.purchasingOperations.accepted')}`, type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true, help: `${t('operations.purchasingOperations.outstanding')}: ${formatQuantity(lookup.items.find(item => item.id === line.itemId), line.remainingQuantity)}` },
-        { key: `damaged:${line.id}`, label: t('enum.itemStatus.damaged'), type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
-        { key: `rejected:${line.id}`, label: t('enum.value.rejected'), type: 'quantity', measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
+        { key: `exceptions:${line.id}`, label: t('operations.tasks.deliveryExceptions'), type: 'checkbox', reset: { [`damaged:${line.id}`]: 0, [`rejected:${line.id}`]: 0, [`notes:${line.id}`]: '' } },
+        ...(values[`exceptions:${line.id}`] ? [
+          { key: `damaged:${line.id}`, label: t('enum.itemStatus.damaged'), type: 'quantity' as const, measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
+          { key: `rejected:${line.id}`, label: t('enum.value.rejected'), type: 'quantity' as const, measure: lookup.items.find(item => item.id === line.itemId), min: 0, max: line.remainingQuantity, required: true },
+          { key: `notes:${line.id}`, label: t('operations.purchasingOperations.inspectionNotesOptional') },
+        ] : []),
         ...(tracking === 'serialized' ? [{ key: `codes:${line.id}`, label: t('operations.purchasingOperations.assetCodesAcceptedFirstDamagedLastOnePerLine'), multiline: true, required: received > 0 }] : []),
         ...(tracking === 'lot_tracked' ? [
           { key: `lot:${line.id}`, label: t('operations.purchasingOperations.batchOfThisDelivery'), required: received > 0,
@@ -161,9 +183,8 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
           // A new batch is created by the receipt itself, together with its first stock.
           ...(newLot ? lotFields(t, `${line.id}:`, received > 0) : []),
         ] : []),
-        { key: `notes:${line.id}`, label: t('operations.purchasingOperations.inspectionNotesOptional') },
       ];
-    }), { key: 'notes', label: t('operations.purchasingOperations.notesOptional'), multiline: true },
+    }),
   ]} onSave={async values => {
     const newLotOf = (line: PurchaseOrder['lines'][number]) => trackingOf(line.itemId) === 'lot_tracked' && values[`lot:${line.id}`] === '__new__';
     const receiptLines = lines.map(line => ({ purchaseOrderLineId: line.id, acceptedQuantity: Number(values[`accepted:${line.id}`]), damagedQuantity: Number(values[`damaged:${line.id}`]), rejectedQuantity: Number(values[`rejected:${line.id}`]),
@@ -185,14 +206,64 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
 }
 
 export function ReceiptsPanel({ purchaseOrderId }: { purchaseOrderId?: string }) {
-  const t = useT(); const receipts = useOperationList(`receipts:${purchaseOrderId ?? ''}`, operationsApi.receipts(purchaseOrderId));
+  const t = useT();
+  const filters = useTaskFilters('receipts-' + (purchaseOrderId ?? 'all'));
+  const receipts = useOperationList('receipts:' + (purchaseOrderId ?? '') + ':' + JSON.stringify(filters.query), operationsApi.receipts(purchaseOrderId, filters.query), { size: 25 });
   const measures = useStockLookups([...new Set((receipts.data ?? []).flatMap(receipt => receipt.lines.map(line => line.itemId)))]);
-  return <Stack spacing={1}><Typography variant="h6">{t('operations.purchasingOperations.receiptHistory')}</Typography><QueryFeedback isLoading={receipts.isLoading} error={receipts.error} />{receipts.data?.map((receipt) => <OperationListEntry key={receipt.id} title={<>{receipt.receiptNumber} · {formatDateTime(receipt.receivedAt)}</>} status={receipt.status}><OperationLines label={t('operations.purchasingOperations.receiptLines')} headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]} rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>, ...[line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity))] }))} /></OperationListEntry>)}<LoadMore list={receipts} /></Stack>;
+  return <Stack spacing={1.5}>
+    <TaskToolbar state={filters} searchLabel={t('operations.tasks.purchaseSearch')} count={receipts.data?.length} more={receipts.hasNextPage} loading={receipts.isFetching}
+      filters={[taskStatusFilter(t, ['posted', 'partially_accepted', 'rejected', 'reversed'], false),
+        { key: 'locationId', label: t('operations.tasks.location'), options: [{ value: '', label: t('operations.tasks.allLocations') }, ...measures.locationOptions] }]} />
+    <QueryFeedback isLoading={receipts.isLoading} error={receipts.error || measures.error} isEmpty={!receipts.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
+    {receipts.data?.map(receipt => <OperationListEntry key={receipt.id} title={receipt.receiptNumber} status={receipt.status}>
+      <Typography sx={{ fontWeight: 600 }}>{receipt.orderNumber} · {receipt.vendorName}</Typography>
+      <Typography>{formatDateTime(receipt.receivedAt)} · {measures.locationOptions.find(location => location.value === receipt.receivingLocationId)?.label}</Typography>
+      <CollapsibleOperationLines summary={receipt.lines.slice(0, 3).map(line => line.itemName).join(', ')} label={t('operations.purchasingOperations.receiptLines')}
+        headers={[t('common.item'), t('operations.purchasingOperations.accepted'), t('enum.itemStatus.damaged'), t('enum.value.rejected')]}
+        rows={receipt.lines.map(line => ({ id: line.id, cells: [<Stack key={line.id}><Typography>{line.itemName}</Typography>{line.receivingNotes && <Typography variant="caption" color="text.secondary">{line.receivingNotes}</Typography>}</Stack>,
+          ...[line.acceptedQuantity, line.damagedQuantity, line.rejectedQuantity].map(quantity => formatQuantity(measures.items.find(item => item.id === line.itemId), quantity))] }))} />
+    </OperationListEntry>)}
+    <LoadMore list={receipts} />
+  </Stack>;
+}
+
+/** Live receiving starts with outstanding deliveries; completed receipts have their own view. */
+export function ReceivingPanel() {
+  const t = useT();
+  const filters = useTaskFilters('receiving');
+  const history = filters.values.kind === 'history';
+  return <Stack spacing={1.5}>
+    <Stack direction="row" spacing={1}>
+      <Button variant={history ? 'outlined' : 'contained'} aria-pressed={!history} onClick={() => filters.set('kind', '')}>{t('operations.tasks.incoming')}</Button>
+      <Button variant={history ? 'contained' : 'outlined'} aria-pressed={history} onClick={() => filters.set('kind', 'history')}>{t('operations.purchasingOperations.receiptHistory')}</Button>
+    </Stack>
+    {history ? <ReceiptsPanel /> : <PurchasingPanel receiving />}
+  </Stack>;
 }
 
 export function VendorsPanel() {
-  const t = useT(); const vendors = useOperationList('vendors', getVendors); const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
-  return <Stack spacing={2}><Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>{vendors.error && <Alert severity="error">{vendors.error.message}</Alert>}{vendors.data?.map((vendor) => <OperationListEntry key={vendor.id} actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]} title={<>{vendor.name}{vendor.sourceHost && <Chip size="small" label={t('operations.vendorSources.generated')} sx={{ ml: 0.75 }} />}</>} status={vendor.active ? 'active' : 'inactive'}><Typography>{vendor.contactPerson} · {vendor.email} · {vendor.phone}</Typography><Typography>{vendor.address}</Typography><Typography>{vendor.paymentNotes}</Typography></OperationListEntry>)}<LoadMore list={vendors} />{edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}</Stack>;
+  const t = useT();
+  const filters = useTaskFilters('vendors', { status: 'active' });
+  const vendors = useOperationList('vendors:' + JSON.stringify(filters.query), (page, size) => getVendors(page, size, filters.query), { size: 25 });
+  const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
+  return <Stack spacing={1.5}>
+    <TaskToolbar state={filters} count={vendors.data?.length} more={vendors.hasNextPage} loading={vendors.isFetching}
+      action={<Button title={translate('operations.purchasingOperations.createANewSupplier')} variant="contained" onClick={() => setEdit('new')}>{t('operations.purchasingOperations.newSupplier2')}</Button>}
+      filters={[{ key: 'status', label: t('common.status'), options: [
+        { value: 'active', label: t('enum.value.active') }, { value: '', label: t('operations.tasks.allStatuses') },
+        { value: 'preferred', label: t('operations.tasks.preferred') }, { value: 'inactive', label: t('enum.value.inactive') },
+      ] }]} />
+    <QueryFeedback isLoading={vendors.isLoading} error={vendors.error} isEmpty={!vendors.data?.length} emptyMessage={t('operations.tasks.noMatches')} />
+    {vendors.data?.map(vendor => <OperationListEntry key={vendor.id}
+      actions={[{ key: 'edit', label: t('common.edit'), title: translate('operations.purchasingOperations.editTheSupplierDetails'), pinned: true, onClick: () => setEdit(vendor) }]}
+      title={<>{vendor.name}{vendor.sourceHost && <Chip size="small" label={t('operations.vendorSources.generated')} sx={{ ml: 0.75 }} />}</>} status={vendor.active ? 'active' : 'inactive'}>
+      <Typography>{[vendor.contactPerson, vendor.email, vendor.phone].filter(Boolean).join(' · ')}</Typography>
+      {vendor.address && <Typography>{vendor.address}</Typography>}
+      {vendor.paymentNotes && <Typography variant="body2">{vendor.paymentNotes}</Typography>}
+    </OperationListEntry>)}
+    <LoadMore list={vendors} />
+    {edit && <VendorForm vendor={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
+  </Stack>;
 }
 
 function VendorForm({ vendor, onClose }: { vendor?: Vendor; onClose: () => void }) {

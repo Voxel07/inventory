@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.adapter.rest;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.application.TransferService;
 import org.ash.inventory.operations.internal.contract.dto.TransferDtos;
 
@@ -27,10 +29,10 @@ public class TransferResource {
     public TransferResource(TransferService service) { this.service = service; }
 
     @Paged @GET
-    public List<TransferDtos.TransferResponse> list(@QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
+    public List<TransferDtos.TransferResponse> list(@Valid @jakarta.ws.rs.BeanParam TaskFilters filters,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.list(status, page, size);
+        return service.list(filters, page, size);
     }
 
     @POST

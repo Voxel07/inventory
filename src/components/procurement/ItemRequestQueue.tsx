@@ -38,23 +38,33 @@ import { useMutationFeedback } from '../../hooks/useMutationFeedback';
 import { translate, useT } from '../../utils/naming';
 import { formatDate } from '../../utils/dateFormat';
 import { validPurchaseUrl } from '../../utils/purchaseLinks';
+import { TaskToolbar } from '../operations/TaskToolbar';
+import { taskSearch, useTaskFilters, useTaskPage } from '../../hooks/useWarehouseTasks';
+import { useEventReports } from '../../hooks/useEvents';
+import { itemRequestStatusLabel } from '../../utils/itemRequests';
 
 type QueueDialog = { kind: 'create' | 'link' | 'decline' | 'order'; entry: ItemRequestQueueEntry } | null;
 
 /** Procurement section for things orders asked for that the inventory does not hold yet. */
-export function ItemRequestQueue({ eventId }: { eventId: string }) {
+export function ItemRequestQueue({ eventId: suppliedEventId }: { eventId?: string } = {}) {
   const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const feedback = useMutationFeedback();
   const [includeResolved, setIncludeResolved] = useState(false);
   const [dialog, setDialog] = useState<QueueDialog>(null);
-  const queue = useItemRequestQueue(eventId, includeResolved);
+  const filters = useTaskFilters('item-requests');
+  const eventId = suppliedEventId ?? filters.values.eventId;
+  const events = useEventReports();
+  const showResolved = includeResolved || ['ordered', 'received', 'declined'].includes(filters.values.status);
+  const queue = useItemRequestQueue(eventId, showResolved);
   const { data: storageLocations = [] } = useStorageLocations();
   const { data: categories = [] } = useItemCategories();
   const createItem = useCreateItem();
   const assign = useMutation({ mutationFn: ({ id, itemId }: { id: string; itemId: string }) => assignRequestItem(id, itemId) });
-  const entries = queue.data ?? [];
+  const entries = (queue.data ?? []).filter(entry => taskSearch(filters.values.search, entry.request.name, entry.orderLabel, entry.faction, entry.requestedBy, entry.eventName)
+    && (!filters.values.status || entry.request.status === filters.values.status));
+  const page = useTaskPage(entries, JSON.stringify([filters.values, includeResolved, eventId]));
   const waiting = entries.filter((entry) => entry.request.status === 'open' || entry.request.status === 'item_created').length;
 
   function origin(entry: ItemRequestQueueEntry) {
@@ -97,20 +107,26 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
   const linkCreated = (entry: ItemRequestQueueEntry, itemId: string) => assign.mutate({ id: entry.request.id, itemId }, feedback.callbacks(t('itemRequests.itemLinked'), () => setDialog(null)));
 
   return <Paper sx={{ mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
+    <Box sx={{ p: 1.5 }}><TaskToolbar state={filters} count={entries.length} loading={queue.isFetching}
+      filters={[
+        { key: 'status', label: t('common.status'), options: [{ value: '', label: t('operations.tasks.allStatuses') },
+          ...(['open', 'item_created', 'ordered', 'received', 'declined'] as const).map(value => ({ value, label: itemRequestStatusLabel(value) }))] },
+        ...(suppliedEventId === undefined ? [{ key: 'eventId', label: t('operations.reportsPanel.event'), options: [{ value: '', label: t('operations.tasks.allEvents') }, ...(events.data ?? []).map(event => ({ value: event.id, label: event.name }))] }] : []),
+      ]} /></Box>
     <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', p: 2, borderBottom: 1, borderBottomColor: 'divider' }}>
       <AddShoppingCartIcon color="warning" />
       <Typography variant="h6">{t('itemRequests.section')}</Typography>
       {!queue.isPending && !queue.isError && <Chip size="small" color={waiting ? 'warning' : 'success'} label={t('itemRequests.openCount', { count: waiting })} />}
       <FormControlLabel sx={{ ml: { md: 'auto' } }} label={t('itemRequests.showResolved')}
-        control={<Switch size="small" checked={includeResolved} onChange={(event) => setIncludeResolved(event.target.checked)} />} />
+        control={<Switch size="small" checked={showResolved} onChange={event => { setIncludeResolved(event.target.checked); if (!event.target.checked) filters.set('status', ''); }} />} />
       <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>{t('itemRequests.queueDescription')}</Typography>
     </Stack>
     <Box sx={{ p: entries.length && !isMobile ? 0 : 2 }}>
       {queue.isPending && <Stack spacing={1} aria-hidden="true">{[0, 1].map((row) => <Skeleton key={row} variant="rounded" height={48} />)}</Stack>}
       {queue.isError && <Alert severity="error">{queue.error instanceof Error ? queue.error.message : t('itemRequests.loadFailed')}</Alert>}
-      {!queue.isPending && !queue.isError && !entries.length && <Typography color="text.secondary">{t('itemRequests.noRequests')}</Typography>}
+      {!queue.isPending && !queue.isError && !entries.length && <Typography color="text.secondary">{t(filters.changed ? 'operations.tasks.noMatches' : 'itemRequests.noRequests')}</Typography>}
       {entries.length > 0 && (isMobile
-        ? <Stack spacing={1}>{entries.map((entry) => <Card key={entry.request.id} variant="outlined">
+        ? <Stack spacing={1}>{page.rows.map((entry) => <Card key={entry.request.id} variant="outlined">
           <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
             <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box sx={{ minWidth: 0 }}>{describe(entry)}</Box>
@@ -131,7 +147,7 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
             <TableCell>{t('common.status')}</TableCell>
             <TableCell>{t('common.action')}</TableCell>
           </TableRow></TableHead>
-          <TableBody>{entries.map((entry) => <TableRow key={entry.request.id} hover>
+          <TableBody>{page.rows.map((entry) => <TableRow key={entry.request.id} hover>
             <TableCell sx={{ maxWidth: 360 }}>{describe(entry)}</TableCell>
             <TableCell align="right" sx={{ fontWeight: 900 }}>{entry.request.quantity}</TableCell>
             <TableCell>{origin(entry)}</TableCell>
@@ -140,6 +156,8 @@ export function ItemRequestQueue({ eventId }: { eventId: string }) {
           </TableRow>)}</TableBody>
         </Table></TableContainer>)}
     </Box>
+
+    {page.control}
 
     {dialog?.kind === 'create' && <FormDialog open onClose={() => setDialog(null)}>
       <ItemForm

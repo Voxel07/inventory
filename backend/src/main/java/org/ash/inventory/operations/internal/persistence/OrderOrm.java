@@ -24,7 +24,7 @@ public class OrderOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
     /** Faction orders, newest event first; every organization member reads all factions. */
-    public List<InventoryOrder> orders(String eventType, String faction, String orderCode,
+    public List<InventoryOrder> orders(String eventType, String faction, String orderCode, String search,
             Collection<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses, UUID eventId, int offset, int limit) {
 
         var jpql = new StringBuilder("select o from InventoryOrder o "
@@ -32,6 +32,7 @@ public class OrderOrm extends EntityOrm {
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
         if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
+        if (search != null && !search.isBlank()) jpql.append(" and (lower(o.orderCode) like :search escape '!' or lower(o.faction.name) like :search escape '!' or lower(o.eventOccurrence.name) like :search escape '!' or exists (select line.id from OrderLine line where line.order = o and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!')))");
         if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
         if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
         jpql.append(InventoryAccessOrm.scope("order", "o", accessActor.current())).append(" order by o.eventOccurrence.startDate desc, o.orderCode, o.id");
@@ -39,6 +40,7 @@ public class OrderOrm extends EntityOrm {
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
+        if (search != null && !search.isBlank()) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
         if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
         if (eventId != null) query.setParameter("eventId", eventId);
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
@@ -93,7 +95,7 @@ public class OrderOrm extends EntityOrm {
         if (filter.eventId() != null) jpql.append(" and event.id = :eventId");
         else if (filter.eventType() != null && !filter.eventType().isBlank()) jpql.append(" and (event is null or event.eventType = :eventType)");
         boolean searching = filter.search() != null && !filter.search().isBlank();
-        if (searching) jpql.append(" and (lower(o.name) like :search escape '!' or lower(o.purpose) like :search escape '!')");
+        if (searching) jpql.append(" and (lower(o.name) like :search escape '!' or lower(o.purpose) like :search escape '!' or lower(o.createdBy.name) like :search escape '!' or lower(event.name) like :search escape '!' or exists (select line.id from OrderLine line where line.order = o and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!')))");
         var query = entityManager.createQuery(jpql + InventoryAccessOrm.scope("order", "o", accessActor.current()) + " order by o.createdAt desc, o.id", InventoryOrder.class);
         if (!filter.statuses().isEmpty()) query.setParameter("statuses", filter.statuses());
         if (filter.eventId() != null) query.setParameter("eventId", filter.eventId());

@@ -208,11 +208,11 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode,
+    public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode, String search,
             List<DomainEnums.OrderStatus> statuses, UUID eventId, int page, int size) {
         actors.requireReader();
         var bounds = bounds(page, size);
-        var values = orders.orders(eventType, faction, orderCode, statuses, eventId, bounds.offset(), bounds.limit());
+        var values = orders.orders(eventType, faction, orderCode, search, statuses, eventId, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
         var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.operations.internal.model.OrderLine>>();

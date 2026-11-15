@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.GoodsReceipt;
 import org.ash.inventory.operations.internal.model.GoodsReceiptLine;
@@ -25,14 +27,17 @@ import java.util.UUID;
 public class PurchasingOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
-    public List<Vendor> vendors(String search, int offset, int limit) {
-        boolean searching = search != null && !search.isBlank();
-        var query = entityManager.createQuery("from Vendor vendor"
-                + (searching ? " where lower(vendor.name) like :search escape '!'" : "")
-                + " order by vendor.active desc, vendor.preferredVendor desc, vendor.name, vendor.id", Vendor.class);
-        if (searching) query.setParameter("search", org.ash.inventory.platform.api.Inputs.containsPattern(search));
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    public List<Vendor> vendors(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("from Vendor vendor where 1=1")
+                .search(filters.search, "vendor.name", "vendor.contactPerson", "vendor.email", "vendor.phone", "vendor.sourceHost");
+        if ("active".equals(filters.status)) predicates.where("vendor.active = true");
+        else if ("inactive".equals(filters.status)) predicates.where("vendor.active = false");
+        else if ("preferred".equals(filters.status)) predicates.where("vendor.active = true and vendor.preferredVendor = true");
+        else if (filters.status != null && !filters.status.isBlank()) throw org.ash.inventory.platform.api.ApiException.badRequest("Unknown supplier status");
+        return predicates.bind(entityManager.createQuery(predicates.ordered("vendor.active desc, vendor.preferredVendor desc, vendor.name, vendor.id"), Vendor.class))
+                .setFirstResult(offset).setMaxResults(limit).getResultList();
     }
+
     public boolean vendorNameExists(String name, UUID excluding) {
         var jpql = excluding == null
                 ? "select count(vendor) from Vendor vendor where lower(vendor.name) = :name"
@@ -80,15 +85,19 @@ public class PurchasingOrm extends EntityOrm {
                 .setMaxResults(1).getResultStream().findFirst().orElse(null);
     }
 
-    public List<PurchaseOrder> purchaseOrders(String status, int offset, int limit) {
-
-        var jpql = status == null || status.isBlank()
-                ? "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where 1=1" + InventoryAccessOrm.scope("purchase", "purchaseOrder") + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc"
-                : "select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where purchaseOrder.status = :status" + InventoryAccessOrm.scope("purchase", "purchaseOrder") + " order by purchaseOrder.orderDate desc, purchaseOrder.createdAt desc";
-        var query = entityManager.createQuery(jpql, PurchaseOrder.class);
-        if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.PurchaseOrderStatus.valueOf(status));
+    public List<PurchaseOrder> purchaseOrders(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("select purchaseOrder from PurchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch purchaseOrder.createdBy left join fetch purchaseOrder.eventOccurrence where 1=1"
+                + InventoryAccessOrm.scope("purchase", "purchaseOrder"))
+                .status("purchaseOrder.status", "incoming".equals(filters.status) ? null : filters.status, DomainEnums.PurchaseOrderStatus.class,
+                        List.of(DomainEnums.PurchaseOrderStatus.received, DomainEnums.PurchaseOrderStatus.cancelled))
+                .equal("purchaseOrder.vendor.id", "vendorId", filters.vendorId)
+                .equal("purchaseOrder.eventOccurrence.id", "eventId", filters.eventId)
+                .searchWhere(filters.search, "(lower(purchaseOrder.orderNumber) like :search escape '!' or lower(purchaseOrder.vendor.name) like :search escape '!' or lower(purchaseOrder.notes) like :search escape '!' or exists (select line.id from PurchaseOrderLine line where line.purchaseOrder = purchaseOrder and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!')))");
+        if ("incoming".equals(filters.status)) predicates.where("purchaseOrder.status in (ordered, partially_received)");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("purchaseOrder.expectedDeliveryDate nulls last, purchaseOrder.orderDate desc, purchaseOrder.id desc"), PurchaseOrder.class));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
+
     public boolean orderNumberExists(String number) {
         return entityManager.createQuery("select count(purchaseOrder) from PurchaseOrder purchaseOrder where lower(purchaseOrder.orderNumber) = :number", Long.class)
                 .setParameter("number", number.toLowerCase(Locale.ROOT)).getSingleResult() > 0;
@@ -142,15 +151,17 @@ public class PurchasingOrm extends EntityOrm {
         return entityManager.createQuery("select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.idempotencyKey = :key", GoodsReceipt.class)
                 .setParameter("key", key).getResultStream().findFirst().orElse(null);
     }
-    public List<GoodsReceipt> receipts(UUID purchaseOrderId, int offset, int limit) {
-
-        var jpql = purchaseOrderId == null
-                ? "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where 1=1" + InventoryAccessOrm.scope("receipt", "receipt") + " order by receipt.receivedAt desc"
-                : "select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder join fetch receipt.receivedBy join fetch receipt.receivingLocation where receipt.purchaseOrder.id = :purchaseOrderId" + InventoryAccessOrm.scope("receipt", "receipt") + " order by receipt.receivedAt desc";
-        var query = entityManager.createQuery(jpql, GoodsReceipt.class);
-        if (purchaseOrderId != null) query.setParameter("purchaseOrderId", purchaseOrderId);
+    public List<GoodsReceipt> receipts(UUID purchaseOrderId, TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("select receipt from GoodsReceipt receipt join fetch receipt.purchaseOrder purchaseOrder join fetch purchaseOrder.vendor join fetch receipt.receivedBy join fetch receipt.receivingLocation where 1=1"
+                + InventoryAccessOrm.scope("receipt", "receipt"))
+                .equal("receipt.purchaseOrder.id", "purchaseOrderId", purchaseOrderId)
+                .equal("receipt.receivingLocation.id", "locationId", filters.locationId)
+                .status("receipt.status", filters.status, DomainEnums.GoodsReceiptStatus.class, List.of())
+                .searchWhere(filters.search, "(lower(receipt.receiptNumber) like :search escape '!' or lower(purchaseOrder.orderNumber) like :search escape '!' or lower(purchaseOrder.vendor.name) like :search escape '!' or lower(receipt.receivingLocation.name) like :search escape '!' or exists (select line.id from GoodsReceiptLine line where line.goodsReceipt = receipt and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!')))");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("receipt.receivedAt desc, receipt.id desc"), GoodsReceipt.class));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
+
     public List<GoodsReceiptLine> receiptLines(Collection<GoodsReceipt> receipts) {
         if (receipts.isEmpty()) return List.of();
         return entityManager.createQuery("select line from GoodsReceiptLine line join fetch line.purchaseOrderLine join fetch line.item left join fetch line.lot where line.goodsReceipt in :receipts order by line.createdAt", GoodsReceiptLine.class)

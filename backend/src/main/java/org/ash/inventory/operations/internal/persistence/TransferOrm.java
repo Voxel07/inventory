@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.model.DomainEnums;
 import org.ash.inventory.operations.internal.model.InventoryLot;
 import org.ash.inventory.operations.internal.model.InventoryPosition;
@@ -19,14 +21,16 @@ import java.util.UUID;
 public class TransferOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
-    public List<InventoryTransfer> transfers(String status, int offset, int limit) {
-
-        var jpql = status == null || status.isBlank()
-                ? "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc"
-                : "select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where transfer.status = :status" + InventoryAccessOrm.scope("transfer", "transfer") + " order by transfer.createdAt desc";
-        if (!accessActor.atLeast(DomainEnums.UserRole.warehouse_crew)) jpql = jpql.replace(" order by", " and transfer.sourceLocation.accessPolicy is not null and transfer.destinationLocation.accessPolicy is not null and not exists (select l.id from InventoryTransferLine l where l.transfer = transfer and l.item.accessPolicy is null) order by");
-        var query = entityManager.createQuery(jpql, InventoryTransfer.class);
-        if (status != null && !status.isBlank()) query.setParameter("status", DomainEnums.TransferStatus.valueOf(status));
+    public List<InventoryTransfer> transfers(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("select transfer from InventoryTransfer transfer join fetch transfer.sourceLocation join fetch transfer.destinationLocation join fetch transfer.requestedBy left join fetch transfer.receivedBy where 1=1"
+                + InventoryAccessOrm.scope("transfer", "transfer"));
+        if (!accessActor.atLeast(DomainEnums.UserRole.warehouse_crew)) predicates.where("transfer.sourceLocation.accessPolicy is not null and transfer.destinationLocation.accessPolicy is not null and not exists (select l.id from InventoryTransferLine l where l.transfer = transfer and l.item.accessPolicy is null)");
+        predicates.status("transfer.status", filters.status, DomainEnums.TransferStatus.class,
+                List.of(DomainEnums.TransferStatus.received, DomainEnums.TransferStatus.cancelled));
+        predicates.searchWhere(filters.search, "(lower(transfer.transferNumber) like :search escape '!' or lower(transfer.sourceLocation.name) like :search escape '!' or lower(transfer.destinationLocation.name) like :search escape '!' or lower(transfer.notes) like :search escape '!' or exists (select line.id from InventoryTransferLine line left join line.assetInstance asset left join line.lot lot where line.transfer = transfer and (lower(line.item.name) like :search escape '!' or lower(line.item.sku) like :search escape '!' or lower(asset.assetCode) like :search escape '!' or lower(lot.lotNumber) like :search escape '!')))");
+        if (filters.locationId != null) predicates.parameter("locationId", filters.locationId).where("(transfer.sourceLocation.id = :locationId or transfer.destinationLocation.id = :locationId)");
+        if (filters.itemId != null) predicates.parameter("itemId", filters.itemId).where("exists (select line.id from InventoryTransferLine line where line.transfer = transfer and line.item.id = :itemId)");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("transfer.createdAt desc, transfer.id desc"), InventoryTransfer.class));
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
     public List<InventoryTransferLine> lines(Collection<InventoryTransfer> transfers) {

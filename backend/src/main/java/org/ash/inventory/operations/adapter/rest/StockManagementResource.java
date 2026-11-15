@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.adapter.rest;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.application.StockManagementService;
 import org.ash.inventory.operations.internal.contract.dto.StockDtos;
 import org.ash.inventory.operations.internal.model.InventoryLot;
@@ -23,9 +25,9 @@ public class StockManagementResource {
     public StockManagementResource(StockManagementService service) { this.service = service; }
 
     @Paged @GET @Path("/inventory-lots") @jakarta.transaction.Transactional
-    public List<StockDtos.LotResponse> lots(@QueryParam("itemId") @jakarta.validation.constraints.Size(max = 200) List<UUID> itemIds,
+    public List<StockDtos.LotResponse> lots(@QueryParam("itemId") @jakarta.validation.constraints.Size(max = 200) List<UUID> itemIds, @Valid @BeanParam TaskFilters filters,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
-        return lots(service.lots(itemIds, page, size));
+        return lots(service.lots(itemIds, filters, page, size));
     }
 
     @PUT @Path("/inventory-lots/{id}") @jakarta.transaction.Transactional

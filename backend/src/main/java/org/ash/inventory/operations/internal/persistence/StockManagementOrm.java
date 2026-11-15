@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+
 import org.ash.inventory.operations.internal.model.AssetInstance;
 import org.ash.inventory.operations.internal.model.InventoryLot;
 import org.ash.inventory.operations.internal.model.InventoryPosition;
@@ -13,11 +15,14 @@ import java.util.UUID;
 @ApplicationScoped
 public class StockManagementOrm extends EntityOrm {
 
-    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, int offset, int limit, UserAccount actor) {
-        boolean filtered = itemIds != null && !itemIds.isEmpty();
-        var query = entityManager.createQuery("from InventoryLot lot join fetch lot.item where " + visibility("lot.item")
-                + (filtered ? " and lot.item.id in :itemIds" : "") + " order by lot.expiryDate nulls last, lot.lotNumber, lot.id", InventoryLot.class);
-        if (filtered) query.setParameter("itemIds", itemIds);
+    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, TaskFilters filters, int offset, int limit, UserAccount actor) {
+        var predicates = new TaskQuery("from InventoryLot lot join fetch lot.item where " + visibility("lot.item"))
+                .status("lot.status", filters.status, org.ash.inventory.operations.internal.model.DomainEnums.LotStatus.class, List.of())
+                .search(filters.search, "lot.lotNumber", "lot.item.name", "lot.item.sku");
+        if (itemIds != null && !itemIds.isEmpty()) predicates.parameter("itemIds", itemIds).where("lot.item.id in :itemIds");
+        if (filters.locationId != null) predicates.parameter("locationId", filters.locationId)
+                .where("exists (select p.id from InventoryPosition p where p.lot = lot and p.location.id = :locationId and (p.quantityOnHand > 0 or p.quantityInTransit > 0) and " + InventoryAccessOrm.visible("p.location.accessPolicy") + ")");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("lot.expiryDate nulls last, lot.lotNumber, lot.id"), InventoryLot.class));
         return visible(query, actor).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

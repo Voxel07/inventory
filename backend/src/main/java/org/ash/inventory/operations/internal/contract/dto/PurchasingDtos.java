@@ -59,7 +59,7 @@ public final class PurchasingDtos {
     public record GoodsReceiptLineResponse(UUID id, UUID purchaseOrderLineId, UUID itemId, String itemName,
             int expectedQuantity, int acceptedQuantity, int damagedQuantity, int rejectedQuantity,
             UUID lotId, String receivingNotes) {}
-    public record GoodsReceiptResponse(UUID id, String receiptNumber, UUID purchaseOrderId,
+    public record GoodsReceiptResponse(UUID id, String receiptNumber, UUID purchaseOrderId, String orderNumber, String vendorName,
             UUID receivedById, Instant receivedAt, UUID receivingLocationId, String status,
             UUID idempotencyKey, String notes, List<GoodsReceiptLineResponse> lines) {}
 

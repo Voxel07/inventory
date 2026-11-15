@@ -115,7 +115,7 @@ public class CsvImportOperations {
                 result = transfer.id();
             }
             case "count" -> {
-                var existing = CsvImportSupport.all((page, size) -> counts.list(null, page, size)).stream()
+                var existing = CsvImportSupport.all((page, size) -> counts.list(new org.ash.inventory.operations.internal.contract.dto.TaskFilters(), page, size)).stream()
                         .filter(entry -> entry.sessionNumber().equals(data.path("sessionNumber").asText())).findFirst();
                 result = existing.isPresent() ? existing.get().id() : counts.create(csv.input(data, CountDtos.CountInput.class)).id();
             }

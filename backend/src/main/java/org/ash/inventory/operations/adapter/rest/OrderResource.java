@@ -50,11 +50,12 @@ public class OrderResource {
     public List<ApiResponses.OrderSummaryResponse> orders(@QueryParam("eventType") @org.ash.inventory.platform.api.InputText String eventType,
             @QueryParam("faction") @org.ash.inventory.platform.api.InputText String faction,
             @QueryParam("orderCode") @org.ash.inventory.platform.api.InputText String orderCode,
+            @QueryParam("search") @org.ash.inventory.platform.api.InputText String search,
             @QueryParam("status") @jakarta.validation.constraints.Size(max = 2000) List<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses,
             @QueryParam("eventId") UUID eventId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return queries.orders(eventType, faction, orderCode, statuses, eventId, page, size);
+        return queries.orders(eventType, faction, orderCode, search, statuses, eventId, page, size);
     }
 
     @GET @Path("/previous")

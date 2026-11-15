@@ -1,8 +1,8 @@
-import { apiPage, apiRequest } from './apiClient';
+import { apiPage, apiRequest, type ApiQuery } from './apiClient';
 import { captureAuthSession, assertAuthSession } from './authManager';
 import type { Loan, LoanExtensionInput, LoanInput, LoanMovementInput } from '../types/loan';
 export const loanApi = {
-  list: (page: number, size: number) => apiPage<Loan>('/api/loans', page, size),
+  list: (page: number, size: number, query: ApiQuery = {}) => apiPage<Loan>('/api/loans', page, size, { query }),
   find: async (predicate: (loan: Loan) => boolean) => {
     const session = captureAuthSession();
     for (let page = 0; ; page++) {

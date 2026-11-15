@@ -25,7 +25,8 @@ export function OperationListEntry({ title, status, children, actions: candidate
     {/* Actions keep the shared touch target; on phones they get a full row below the details. Pinned steps stay visible
         when the row is too narrow, the rest move into the "more" menu. */}
     {actions && <Box sx={{ display: 'flex', minWidth: 0, pt: { xs: 1, md: 0 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider' }}>
-      <ActionBar actions={candidates} align={{ xs: 'start', md: 'end' }} />
+      <ActionBar actions={candidates.map(action => action && action.pinned ? { ...action, variant: action.variant ?? 'contained' } : action)} collapsed={candidates.some(action => action && action.pinned) ? true : undefined} align={{ xs: 'start', md: 'end' }}
+        buttonSx={{ minHeight: 44 }} />
     </Box>}
   </Box>;
 }
