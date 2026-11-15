@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.Immutable
 @Table(name = "sync_command_audit")
 public class SyncCommandAudit extends BaseEntity {
     @Column(name = "command_id", nullable = false, unique = true) public UUID commandId;

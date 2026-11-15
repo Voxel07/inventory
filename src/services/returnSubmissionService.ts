@@ -1,11 +1,13 @@
 import type { ReturnSubmission, ReturnSubmissionFormData, ReturnSubmissionStatus } from '../types';
-import { apiRequest } from './apiClient';
+import { apiPage, apiRequest } from './apiClient';
+import type { Page } from './apiPagination';
 import { stageImage } from './stagedImageService';
 import { captureAuthSession } from './authManager';
 import { fieldCommand } from './fieldCommand';
 
-export function getReturnSubmissions(status?: ReturnSubmissionStatus): Promise<ReturnSubmission[]> {
-  return apiRequest('/api/returns', { query: { status } });
+/** Newest first. `mine`: only returns made for the signed-in account, also for warehouse workers. */
+export function getReturnSubmissions(page: number, size: number, status?: ReturnSubmissionStatus, mine = false): Promise<Page<ReturnSubmission>> {
+  return apiPage('/api/returns', page, size, { query: { status, mine: mine || undefined } });
 }
 
 export async function createReturnSubmission(data: ReturnSubmissionFormData): Promise<ReturnSubmission> {

@@ -1214,7 +1214,7 @@ class InventoryApiTest {
     }
 
     @Test
-    void factionLeaderCannotUseTheApiForAnUnassignedFaction() {
+    void factionLeaderReadsEveryFactionButChangesOnlyAssignedOnes() {
         assignedFactionLeaderRequest()
                 .get("/api/auth/me")
                 .then().statusCode(200)
@@ -1287,23 +1287,22 @@ class InventoryApiTest {
                 .then().statusCode(200);
         assignedFactionLeaderRequest().get("/api/orders/faction/" + adminCreatedAssignedOrderId + "/pickup-groups")
                 .then().statusCode(200);
+        // Every organization member reads all faction lists; only writes are limited to the assigned factions.
         assignedFactionLeaderRequest()
                 .get("/api/orders/faction/" + unassignedOrderId)
-                .then().statusCode(403);
+                .then().statusCode(200).body("faction", equalTo("Hidden API faction"));
         assignedFactionLeaderRequest().get("/api/orders/faction/" + unassignedOrderId + "/pickup-groups")
+                .then().statusCode(200).body("canEdit", equalTo(false));
+        assignedFactionLeaderRequest().body(Map.of()).post("/api/orders/faction/" + unassignedOrderId + "/transitions/submitted")
                 .then().statusCode(403);
         assignedFactionLeaderRequest()
                 .body(unassignedOrder)
                 .patch("/api/orders/faction/" + unassignedOrderId)
                 .then().statusCode(403);
-        assignedFactionLeaderRequest()
-                .get("/api/orders/faction")
-                .then().statusCode(200)
-                .body("faction", org.hamcrest.Matchers.hasItem("Allowed API faction"))
-                .body("faction", org.hamcrest.Matchers.everyItem(equalTo("Allowed API faction")));
         assignedFactionLeaderRequest().queryParam("faction", "Hidden API faction").get("/api/orders/faction")
-                .then().statusCode(200).body("size()", equalTo(0));
-        factionLeaderRequest().get("/api/orders/faction").then().statusCode(200).body("size()", equalTo(0));
+                .then().statusCode(200).body("id", org.hamcrest.Matchers.hasItem(unassignedOrderId));
+        factionLeaderRequest().queryParam("faction", "Hidden API faction").get("/api/orders/faction")
+                .then().statusCode(200).body("id", org.hamcrest.Matchers.hasItem(unassignedOrderId));
     }
 
     @Test

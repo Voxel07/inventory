@@ -25,7 +25,7 @@ import java.util.TreeSet;
  * Resolves the calling account. The identity provider decides who may use the inventory at all
  * (membership in the access group, default {@code inventory}); the role and faction memberships are
  * managed in the app by the inventory admin. Accounts are keyed by {@code (issuer, sub)}; new accounts
- * start as {@code read_only} unless their e-mail is listed as a bootstrap admin. Name and e-mail
+ * start as {@code read_only} unless their e-mail is listed as a bootstrap admin while no administrator exists. Name and e-mail
  * are never used as account keys.
  */
 @RequestScoped
@@ -144,7 +144,8 @@ public class ActorService {
                 throw new ApiException(401, "Identity fields are invalid or too long");
         cached = users.findByIdentity(issuer, subject);
         if (cached != null && !cached.active) throw ApiException.forbidden("This inventory account is deactivated");
-        boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email);
+        // Bootstrap e-mails only matter while the system has no administrator: first setup and recovery.
+        boolean bootstrap = isBootstrapAdmin(bootstrapAdmins, email) && !users.adminExists();
         if (cached == null) {
             var provisioned = users.provision(issuer, subject, name, email,
                     headerRoles != null ? headerRoles : Set.of(bootstrap ? DomainEnums.UserRole.admin : DomainEnums.UserRole.read_only),
@@ -155,7 +156,7 @@ public class ActorService {
             if (!Objects.equals(cached.name, name)) cached.name = name;
             if (email != null && !Objects.equals(cached.email, email)) cached.email = email;
             // Recovery: a listed bootstrap admin regains admin only while no admin exists.
-            if (bootstrap && cached.role != DomainEnums.UserRole.admin && !users.adminExists()) {
+            if (bootstrap && cached.role != DomainEnums.UserRole.admin) {
                 var restored = new TreeSet<>(cached.roles); restored.add(DomainEnums.UserRole.admin); cached.setRoles(restored);
             }
         }
@@ -456,10 +457,18 @@ public class ActorService {
         requireAtLeast(DomainEnums.UserRole.read_only, "Not available for tenant accounts");
     }
 
-    /** Faction leaders read only assigned factions; other organization roles retain their overview. */
-    public boolean canViewFaction(UserAccount actor, org.ash.inventory.operations.internal.model.Faction faction) {
-        return seesOrganization(actor) && (actor.role != DomainEnums.UserRole.faction_leader
-                || faction != null && actor.factions.contains(factionKey(faction.eventType, faction.slug)));
+    /**
+     * Every organization member reads every faction order; general orders are hidden from faction leaders.
+     * Changing a faction order is checked separately ({@link #canWriteFaction}).
+     */
+    public boolean canViewOrder(UserAccount actor, org.ash.inventory.operations.internal.model.InventoryOrder order) {
+        return order.kind == org.ash.inventory.operations.internal.model.InventoryOrder.Kind.faction
+                ? seesOrganization(actor) : canViewGeneralOrders(actor);
+    }
+
+    public void requireOrderRead(org.ash.inventory.operations.internal.model.InventoryOrder order) {
+        requireReader();
+        if (!canViewOrder(current(), order)) throw ApiException.forbidden("You do not have access to this order");
     }
 
     public boolean canViewGeneralOrders(UserAccount actor) {

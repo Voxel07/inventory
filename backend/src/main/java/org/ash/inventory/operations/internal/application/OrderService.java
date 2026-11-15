@@ -135,7 +135,7 @@ public class OrderService {
     @Transactional
     @org.ash.inventory.operations.internal.security.PrivateInventoryCommand(usage = true)
     public InventoryOrder copyAsDraft(UUID id, UUID eventId, UUID commandId) {
-        var source = orm.require(InventoryOrder.class, id, "Order"); assertCanView(source);
+        var source = orm.require(InventoryOrder.class, id, "Order"); actors.requireOrderRead(source);
         var event = orm.require(EventOccurrence.class, eventId, "Event");
         requireOpenEvent(event); requireBeforeDeadline(event);
         if (source.eventOccurrence != null && !source.eventOccurrence.eventType.equals(event.eventType))
@@ -598,15 +598,6 @@ public class OrderService {
         return returnItems(id, new ApiModels.ReturnInput(outcomes, assetOutcomes, idempotencyKey, "Full order return"));
     }
 
-    /** Faction leaders read only orders of their assigned factions. */
-    public void assertCanView(InventoryOrder order) {
-        actors.requireReader();
-        var actor = actors.current();
-        boolean visible = order.kind == InventoryOrder.Kind.faction
-                ? actors.canViewFaction(actor, order.faction) : actors.canViewGeneralOrders(actor);
-        if (!visible) throw ApiException.forbidden("You do not have access to this order");
-    }
-
     private void requireGeneralOwner(InventoryOrder order) {
         var actor = actors.current();
         if (actor.role.atLeast(DomainEnums.UserRole.warehouse_crew)) return;
@@ -626,6 +617,8 @@ public class OrderService {
         var lines = orm.lines(order);
         var prepared = aggregatePrepared(lines);
         itemLocks.lock(prepared.keySet().stream().map(item -> item.id).toList());
+        // Bookings below do not change reservations; they become custody after the loop.
+        var reservations = orm.reservations(order);
         for (var entry : prepared.entrySet()) {
             var item = orm.findLocked(Item.class, entry.getKey().id);
             eligibility.assertCheckoutAllowed(item);
@@ -640,11 +633,13 @@ public class OrderService {
             if (entry.getValue() > available)
                 throw ApiException.conflict("Insufficient stock to pick up " + item.name);
             var allocations = new LinkedHashMap<org.ash.inventory.operations.internal.model.InventoryPosition, Integer>();
-            for (var reserved : orm.reservations(order))
+            for (var reserved : reservations)
                 if (reserved.item.id.equals(item.id) && reserved.openQuantity() > 0)
                     allocations.merge(reserved.position, reserved.openQuantity(), Math::addExact);
             if (allocations.values().stream().mapToInt(Integer::intValue).sum() != entry.getValue())
                 throw ApiException.conflict("Prepared source allocations changed; prepare the order again");
+            // Nothing is booked before the first source, so its "before" is the availability checked above.
+            Integer before = available;
             for (var source : allocations.entrySet()) {
                 var position = source.getKey();
                 var transaction = new StockTransaction();
@@ -654,7 +649,8 @@ public class OrderService {
                 transaction.eventType = order.eventOccurrence == null ? null : order.eventOccurrence.eventType;
                 transaction.faction = order.factionLabel(); transaction.type = DomainEnums.TransactionType.checkout;
                 transaction.quantity = source.getValue();
-                transaction.availabilityBefore = inventory.availableFor(item, order.eventOccurrence, ownReservation);
+                transaction.availabilityBefore = before != null ? before : inventory.availableFor(item, order.eventOccurrence, ownReservation);
+                before = null;
                 transaction.reason = "Order pickup " + order.label();
                 transaction.idempotencyKey = transactionKey(idempotencyKey, order, item, "pickup:" + (position == null ? "unlocated" : position.id));
                 transaction.clientCommandId = idempotencyKey;

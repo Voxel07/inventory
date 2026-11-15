@@ -21,6 +21,7 @@
         "-Dquarkus.datasource.username=test", "-Dquarkus.datasource.password=test",
         "-Dquarkus.redis.hosts=redis://localhost:56379", "-Dquarkus.analytics.disabled=true",
         "-Dquarkus.console.enabled=false"],
+      "env": { "JAVA_HOME": "D:/CodingStuff/jdk-25.0.4.1" },
       "port": 8080
     },
     {
@@ -32,6 +33,7 @@
         "-Dquarkus.redis.hosts=redis://localhost:56379", "-Dquarkus.analytics.disabled=true",
         "-Dquarkus.console.enabled=false", "-Dquarkus.http.port=8090", "-Ddebug=false",
         "-Dquarkus.http.cors.origins=http://localhost:5173,http://localhost:5174"],
+      "env": { "JAVA_HOME": "D:/CodingStuff/jdk-25.0.4.1" },
       "port": 8090,
       "autoPort": false
     },

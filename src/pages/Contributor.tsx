@@ -38,7 +38,7 @@ const SECTIONS = ['custody', 'stored', 'requests', 'returns'];
 
 export function Contributor({ embedded = false }: { embedded?: boolean }) {
   const t = useT(); const { user } = useAuth(); const warehouse = canOperateWarehouse(user); const writable = canOrder(user);
-  const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions();
+  const { custody, stored, requests } = useMember(); const returns = useReturnSubmissions(undefined, { mine: true });
   const [request, setRequest] = useState<{ item: Stored; kind: string; commandId: string } | null>(null);
   const [returning, setReturning] = useState<NonNullable<typeof custody.data>[number] | null>(null);
   const [returnCommand, setReturnCommand] = useState('');
@@ -61,7 +61,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
   }
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => { if (focus) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [focus, linkedSection]);
-  const myReturns = returns.data?.filter(row => row.returnedForUserId === user?.id) ?? [];
+  const myReturns = returns.data ?? [];
   const sections = [
     { key: 'custody', label: t('pages.contributor.inMyCustody'), count: custody.data?.length, loading: custody.isLoading },
     { key: 'stored', label: t('pages.contributor.storedWithMe'), count: stored.data?.length, loading: stored.isLoading },
@@ -177,6 +177,7 @@ export function Contributor({ embedded = false }: { embedded?: boolean }) {
         getRowClassName={({ id }) => id === focus ? 'linked-task' : ''}
         sx={{ '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' }, '& .linked-task': { bgcolor: 'action.selected' } }} />
     </Box>
+    {section === "returns" && returns.hasNextPage && <Button title={t('pages.contributor.loadMoreReturns')} disabled={returns.isFetchingNextPage} onClick={() => { void returns.fetchNextPage(); }}>{t('pages.contributor.loadMore')}</Button>}
     {section === "requests" && requests.hasNextPage && <Button title={t('pages.contributor.loadMoreRequests')} disabled={requests.isFetchingNextPage} onClick={() => { void requests.fetchNextPage(); }}>{t('pages.contributor.loadMore')}</Button>}
     {request && <OperationForm title={request.kind === 'damage' ? t('common.reportDamage') : t('pages.contributor.coordinatePickup')} onClose={() => setRequest(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('common.quantity'), type: 'number', required: true, min: 1, max: request.item.quantity }, ...(assetDamage ? [{ key: 'severity', label: t('common.severity'), required: true, options: SEVERITY_LEVELS.map(value => ({ value, label: nameFor('severity', value) })) }] : []), { key: 'notes', label: t('pages.contributor.descriptionProposedTimeContact'), required: true, multiline: true }]} onSave={v => memberApi.request({ itemId: request.item.itemId, assetId: request.item.assetId, locationId: request.item.locationId, kind: request.kind, commandId: request.commandId, quantity: inputNumber(v.quantity), notes: inputText(v.notes), severity: assetDamage ? inputText(v.severity) as DamageSeverity : undefined })} />}
     {returning && <OperationForm title={t('pages.contributor.submitReturnForInspection')} onClose={() => setReturning(null)} initial={{ quantity: 1 }} fields={[{ key: 'quantity', label: t('common.quantity'), type: 'number', required: true, min: 1, max: returning.checkedOut - (returning.pendingQuantity ?? 0) }, ...(factionOrderOf(returning) && !returning.assetInstanceId ? [{ key: 'assetId', label: t('pages.contributor.assetIDSerializedEquipmentOnly') }] : []), { key: 'notes', label: t('pages.contributor.placementNotes'), required: true }]} onSave={v => memberApi.submitReturn({ quantity: inputNumber(v.quantity), notes: optionalText(v.notes), assetId: optionalText(v.assetId), custodyKey: returning.key, commandId: returnCommand })} />}

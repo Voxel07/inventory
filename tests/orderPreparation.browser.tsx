@@ -10,7 +10,7 @@ import { FactionOrderDetail } from '../src/pages/FactionOrderDetail';
 import { setDevelopmentSession } from '../src/services/authManager';
 import { setAppLanguage } from '../src/utils/naming';
 import { ROLE_LADDER, type EventReport, type Faction, type FactionOrder, type FactionOrderFormData, type FactionOrderStatus, type GeneralOrder, type GeneralOrderFormData, type StorageLocation } from '../src/types';
-import { canOperateWarehouse, canUseGeneralOrders, canViewFaction, canViewGeneralOrders, canWriteFaction } from '../src/utils/access';
+import { canOperateWarehouse, canUseGeneralOrders, canViewGeneralOrders, canViewOrganization, canWriteFaction } from '../src/utils/access';
 import type { PickupAssignment, PickupGroup, PickupPlan } from '../src/services/orderPickupService';
 import { FIXTURE_TIME, fixtureAssembly, fixtureItem, fixtureLocation, fixtureStock, fixtureUser } from './fixtures/dto';
 import { byIds, installFixtureApi } from './fixtures/api';
@@ -26,7 +26,8 @@ const params = new URLSearchParams(location.search);
 const role = ROLE_LADDER.find(value => value === params.get('role')) ?? 'warehouse_crew';
 const previewUser = { ...fixtureUser(role), faction: ['LS:tera'] };
 const initialView = params.get('view') ?? '/orders/faction/order-tera';
-const visibleFaction = (order: FactionOrder) => canViewFaction(previewUser, order.factionKey);
+// Every organization member reads all faction lists (backend ActorService.canViewOrder).
+const seesFactionOrders = canViewOrganization(previewUser);
 const matchesOrder = (order: { status: string; eventOccurrenceId?: string; name?: string }, url: URL) => {
   const statuses = url.searchParams.getAll('status');
   return (!statuses.length || statuses.includes(order.status))
@@ -165,10 +166,10 @@ installFixtureApi(({ path, url, method, body }) => {
   if (path === '/api/events') return events;
   if (path === '/api/event-types') return ['LS', 'DE'];
   if (path === '/api/factions') return factions;
-  if (path === '/api/orders/faction') return factionOrders.filter(order => visibleFaction(order) && matchesOrder(order, url));
+  if (path === '/api/orders/faction') return factionOrders.filter(order => seesFactionOrders && matchesOrder(order, url));
   if (path === '/api/orders/faction/previous') return null;
   if (path === '/api/orders/general') return canViewGeneralOrders(previewUser) ? generalOrders.filter(order => matchesOrder(order, url)) : [];
-  if (/^\/api\/orders\/faction\/[^/]+$/.test(path)) return factionOrders.find((order) => visibleFaction(order) && order.id === path.split('/')[4])
+  if (/^\/api\/orders\/faction\/[^/]+$/.test(path)) return factionOrders.find((order) => seesFactionOrders && order.id === path.split('/')[4])
     ?? Response.json({ message: 'Order not visible to this role' }, { status: 403 });
   if (/^\/api\/orders\/general\/[^/]+$/.test(path)) return canViewGeneralOrders(previewUser) ? generalOrders.find(order => order.id === path.split('/')[4]) : Response.json({ message: 'Forbidden' }, { status: 403 });
   if (path === '/api/equipment-availability') return {};

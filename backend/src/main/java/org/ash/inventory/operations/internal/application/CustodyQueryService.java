@@ -17,12 +17,11 @@ import java.util.UUID;
 public class CustodyQueryService {
     private final CustodyOrm custody;
     private final OrderOrm orders;
-    private final OrderService orderService;
+    @jakarta.inject.Inject org.ash.inventory.operations.internal.security.ActorService actors;
 
-    public CustodyQueryService(CustodyOrm custody, OrderOrm orders, OrderService orderService) {
+    public CustodyQueryService(CustodyOrm custody, OrderOrm orders) {
         this.custody = custody;
         this.orders = orders;
-        this.orderService = orderService;
     }
 
     @Transactional
@@ -62,7 +61,7 @@ public class CustodyQueryService {
     private void authorize(org.ash.inventory.operations.internal.model.InventoryOrder.Kind kind, UUID orderId) {
         var order = orders.findOrder(orderId);
         if (order == null || order.kind != kind) throw ApiException.notFound("Order not found");
-        orderService.assertCanView(order);
+        actors.requireOrderRead(order);
     }
 
 }

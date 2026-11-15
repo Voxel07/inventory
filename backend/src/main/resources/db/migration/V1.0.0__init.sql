@@ -982,6 +982,15 @@ alter table order_item_requests add constraint fk_item_request_purchase foreign 
 alter table order_item_requests add constraint fk_item_request_resolver foreign key (resolved_by) references app_users(id);
 create index ix_item_requests_order on order_item_requests (order_id);
 create index ix_item_requests_item on order_item_requests (item_id) where item_id is not null;
+-- Order detail, history and reconciliation reads are always scoped to one order.
+create index ix_order_history_order on order_history (order_id, occurred_at, id);
+create index ix_return_submission_order on return_submissions (order_id) where order_id is not null;
+create index ix_custody_handovers_order on custody_handovers (order_id);
+create index ix_return_reconciliations_order on return_reconciliations (order_id);
+create index ix_damage_order on damage_reports (order_id) where order_id is not null;
+-- Inbox list and unread badge, polled by every signed-in client.
+create index ix_notifications_recipient on notifications (recipient_id, created_at desc, id desc);
+create index ix_notifications_unread on notifications (recipient_id) where read_at is null;
 create index ix_purchase_lines_item on purchase_order_lines (item_id, purchase_order_id);
 alter table if exists assembly_items add constraint FK4gy48ars675efhc1kyjqkvu7n foreign key (assembly_id) references assemblies;
 alter table if exists assembly_items add constraint FKq6cfebw2dybsanpmpubg7yx7l foreign key (item_id) references items;

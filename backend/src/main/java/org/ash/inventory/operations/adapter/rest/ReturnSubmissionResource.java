@@ -31,11 +31,14 @@ public class ReturnSubmissionResource {
         this.mapper = mapper;
     }
 
-    @GET
+    @Paged @GET
     @Transactional
     public List<ApiResponses.ReturnSubmissionResponse> list(
-            @QueryParam("status") DomainEnums.ReturnSubmissionStatus status) {
-        var submissions = service.list(status);
+            @QueryParam("status") DomainEnums.ReturnSubmissionStatus status,
+            @QueryParam("mine") boolean mine,
+            @QueryParam("page") @jakarta.ws.rs.DefaultValue("0") int page,
+            @QueryParam("size") @jakarta.ws.rs.DefaultValue("100") int size) {
+        var submissions = service.list(status, mine, page, size);
         var damage = service.reportedDamage(submissions);
         return submissions.stream().map(value -> mapper.returnSubmission(value, damage.get(value.id))).toList();
     }

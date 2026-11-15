@@ -73,7 +73,7 @@ public class GeneralOrderResource {
     @Path("/{id}")
     @Transactional
     public ApiResponses.GeneralOrderResponse update(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.GeneralOrderInput input) {
-        queries.generalOrder(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.general);
         return queries.projectGeneralOrder(service.updateGeneral(id, input));
     }
 
@@ -82,14 +82,14 @@ public class GeneralOrderResource {
     @Transactional
     public ApiResponses.GeneralOrderResponse transition(@PathParam("id") UUID id, @PathParam("status") org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus status,
             @Valid ApiModels.TransitionInput input) {
-        queries.generalOrder(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.general);
         var safe = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return queries.projectGeneralOrder(service.transition(id, status, safe));
     }
 
     @POST @Path("/{id}/prepare") @Transactional
     public ApiResponses.GeneralOrderResponse prepare(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.PreparationInput input) {
-        queries.generalOrder(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.general);
         return queries.projectGeneralOrder(service.prepare(id, input));
     }
 
@@ -97,7 +97,7 @@ public class GeneralOrderResource {
     @Path("/{id}/return")
     @Transactional
     public ApiResponses.GeneralOrderResponse returnItems(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ReturnInput input) {
-        queries.generalOrder(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.general);
         return queries.projectGeneralOrder(service.returnItems(id, input));
     }
 
@@ -105,7 +105,7 @@ public class GeneralOrderResource {
     @Path("/{id}/restock")
     @Transactional
     public ApiResponses.GeneralOrderResponse restock(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderRestockInput input) {
-        queries.generalOrder(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.general);
         return queries.projectGeneralOrder(service.restockUnused(id, input));
     }
 

@@ -34,7 +34,6 @@ public class ApiQueryService {
 
     private final ActorService actors;
     private final CatalogService catalog;
-    private final OrderService orderService;
     private final InventoryOperationsService inventory;
     private final OrderOrm orders;
     private final OperationsOrm operations;
@@ -54,12 +53,11 @@ public class ApiQueryService {
     @jakarta.inject.Inject @io.quarkus.cache.CacheName("inventory-summary-movements") io.quarkus.cache.Cache movementCounts;
     @jakarta.inject.Inject StockHistoryService stockHistory;
 
-    public ApiQueryService(ActorService actors, CatalogService catalog, OrderService orderService,
+    public ApiQueryService(ActorService actors, CatalogService catalog,
             InventoryOperationsService inventory, OrderOrm orders, OperationsOrm operations,
             NotificationService notifications, UserOrm users, ApiMapper mapper) {
         this.actors = actors;
         this.catalog = catalog;
-        this.orderService = orderService;
         this.inventory = inventory;
         this.orders = orders;
         this.operations = operations;
@@ -205,7 +203,7 @@ public class ApiQueryService {
         if (eventType == null || eventType.isBlank() || faction == null || faction.isBlank() || before == null)
             throw ApiException.badRequest("Event type, faction and comparison date are required");
         var value = orders.previousFactionOrder(eventType, faction, before, excludeId);
-        if (value != null) orderService.assertCanView(value);
+        if (value != null) actors.requireOrderRead(value);
         return value == null ? null : projectOrder(value);
     }
 
@@ -213,10 +211,8 @@ public class ApiQueryService {
     public List<ApiResponses.OrderSummaryResponse> orders(String eventType, String faction, String orderCode,
             List<DomainEnums.OrderStatus> statuses, UUID eventId, int page, int size) {
         actors.requireReader();
-        var actor = actors.current();
-        var factionKeys = actor.role == DomainEnums.UserRole.faction_leader ? actor.factions : null;
         var bounds = bounds(page, size);
-        var values = orders.orders(eventType, faction, orderCode, factionKeys, statuses, eventId, bounds.offset(), bounds.limit());
+        var values = orders.orders(eventType, faction, orderCode, statuses, eventId, bounds.offset(), bounds.limit());
 
         var lines = orders.lines(values);
         var linesByOrder = new LinkedHashMap<UUID, List<org.ash.inventory.operations.internal.model.OrderLine>>();
@@ -237,11 +233,20 @@ public class ApiQueryService {
                 .toList();
     }
 
+    /** Access check before an order command: the read's not-found and visibility rules without building the response. */
+    @Transactional
+    public void requireVisibleOrder(UUID id, org.ash.inventory.operations.internal.model.InventoryOrder.Kind kind) {
+        var value = orders.findOrder(id);
+        if (value == null || value.kind != kind) throw ApiException.notFound(
+                kind == org.ash.inventory.operations.internal.model.InventoryOrder.Kind.faction ? "Faction order not found" : "General order not found");
+        actors.requireOrderRead(value);
+    }
+
     @Transactional
     public ApiResponses.OrderResponse order(UUID id) {
         var value = orders.findOrder(id);
         if (value == null || value.kind != org.ash.inventory.operations.internal.model.InventoryOrder.Kind.faction) throw ApiException.notFound("Faction order not found");
-        orderService.assertCanView(value);
+        actors.requireOrderRead(value);
         return projectOrder(value);
     }
 
@@ -304,7 +309,7 @@ public class ApiQueryService {
     public ApiResponses.GeneralOrderResponse generalOrder(UUID id) {
         var order = orders.find(org.ash.inventory.operations.internal.model.InventoryOrder.class, id);
         if (order == null || order.kind != org.ash.inventory.operations.internal.model.InventoryOrder.Kind.general) throw ApiException.notFound("General order not found");
-        orderService.assertCanView(order);
+        actors.requireOrderRead(order);
         return projectGeneralOrder(order);
     }
 
@@ -368,6 +373,7 @@ public class ApiQueryService {
         actors.requireReader();
         var value = orders.find(org.ash.inventory.operations.internal.model.InventoryOrder.class, id);
         if (value == null) throw ApiException.notFound("Order not found");
+        actors.requireOrderRead(value);
         return projectAnyOrder(value);
     }
 

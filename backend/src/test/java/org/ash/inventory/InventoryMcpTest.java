@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class InventoryMcpTest {
     @Inject EntityManager em;
     @Inject ObjectMapper mapper;
+    private static final ObjectMapper RESPONSES = new ObjectMapper();
     @Inject InventoryMcpTools tools;
     @Inject InventoryMcpResources resources;
     @Inject InventoryMcpPrompts prompts;
@@ -237,8 +238,8 @@ class InventoryMcpTest {
         var createdEvent = tools.create_event(eventInput);
         assertEquals(5, createdEvent.plannedQuantities().get(bulk.id.toString()));
         assertEquals(eventInput.startDate(), tools.get_event_details(createdEvent.id()).startDate());
-        assertEquals("active", tools.update_event(createdEvent.id(), new ApiModels.EventInput("MILSIM", eventInput.name(),
-                eventInput.startDate(), null, "active", null, null, null, null)).status());
+        assertEquals("completed", tools.update_event(createdEvent.id(), new ApiModels.EventInput("MILSIM", eventInput.name(),
+                eventInput.startDate(), null, "completed", null, null, null, null)).status());
         assertTrue(tools.delete_event(createdEvent.id()).success());
     }
 
@@ -479,11 +480,11 @@ class InventoryMcpTest {
         assertTrue(locations.toString().contains(location.id.toString()));
         var summary = call(session, actorId, "read_only", "get_operational_summary", Map.of());
         assertFalse(summary.path("result").path("isError").asBoolean(), summary.toString());
-        var publicMetrics = mapper.readTree(summary.path("result").path("content").get(0).path("text").asText());
+        var publicMetrics = RESPONSES.readTree(summary.path("result").path("content").get(0).path("text").asText());
         String ownerSession = session(owner.externalSubject, "faction_leader");
         var ownerSummary = call(ownerSession, owner.externalSubject, "faction_leader", "get_operational_summary", Map.of());
         assertFalse(ownerSummary.path("result").path("isError").asBoolean(), ownerSummary.toString());
-        var ownerMetrics = mapper.readTree(ownerSummary.path("result").path("content").get(0).path("text").asText());
+        var ownerMetrics = RESPONSES.readTree(ownerSummary.path("result").path("content").get(0).path("text").asText());
         assertEquals(publicMetrics.path("totalActiveItems").asLong() + 2, ownerMetrics.path("totalActiveItems").asLong());
         assertEquals(publicMetrics.path("totalSerializedAssets").asLong() + 2, ownerMetrics.path("totalSerializedAssets").asLong());
         for (String uri : List.of("inventory://system/overview", "inventory://locations", "inventory://categories")) {
@@ -523,7 +524,8 @@ class InventoryMcpTest {
                 .header("MCP-Protocol-Version", "2025-11-25").header("X-Actor-Id", actorId).header("X-Actor-Role", role)
                 .contentType(ContentType.JSON).body(Map.of("jsonrpc", "2.0", "id", UUID.randomUUID().toString(), "method", method, "params", params))
                 .post("/mcp").then().statusCode(200).extract().asString();
-        var response = mapper.readTree(body);
+        // Server output is not bound by the request parsing limits of the application mapper (InputJson).
+        var response = RESPONSES.readTree(body);
         assertFalse(response.has("error"), body);
         assertTrue(response.path("result").isObject(), body);
         return response;

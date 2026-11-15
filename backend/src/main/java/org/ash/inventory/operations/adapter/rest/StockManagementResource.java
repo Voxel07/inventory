@@ -23,9 +23,9 @@ public class StockManagementResource {
     public StockManagementResource(StockManagementService service) { this.service = service; }
 
     @Paged @GET @Path("/inventory-lots") @jakarta.transaction.Transactional
-    public List<StockDtos.LotResponse> lots(@QueryParam("itemId") UUID itemId,
+    public List<StockDtos.LotResponse> lots(@QueryParam("itemId") @jakarta.validation.constraints.Size(max = 200) List<UUID> itemIds,
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("100") int size) {
-        return lots(service.lots(itemId, page, size));
+        return lots(service.lots(itemIds, page, size));
     }
 
     @PUT @Path("/inventory-lots/{id}") @jakarta.transaction.Transactional

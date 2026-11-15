@@ -44,6 +44,45 @@ class ActorServiceRoleTest {
         var actor = new ActorService(identity, new io.quarkus.vertx.http.runtime.CurrentVertxRequest(), users, false, "inventory", java.util.Optional.empty());
         assertEquals(DomainEnums.UserRole.read_only, actor.current().role);
     }
+
+    @Test
+    void bootstrapEmailGrantsAdminOnlyWhileNoAdminExists() {
+        assertEquals(DomainEnums.UserRole.admin, provisionBootstrapEmail(false));
+        assertEquals(DomainEnums.UserRole.read_only, provisionBootstrapEmail(true));
+    }
+
+    private DomainEnums.UserRole provisionBootstrapEmail(boolean adminExists) {
+        var token = (org.eclipse.microprofile.jwt.JsonWebToken) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{org.eclipse.microprofile.jwt.JsonWebToken.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getIssuer" -> "https://identity.example.test";
+                    case "getSubject", "getName" -> "listed-admin";
+                    case "getClaim" -> "email".equals(arguments[0]) ? "Ada@Example.org" : null;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        var identity = (io.quarkus.security.identity.SecurityIdentity) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{io.quarkus.security.identity.SecurityIdentity.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "isAnonymous" -> false;
+                    case "getPrincipal" -> token;
+                    case "getRoles" -> Set.of("inventory");
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        var users = new org.ash.inventory.operations.internal.persistence.UserOrm(null, null) {
+            @Override public UserAccount findByIdentity(String issuer, String subject) { return null; }
+            @Override public boolean adminExists() { return adminExists; }
+            @Override public Provisioned provision(String issuer, String subject, String name, String email,
+                    Set<DomainEnums.UserRole> roles, java.util.Collection<String> factions) {
+                var user = new UserAccount();
+                user.setRoles(roles);
+                return new Provisioned(user, false);
+            }
+        };
+        var actor = new ActorService(identity, new io.quarkus.vertx.http.runtime.CurrentVertxRequest(), users, false,
+                "inventory", java.util.Optional.of("ada@example.org"));
+        return actor.current().role;
+    }
+
     @Test
     void newAccountsDefaultToReadOnlyAndKeepIndependentRoleAssignments() {
         var user = new org.ash.inventory.operations.internal.model.UserAccount();
@@ -105,30 +144,28 @@ class ActorServiceRoleTest {
     }
 
     @Test
-    void factionLeadersReadOnlyAssignedFactionsAndCannotReadGeneralOrders() {
+    void organizationMembersReadEveryFactionOrderAndFactionLeadersNoGeneralOrders() {
         var actors = new ActorService(null, null, null, false, "inventory", java.util.Optional.empty());
-        var faction = new org.ash.inventory.operations.internal.model.Faction();
-        faction.eventType = "DE";
-        faction.slug = "kgg";
+        var faction = new org.ash.inventory.operations.internal.model.InventoryOrder();
+        faction.kind = org.ash.inventory.operations.internal.model.InventoryOrder.Kind.faction;
+        var general = new org.ash.inventory.operations.internal.model.InventoryOrder();
+        general.kind = org.ash.inventory.operations.internal.model.InventoryOrder.Kind.general;
         var user = new UserAccount();
         user.setRoles(java.util.List.of(DomainEnums.UserRole.faction_leader));
         user.factions.add("DE:kgg");
-        assertTrue(actors.canViewFaction(user, faction));
-        assertFalse(actors.canViewGeneralOrders(user));
-        faction.eventType = "LS";
-        assertFalse(actors.canViewFaction(user, faction));
+        assertTrue(actors.canViewOrder(user, faction));
+        assertFalse(actors.canViewOrder(user, general));
         user.factions.clear();
-        faction.eventType = "DE";
-        assertFalse(actors.canViewFaction(user, faction));
+        assertTrue(actors.canViewOrder(user, faction));
         for (var role : java.util.List.of(DomainEnums.UserRole.read_only, DomainEnums.UserRole.ash,
                 DomainEnums.UserRole.warehouse_crew, DomainEnums.UserRole.admin)) {
             user.setRoles(java.util.List.of(role));
-            assertTrue(actors.canViewFaction(user, faction));
-            assertTrue(actors.canViewGeneralOrders(user));
+            assertTrue(actors.canViewOrder(user, faction));
+            assertTrue(actors.canViewOrder(user, general));
         }
         user.setRoles(java.util.List.of(DomainEnums.UserRole.tenant));
-        assertFalse(actors.canViewFaction(user, faction));
-        assertFalse(actors.canViewGeneralOrders(user));
+        assertFalse(actors.canViewOrder(user, faction));
+        assertFalse(actors.canViewOrder(user, general));
     }
 
     @Test

@@ -36,7 +36,7 @@ class RuntimeReturnApiTest {
     }
 
     private String event() {
-        return admin().body(Map.of("eventType", "DE", "name", "Runtime event " + UUID.randomUUID(), "startDate", 2187820800000L, "status", "active"))
+        return admin().body(Map.of("eventType", "DE", "name", "Runtime event " + UUID.randomUUID(), "startDate", 2187820800000L, "status", "planned"))
                 .post("/api/events").then().statusCode(200).extract().path("id");
     }
 

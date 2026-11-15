@@ -13,10 +13,11 @@ import java.util.UUID;
 @ApplicationScoped
 public class StockManagementOrm extends EntityOrm {
 
-    public List<InventoryLot> lots(UUID itemId, int offset, int limit, UserAccount actor) {
+    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, int offset, int limit, UserAccount actor) {
+        boolean filtered = itemIds != null && !itemIds.isEmpty();
         var query = entityManager.createQuery("from InventoryLot lot join fetch lot.item where " + visibility("lot.item")
-                + (itemId == null ? "" : " and lot.item.id = :itemId") + " order by lot.expiryDate nulls last, lot.lotNumber", InventoryLot.class);
-        if (itemId != null) query.setParameter("itemId", itemId);
+                + (filtered ? " and lot.item.id in :itemIds" : "") + " order by lot.expiryDate nulls last, lot.lotNumber, lot.id", InventoryLot.class);
+        if (filtered) query.setParameter("itemIds", itemIds);
         return visible(query, actor).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 

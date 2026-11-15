@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { ROLE_LADDER, type User, type UserRole } from '../src/types';
 import {
   atLeast, canAccessSharingGroups, canAccessWarehouseTasks, canCreateInventory, canEditCatalog, canEditEvents, canManageInventory, canManagePurchasing, canManageUsers,
-  canOrder, canPerformCustody, canPerformMaintenance, canTakeOut, canUseGeneralOrders, canViewCatalog, canViewFaction,
+  canOrder, canPerformCustody, canPerformMaintenance, canTakeOut, canUseGeneralOrders, canViewCatalog,
   canViewGeneralOrders, canViewOrganization, canWriteFaction, canWriteOff,
 } from '../src/utils/access';
 import { noticeDetails, notificationPath } from '../src/utils/notifications';
@@ -67,22 +67,12 @@ describe('role ladder', () => {
     expect(canAccessWarehouseTasks(null)).toBe(false);
   });
 
-  test('faction leaders see assigned factions only, including event-specific memberships', () => {
+  test('faction leaders read every faction list but no general orders', () => {
     const leader = user('faction_leader', ['DE:kgg', 'LS:tera']);
-    expect(canViewFaction(leader, 'DE:kgg')).toBe(true);
-    expect(canViewFaction(leader, 'LS:tera')).toBe(true);
-    expect(canViewFaction(leader, 'LS:kgg')).toBe(false);
-    expect(canViewFaction(leader, 'DE:other')).toBe(false);
-    expect(canViewFaction(user('faction_leader'), 'DE:kgg')).toBe(false);
-    for (const role of ['read_only', 'ash', 'warehouse_crew', 'admin'] as const) {
-      expect(canViewFaction(user(role), 'DE:other')).toBe(true);
-      expect(canViewGeneralOrders(user(role))).toBe(true);
-    }
+    for (const role of ['read_only', 'ash', 'warehouse_crew', 'admin'] as const) expect(canViewGeneralOrders(user(role))).toBe(true);
     expect(canViewGeneralOrders(leader)).toBe(false);
     expect(canViewGeneralOrders(user('tenant'))).toBe(false);
     expect(canViewGeneralOrders(null)).toBe(false);
-    expect(canViewFaction(user('tenant'), 'DE:kgg')).toBe(false);
-    expect(canViewFaction(null, 'DE:kgg')).toBe(false);
   });
 });
 

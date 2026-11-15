@@ -203,9 +203,10 @@ public class ReturnSubmissionService {
     }
 
     @Transactional
-    public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status) {
+    public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, boolean mine, int page, int size) {
         var actor = actors.current();
-        return orm.list(status, actor, canManageReturns(actor));
+        var bounds = org.ash.inventory.platform.api.PageBounds.of(page, size);
+        return orm.list(status, actor, canManageReturns(actor), mine, bounds.offset(), bounds.limit());
     }
 
     /**

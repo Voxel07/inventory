@@ -67,15 +67,17 @@ class OrderPickupApiTest {
         admin().get(path).then().statusCode(200).body("pickupPointsComplete", equalTo(true)).body("groups.pickupLocationId", containsInAnyOrder(tech, general));
     }
 
-    @Test void factionLeadersReceiveNoPickupLinksForOtherFactions() {
+    @Test void factionLeadersReadOtherFactionsPickupPlansAndGetTheirItemNotices() {
         String subject = "unassigned-leader-" + UUID.randomUUID();
         String leader = actor(subject, "faction_leader").get("/api/auth/me").then().statusCode(200).extract().path("id");
         String shelf = location("Leader pickup"), light = item("Light", "Lighting", shelf);
         responsible(light, leader);
         String order = faction(Map.of(light, 1), Map.of()), path = "/api/orders/faction/" + order + "/pickup-groups";
-        actor(subject, "faction_leader").get(path).then().statusCode(403);
-        admin().post(path + "/notify").then().statusCode(200).body(equalTo("0"));
-        actor(subject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(0));
+        actor(subject, "faction_leader").get("/api/orders/faction/" + order).then().statusCode(200);
+        actor(subject, "faction_leader").get(path).then().statusCode(200).body("canEdit", equalTo(false));
+        actor(subject, "faction_leader").body(Map.of("assignments", Map.of())).patch(path).then().statusCode(403);
+        admin().post(path + "/notify").then().statusCode(200).body(equalTo("1"));
+        actor(subject, "faction_leader").get("/api/notifications").then().statusCode(200).body("size()", equalTo(1));
     }
 
     @Test void assemblyComponentsAreCountedAndNotifiedWithoutDuplicatingDirectItems() {

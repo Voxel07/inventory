@@ -18,7 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/** Append-only (database trigger); immutable so Hibernate never dirty-checks or rewrites the jsonb snapshot. */
 @Entity
+@org.hibernate.annotations.Immutable
 @Table(name = "order_history")
 public class OrderHistory {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) public Long id;

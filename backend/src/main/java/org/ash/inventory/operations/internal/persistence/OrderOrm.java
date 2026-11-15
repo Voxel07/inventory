@@ -23,25 +23,22 @@ import java.util.UUID;
 public class OrderOrm extends EntityOrm {
     @jakarta.inject.Inject InventoryAccessOrm privacyScopes;
 
-    /** {@code factionKeys} ({@code EVENT:slug}) restricts the result to those factions; {@code null} means unrestricted. */
-    public List<InventoryOrder> orders(String eventType, String faction, String orderCode, Collection<String> factionKeys,
+    /** Faction orders, newest event first; every organization member reads all factions. */
+    public List<InventoryOrder> orders(String eventType, String faction, String orderCode,
             Collection<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses, UUID eventId, int offset, int limit) {
-        if (factionKeys != null && factionKeys.isEmpty()) return List.of();
 
         var jpql = new StringBuilder("select o from InventoryOrder o "
                 + "join fetch o.eventOccurrence join fetch o.faction left join fetch o.pickupLocation where o.kind = faction");
         if (eventType != null && !eventType.isBlank()) jpql.append(" and o.eventOccurrence.eventType = :eventType");
         if (faction != null && !faction.isBlank()) jpql.append(" and o.faction.name = :faction");
         if (orderCode != null && !orderCode.isBlank()) jpql.append(" and o.orderCode = :orderCode");
-        if (factionKeys != null) jpql.append(" and concat(upper(o.faction.eventType), concat(':', lower(o.faction.slug))) in :factionKeys");
         if (!statuses.isEmpty()) jpql.append(" and o.status in :statuses");
         if (eventId != null) jpql.append(" and o.eventOccurrence.id = :eventId");
-        jpql.append(InventoryAccessOrm.scope("order", "o", accessActor.current())).append(" order by o.eventOccurrence.startDate desc");
+        jpql.append(InventoryAccessOrm.scope("order", "o", accessActor.current())).append(" order by o.eventOccurrence.startDate desc, o.orderCode, o.id");
         var query = entityManager.createQuery(jpql.toString(), InventoryOrder.class);
         if (eventType != null && !eventType.isBlank()) query.setParameter("eventType", eventType);
         if (faction != null && !faction.isBlank()) query.setParameter("faction", faction);
         if (orderCode != null && !orderCode.isBlank()) query.setParameter("orderCode", orderCode.trim().toUpperCase(Locale.ROOT));
-        if (factionKeys != null) query.setParameter("factionKeys", factionKeys);
         if (!statuses.isEmpty()) query.setParameter("statuses", statuses);
         if (eventId != null) query.setParameter("eventId", eventId);
         return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
@@ -77,7 +74,15 @@ public class OrderOrm extends EntityOrm {
     }
 
     public InventoryOrder findOrder(UUID id) { return entityManager.find(InventoryOrder.class, id); }
-    public InventoryOrder findLockedOrder(UUID id) { return entityManager.find(InventoryOrder.class, id, LockModeType.PESSIMISTIC_WRITE); }
+    /**
+     * Locked order with the state the previous lock holder committed: the request may have read the order (and its
+     * lines, which the refresh cascades to) before it waited for the lock.
+     */
+    public InventoryOrder findLockedOrder(UUID id) {
+        var order = entityManager.find(InventoryOrder.class, id, LockModeType.PESSIMISTIC_WRITE);
+        if (order != null) entityManager.refresh(order);
+        return order;
+    }
 
     public record Filter(Collection<org.ash.inventory.operations.internal.model.DomainEnums.OrderStatus> statuses, UUID eventId, String eventType, String search) {}
 

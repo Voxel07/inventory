@@ -1,6 +1,7 @@
 import { useAuth } from './useAuth';
 import { canViewOrganization } from '../utils/access';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { usePagedList } from './usePagedList';
 import type { ReturnSubmissionFormData, ReturnSubmissionStatus } from '../types';
 import {
   acknowledgeReturnSubmission,
@@ -9,13 +10,12 @@ import {
   rejectReturnSubmission,
 } from '../services/returnSubmissionService';
 
-export function useReturnSubmissions(status?: ReturnSubmissionStatus) {
+/** Server pages, newest first; further pages load on `fetchNextPage`. */
+export function useReturnSubmissions(status?: ReturnSubmissionStatus, options?: { mine?: boolean }) {
   const { user } = useAuth();
-  return useQuery({
-    queryKey: ['return-submissions', status ?? 'all', user?.id],
-    queryFn: () => getReturnSubmissions(status),
-    enabled: canViewOrganization(user),
-  });
+  const mine = options?.mine ?? false;
+  return usePagedList(['return-submissions', status ?? 'all', mine ? 'mine' : 'visible', user?.id],
+    (page, size) => getReturnSubmissions(page, size, status, mine), { enabled: canViewOrganization(user) });
 }
 
 function useReturnMutation<T>(mutationFn: (input: T) => Promise<unknown>) {

@@ -24,6 +24,7 @@ public class CsvImportOrders {
     @Inject CatalogService catalog;
     @Inject ApiQueryService queries;
     @Inject OrderService orders;
+    @Inject org.ash.inventory.operations.internal.security.ActorService actors;
     @Inject InventoryOperationsService inventory;
 
     public void faction(CsvImportJob job, JsonNode row) {
@@ -40,7 +41,7 @@ public class CsvImportOrders {
         InventoryOrder order;
         if (existing.isPresent()) {
             order = catalog.find(InventoryOrder.class, existing.get().id());
-            orders.assertCanView(order);
+            actors.requireOrderRead(order);
             if (order.status == DomainEnums.OrderStatus.preparing) order = transition(job, row, order, "submitted");
             if (Set.of(DomainEnums.OrderStatus.draft, DomainEnums.OrderStatus.submitted).contains(order.status))
                 order = orders.update(order.id, csv.input(data, ApiModels.OrderInput.class));
@@ -80,7 +81,7 @@ public class CsvImportOrders {
                 && eventId.toString().equals(order.eventOccurrenceId())).findFirst();
         var order = existing.isPresent() ? catalog.find(InventoryOrder.class, existing.get().id())
                 : orders.createGeneral(csv.input(data, ApiModels.GeneralOrderInput.class));
-        orders.assertCanView(order);
+        actors.requireOrderRead(order);
         String target = row.path("targetStatus").asText();
         // Resume existing orders too; a prior import may have stopped before its requested lifecycle finished.
         if (!target.equals("draft") && order.status == DomainEnums.OrderStatus.draft) order = transition(job, row, order, "submitted");

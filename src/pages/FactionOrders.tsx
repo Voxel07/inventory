@@ -30,7 +30,7 @@ import type { EventType, FactionOrderStatus, FactionOrderSummary } from '../type
 import { useUIStore } from '../store/uiStore';
 import { translate, useT } from '../utils/naming';
 import { useAuth } from '../hooks/useAuth';
-import { canManageInventory, canOrder, canViewFaction, canWriteFaction, factionKeyOf } from '../utils/access';
+import { canManageInventory, canOrder, canWriteFaction, factionKeyOf } from '../utils/access';
 import { useFactionCatalog } from '../hooks/useFactionCatalog';
 import { FactionAccessNotice } from '../components/shared/AccessGuard';
 import { isOfflineQueuedError } from '../utils/offline';
@@ -72,9 +72,8 @@ export function FactionOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
   const { user } = useAuth();
   const currentUser = user;
   const isManager = canManageInventory(currentUser);
-  const accessibleFactions = (type: EventType) => catalog.factionsFor(type)
-    .filter((faction) => canViewFaction(currentUser, factionKeyOf(faction)))
-    .map((faction) => faction.name);
+  // Every organization member reads all factions' lists; writing stays with the faction's leaders and the warehouse.
+  const accessibleFactions = (type: EventType) => catalog.factionsFor(type).map((faction) => faction.name);
   const canCreateList = catalog.factionsFor(eventType).some((faction) => canWriteFaction(currentUser, factionKeyOf(faction)));
   const selectableEvents = catalog.eventTypes.filter((type) => accessibleFactions(type).length > 0);
   const visibleFactions = accessibleFactions(eventType);
@@ -91,7 +90,7 @@ export function FactionOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
   const overviewOrders = useQuery({ queryKey: ['faction-orders', 'overview', eventType, eventId], networkMode: 'offlineFirst',
     queryFn: () => loadAllPages((page, size) => getFactionOrders({ eventType, eventId, status: COUNTED_ORDER_STATUSES }, page, size)) });
   const createOrder = useCreateFactionOrder();
-  const activeOrders = (active.data ?? []).filter((order) => canViewFaction(currentUser, order.factionKey));
+  const activeOrders = active.data ?? [];
   const factionOverview = visibleFactions.map((faction) => {
     const factionOrders = (overviewOrders.data ?? []).filter((order) => order.faction === faction);
     const state: FactionState = factionOrders.some((order) => order.status !== 'draft')
@@ -101,7 +100,7 @@ export function FactionOrders({ kindSwitch }: { kindSwitch?: ReactNode }) {
   });
   const activeOrderGroups = [...new Set(activeOrders.map((order) => order.faction))]
     .map((faction) => ({ faction, orders: activeOrders.filter((order) => order.faction === faction) }));
-  const historyOrders = (history.data ?? []).filter((order) => canViewFaction(currentUser, order.factionKey));
+  const historyOrders = history.data ?? [];
 
   useEffect(() => {
     if (!selectableEvents.includes(eventType) && selectableEvents[0]) setEventType(selectableEvents[0]);

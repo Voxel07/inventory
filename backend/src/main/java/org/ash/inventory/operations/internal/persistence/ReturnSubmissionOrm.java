@@ -27,8 +27,10 @@ public class ReturnSubmissionOrm extends EntityOrm {
         return findLockedFresh(ReturnSubmission.class, id);
     }
 
-    public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, UserAccount actor, boolean manager) {
-        String ownerFilter = manager ? "" : " and (r.submittedBy = :actor or r.returnedFor = :actor or (r.order is null and r.item.accessPolicy is not null and function('inventory_policy_visible', r.item.accessPolicy.id, :accessActor, :accessAdmin, :accessPublic, true) = true))";
+    /** {@code mine}: only returns made for the actor (their own return status), also for warehouse workers. */
+    public List<ReturnSubmission> list(DomainEnums.ReturnSubmissionStatus status, UserAccount actor, boolean manager, boolean mine,
+            int offset, int limit) {
+        String ownerFilter = mine ? " and r.returnedFor = :actor" : manager ? "" : " and (r.submittedBy = :actor or r.returnedFor = :actor or (r.order is null and r.item.accessPolicy is not null and function('inventory_policy_visible', r.item.accessPolicy.id, :accessActor, :accessAdmin, :accessPublic, true) = true))";
         var query = entityManager.createQuery(
                 "from ReturnSubmission r"
                         + " join fetch r.item"
@@ -41,9 +43,9 @@ public class ReturnSubmissionOrm extends EntityOrm {
                         + " where " + InventoryAccessOrm.visible("r.item.accessPolicy")
                         + " and (location is null or " + InventoryAccessOrm.visible("location.accessPolicy") + ")"
                         + " and (:status is null or r.status = :status)" + ownerFilter
-                        + " order by r.createdAt desc", ReturnSubmission.class)
-                .setParameter("status", status);
-        if (!manager) query.setParameter("actor", actor);
+                        + " order by r.createdAt desc, r.id desc", ReturnSubmission.class)
+                .setParameter("status", status).setFirstResult(offset).setMaxResults(limit);
+        if (mine || !manager) query.setParameter("actor", actor);
         InventoryAccessOrm.bind(query, actor);
         return query.getResultList();
     }

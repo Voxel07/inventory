@@ -58,7 +58,7 @@ export function ReturnedItemsPage() {
   const [search, setSearch] = useState('');
   const [reviewing, setReviewing] = useState<ReturnSubmission | null>(null);
   const [status, setStatus] = useState<ReturnSubmissionStatus | ''>('pending');
-  const { data = [], isLoading, isError, refetch } = useReturnSubmissions(status || undefined);
+  const { data = [], isLoading, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useReturnSubmissions(status || undefined);
 
   const labels = { pending: t('pages.returnedItems.awaitingReview'), accepted: t('pages.returnedItems.returnedToStock'), rejected: t('enum.value.rejected') };
   const person = (row: ReturnSubmission) => row.returnedForUserName || row.returnedForUserId;
@@ -134,6 +134,9 @@ export function ReturnedItemsPage() {
         </TextField>
       </Stack>
       {content}
+      {hasNextPage && !isError && <Button variant="outlined" sx={{ mt: 2 }} disabled={isFetchingNextPage} onClick={() => { void fetchNextPage(); }}>
+        {t('pages.returnedItems.loadMoreReturns')}
+      </Button>}
       {reviewing && <ReturnReviewDialog key={reviewing.id} submission={reviewing} statusLabel={labels[reviewing.status]} onClose={() => setReviewing(null)} />}
     </Box>
   );

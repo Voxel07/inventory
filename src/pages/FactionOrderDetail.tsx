@@ -47,7 +47,7 @@ import { translate, useT } from '../utils/naming';
 import { assemblyAvailability } from '../utils/factionOrderQuantities';
 import { getItemStock } from '../utils/stock';
 import { useAuth } from '../hooks/useAuth';
-import { canManageInventory, canViewFaction, canWriteFaction, canWriteOff } from '../utils/access';
+import { canManageInventory, canWriteFaction, canWriteOff } from '../utils/access';
 
 type ConfirmAction = 'pickup' | 'cancel' | null;
 
@@ -254,14 +254,6 @@ export function FactionOrderDetail() {
   }
 
   const currentUser = user;
-  if (!canViewFaction(currentUser, order.factionKey)) {
-    return (
-      <Alert severity="error" action={<Button title={translate('pages.factionOrderDetail.returnToTheFactionOrderOverview')} color="inherit" onClick={() => navigate('/orders?tab=faction')}>{t('pages.factionOrderDetail.backToOverview')}</Button>}>
-        {t('pages.factionOrderDetail.youDoNotHaveAccessToThisFactionOrder')}
-      </Alert>
-    );
-  }
-
   const pickupLocation = order.expand?.pickupLocation ?? storageLocations.find((location) => location.id === order.pickupLocation);
   const pickupPoint = order.pickupLatitude != null && order.pickupLongitude != null
     ? `${order.pickupLatitude.toFixed(6)}, ${order.pickupLongitude.toFixed(6)}`

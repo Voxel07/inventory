@@ -82,7 +82,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse update(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderInput input) {
         actor.current();
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         return queries.projectOrder(service.update(id, input));
     }
 
@@ -90,7 +90,7 @@ public class OrderResource {
     @Path("/{id}/prepare")
     @Transactional
     public ApiResponses.OrderResponse prepare(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.PreparationInput input) {
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         return queries.projectOrder(service.prepare(id, input));
     }
 
@@ -99,7 +99,7 @@ public class OrderResource {
     @Transactional
     public ApiResponses.OrderResponse transition(@PathParam("id") UUID id, @PathParam("status") DomainEnums.OrderStatus status,
             @Valid ApiModels.TransitionInput input) {
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         var safeInput = input == null ? new ApiModels.TransitionInput(null, null, null, null, null, null) : input;
         return queries.projectOrder(service.transition(id, status, safeInput));
     }
@@ -108,7 +108,7 @@ public class OrderResource {
     @Path("/{id}/return")
     @Transactional
     public ApiResponses.OrderResponse returnItems(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.ReturnInput input) {
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         return queries.projectOrder(service.returnItems(id, input));
     }
 
@@ -116,7 +116,7 @@ public class OrderResource {
     @Path("/{id}/restock")
     @Transactional
     public ApiResponses.OrderResponse restock(@PathParam("id") UUID id, @jakarta.validation.constraints.NotNull @Valid ApiModels.OrderRestockInput input) {
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         return queries.projectOrder(service.restockUnused(id, input));
     }
 
@@ -124,7 +124,7 @@ public class OrderResource {
     @Path("/{id}/return-all")
     @Transactional
     public ApiResponses.OrderResponse returnAll(@PathParam("id") UUID id, @Valid ApiModels.TransitionInput input) {
-        queries.order(id);
+        queries.requireVisibleOrder(id, InventoryOrder.Kind.faction);
         return queries.projectOrder(service.returnAll(id, input == null ? null : input.idempotencyKey()));
     }
 

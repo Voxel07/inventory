@@ -120,7 +120,7 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
   const lotItemIds = itemIds.filter(id => trackingOf(id) === 'lot_tracked');
   // Every batch of the delivered lot-tracked items; batches are matched explicitly, never by default.
   const lots = useQuery({ queryKey: queryKeys.operations(`receive-lots:${lotItemIds.join(',')}`), enabled: lookup.complete,
-    queryFn: async () => (await Promise.all(lotItemIds.map(itemId => loadAllPages(operationsApi.lots({ itemId }))))).flat() });
+    queryFn: () => lotItemIds.length ? loadAllPages(operationsApi.lots({ itemId: lotItemIds })) : Promise.resolve([]) });
   const [key] = useState(() => crypto.randomUUID());
   const [receivedAt] = useState(() => Date.now());
   const [ready, setReady] = useState(false);

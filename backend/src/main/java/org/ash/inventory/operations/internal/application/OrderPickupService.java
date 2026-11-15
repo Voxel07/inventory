@@ -222,8 +222,7 @@ public class OrderPickupService {
     }
 
     private boolean canViewAll(OrderData data, UserAccount actor) {
-        return data.entity.kind == InventoryOrder.Kind.faction
-                ? actors.canViewFaction(actor, data.entity.faction) : actors.canViewGeneralOrders(actor);
+        return actors.canViewOrder(actor, data.entity);
     }
     /** The creator, while still allowed to order that kind of order, or a warehouse worker. */
     private boolean canEdit(OrderData data, UserAccount actor) {

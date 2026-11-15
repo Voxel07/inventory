@@ -32,8 +32,13 @@ public class StockManagementService {
     }
 
     public List<InventoryLot> lots(UUID itemId, int page, int size) {
+        return lots(itemId == null ? List.of() : List.of(itemId), page, size);
+    }
+
+    /** Lots of the given items (all visible lots when empty), one page in a stable order. */
+    public List<InventoryLot> lots(java.util.Collection<UUID> itemIds, int page, int size) {
         actors.current();
-        return orm.lots(itemId, PageBounds.of(page, size).offset(), size, actors.current());
+        return orm.lots(itemIds, PageBounds.of(page, size).offset(), size, actors.current());
     }
 
     /**

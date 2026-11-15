@@ -33,7 +33,7 @@ public class HandoverEvidenceService {
     public record Handover(UUID id, String code, String type, Instant occurredAt, String collector, List<Evidence> evidence) {}
 
     public List<Handover> list(UUID orderId, int page, int size) {
-        var order = required(InventoryOrder.class, orderId); orders.assertCanView(order);
+        var order = required(InventoryOrder.class, orderId); actors.requireOrderRead(order);
         if (privacy.denied(orderId)) throw ApiException.notFound("Order not found");
         if (page < 0 || page > 100000 || size < 1 || size > 100) throw ApiException.badRequest("Invalid page bounds");
         var handovers = em.createQuery("from CustodyHandover h where h.order.id = :order order by h.occurredAt desc, h.id", CustodyHandover.class)
@@ -46,7 +46,7 @@ public class HandoverEvidenceService {
     }
     public Evidence record(UUID id, Input input) {
         actors.requireWarehouse(); var actor = actors.current();
-        var handover = required(CustodyHandover.class, id); orders.assertCanView(handover.order);
+        var handover = required(CustodyHandover.class, id); actors.requireOrderRead(handover.order);
         em.lock(handover,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         if (privacy.denied(handover.order.id)) throw ApiException.notFound("Handover not found");
         var prior = em.createQuery("from HandoverEvidence e where e.commandId = :command", HandoverEvidence.class)

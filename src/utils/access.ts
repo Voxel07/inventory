@@ -91,12 +91,6 @@ export function factionKeyOf(faction: { eventType: string; slug: string }): stri
   return `${faction.eventType.trim().toUpperCase()}:${faction.slug.trim().toLowerCase()}`;
 }
 
-/** Faction leaders see only assigned factions; other organization roles retain their overview. */
-export function canViewFaction(user: User | null | undefined, factionKey: string): boolean {
-  return canViewOrganization(user)
-    && (effectiveAccess(user) !== 'faction_leader' || Boolean(user?.faction?.includes(factionKey)));
-}
-
 /** General orders are hidden from faction leaders. */
 export function canViewGeneralOrders(user: User | null | undefined): boolean {
   return canViewOrganization(user) && effectiveAccess(user) !== 'faction_leader';
