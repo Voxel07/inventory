@@ -34,7 +34,6 @@ import { deDE, enUS } from '@mui/x-data-grid/locales';
 import { DateRangeField, TextField } from '../components/shared/DateTextField';
 import AddIcon from '@mui/icons-material/Add';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import EditIcon from '@mui/icons-material/Edit';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -42,8 +41,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { itemApi } from '../services/inventoryService';
 import { useQuery } from '@tanstack/react-query';
 import { useCreateEventReport, useDeleteEventReport, useEventReports, useUpdateEventReport } from '../hooks/useEvents';
-import type { EventReport, EventType, Item } from '../types';
-import { getItemStock } from '../utils/stock';
+import type { EventReport, EventType } from '../types';
 import { translate, useAppLanguage, useT } from '../utils/naming';
 import { useUIStore } from '../store/uiStore';
 import { catalogGridSx } from '../components/lists/catalogGrid';
@@ -98,7 +96,6 @@ export function Events() {
   }
 
   const completedReports = reports?.filter((report) => report.status === 'completed') ?? [];
-  const lastCompleted = completedReports[0];
   const selectedEvent = reports?.find((report) => report.id === selectedEventId) ?? reports?.find((report) => report.status === 'planned') ?? reports?.[0];
   const eventItems = items?.filter((item) => item.eventTypes?.includes(eventType)) ?? [];
   const usageReports = [...completedReports].sort((left, right) => (left.eventDate - right.eventDate));
@@ -127,10 +124,6 @@ export function Events() {
       valueFormatter: (value: number | null) => value ?? '—',
     })),
   ];
-
-  function stockFor(item: Item) {
-    return getItemStock(item).remaining;
-  }
 
   function openCreate() {
     setNewName(`${eventType} ${new Date().getFullYear().toString().slice(-2)}`);
@@ -245,40 +238,6 @@ export function Events() {
             icon: <Inventory2OutlinedIcon />, onClick: () => navigate(`/events/${selectedEvent.id}?edit=1`) },
         ]} />}
         {selectedEvent?.status === 'completed' && <Chip color="success" icon={<EventAvailableIcon />} label={t('pages.events.closedReportLocked')} />}
-      </Stack>
-
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
-        <Paper sx={{ p: 2, flex: 1 }}>
-          <Typography variant="overline" color="text.secondary">{t('pages.events.lastCompletedEvent')}</Typography>
-          {lastCompleted ? (
-            <>
-              <Typography variant="h6">
-                {formatDate(lastCompleted.eventDate)}
-              </Typography>
-              <Typography color="text.secondary">
-                {t('pages.events.itemsUsed')}: {Object.values(lastCompleted.usedQuantities ?? {}).filter((value) => value > 0).length}
-              </Typography>
-              {lastCompleted.notes && <Typography sx={{ mt: 1 }}>{lastCompleted.notes}</Typography>}
-              <Button title={translate('pages.events.openDetailsOfTheLastCompletedEvent')}
-                size="small"
-                endIcon={<ArrowForwardIcon />}
-                onClick={() => navigate(`/events/${lastCompleted.id}`)}
-                sx={{ mt: 1.5 }}
-              >
-                {t('pages.events.openEvent')}
-              </Button>
-            </>
-          ) : (
-            <Typography color="text.secondary">{t('pages.events.noCompletedReportYet')}</Typography>
-          )}
-        </Paper>
-        <Paper sx={{ p: 2, flex: 1 }}>
-          <Typography variant="overline" color="text.secondary">{t('pages.events.taggedForThisEventType')}</Typography>
-          <Typography variant="h6">{eventItems.length} {t('common.items')}</Typography>
-          <Typography color="text.secondary">
-            {eventItems.filter((item) => stockFor(item) > 0).length} {t('pages.events.currentlyAvailable')}
-          </Typography>
-        </Paper>
       </Stack>
 
       {!isLoading && eventItems.length === 0 && (

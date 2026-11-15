@@ -48,7 +48,6 @@ export function useNavGroups(user: User | null | undefined): NavGroup[] {
             { label: t('nav.assemblies'), path: '/assemblies', icon: <CategoryOutlinedIcon /> },
             { label: t('shared.navigation.locations'), path: '/storage-locations', icon: <RoomOutlinedIcon /> },
             ...(manager ? [{ label: t('shared.navigation.labelsQRCodes'), path: '/print-qr', icon: <QrCode2Icon /> }] : []),
-            ...(canAccessSharingGroups(user) ? [{ label: t('common.sharingGroups'), path: '/sharing', icon: <GroupsOutlinedIcon /> }] : []),
         ] : [] },
         { label: t('shared.navigation.ordersReturns'), items: catalog ? [
             ...(organization ? [{ label: t('nav.orders'), path: '/orders', icon: <ReceiptLongOutlinedIcon /> }] : []),
@@ -70,9 +69,10 @@ export function useNavGroups(user: User | null | undefined): NavGroup[] {
         { label: t('shared.navigation.reports'), items: manager ? [
             { label: t('nav.transactions'), path: '/transactions', icon: <HistoryIcon /> },
         ] : [] },
-        { label: t('shared.navigation.administration'), items: canManageUsers(user) || canPreviewRoles ? [
-            { label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsOutlinedIcon /> },
-        ] : [] },
+        { label: t('shared.navigation.administration'), items: [
+            ...(canManageUsers(user) || canPreviewRoles ? [{ label: t('nav.userManagement'), path: '/users', icon: <ManageAccountsOutlinedIcon /> }] : []),
+            ...(catalog && canAccessSharingGroups(user) ? [{ label: t('common.sharingGroups'), path: '/sharing', icon: <GroupsOutlinedIcon /> }] : []),
+        ] },
     ];
     return groups.filter((group) => group.items.length > 0);
 }
