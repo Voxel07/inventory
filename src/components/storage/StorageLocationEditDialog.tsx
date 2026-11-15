@@ -12,10 +12,9 @@ import { useUIStore } from '../../store/uiStore';
 import type { StorageLocation, StorageLocationFormData } from '../../types';
 import { isDescendant, locationRole } from '../../utils/locationHierarchy';
 import { translate, useT } from '../../utils/naming';
+import { SITE_ZOOM } from '../maps/storageMapDefaults';
 
-const DEFAULT_CENTER = { latitude: 52.375953, longitude: 11.826278 };
-
-/** Edits one location: name, code, description, where it sits (move) and — for locations and sections — its map. */
+/** Edits one location: name, code, description, where it sits (move) and its exact map placement at any depth. */
 export function StorageLocationEditDialog({ location, locations, onClose }: {
   location: StorageLocation;
   /** Complete location list, for the parent choice. */
@@ -25,33 +24,38 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
   const t = useT();
   const showSnackbar = useUIStore((s) => s.showSnackbar);
   const update = useUpdateStorageLocation();
+  const ownsMap = location.mapSourceId === location.id;
   const [form, setForm] = useState<StorageLocationFormData>({
     privateResource: Boolean(location.access?.privateResource), parentLocationId: location.parentLocationId ?? null, keepParent: location.depth === null, active: location.active,
-    name: location.name, code: location.code, description: location.description ?? '', mapOverlay: location.mapOverlay ?? null,
-    latitude: location.latitude ?? DEFAULT_CENTER.latitude, longitude: location.longitude ?? DEFAULT_CENTER.longitude,
-    mapZoom: Math.max(location.mapZoom ?? 19, 19), overlayBounds: location.overlayBounds,
+    name: location.name, code: location.code, description: location.description ?? '', mapOverlay: ownsMap ? location.mapOverlay ?? null : null,
+    latitude: ownsMap ? location.latitude : undefined, longitude: ownsMap ? location.longitude : undefined,
+    mapZoom: location.mapZoom ?? SITE_ZOOM, overlayBounds: ownsMap ? location.overlayBounds : undefined, mapOutline: location.mapOutline,
   });
+  const [drawing, setDrawing] = useState(false);
   const overlayPreview = useObjectUrl(form.mapOverlayFile);
   const parent = locations.find((entry) => entry.id === form.parentLocationId);
   const depth = form.keepParent ? null : parent ? parent.depth === null ? null : parent.depth + 1 : 0;
-  // Storage places show the map of their section or location.
-  const hasMap = depth !== null && depth <= 1;
   const parentChoices = locations.filter((entry) => entry.active && !isDescendant(entry, location.id, locations)
     && (!location.access?.privateResource || entry.access?.privateResource));
 
   function submit() {
     if (!form.name.trim()) return;
-    const data: StorageLocationFormData = hasMap || depth === null ? form
-      : { ...form, latitude: undefined, longitude: undefined, mapOverlay: null, overlayBounds: undefined, mapOverlayFile: undefined };
-    update.mutate({ id: location.id, data }, {
+    update.mutate({ id: location.id, data: form }, {
       onSuccess: () => { showSnackbar(t('pages.storageLocations.storageLocationUpdatedSuccessfully'), 'success'); onClose(); },
       onError: (error) => showSnackbar(error.message, 'error'),
     });
   }
 
-  return <FormDialog open onClose={onClose} maxWidth="md">
+  const invalidCoordinates = (form.latitude == null) !== (form.longitude == null)
+    || (form.latitude != null && (!Number.isFinite(form.latitude) || Math.abs(form.latitude) > 90))
+    || (form.longitude != null && (!Number.isFinite(form.longitude) || Math.abs(form.longitude) > 180));
+
+  const mapLatitude = !invalidCoordinates ? form.latitude ?? parent?.latitude ?? location.latitude : parent?.latitude ?? location.latitude;
+  const mapLongitude = !invalidCoordinates ? form.longitude ?? parent?.longitude ?? location.longitude : parent?.longitude ?? location.longitude;
+
+  return <FormDialog open onClose={update.isPending ? () => {} : onClose} maxWidth="md">
     <DialogForm title={t('pages.storageLocations.editStorageLocation')} onSubmit={submit} onCancel={onClose} noValidate
-      pending={update.isPending} submitDisabled={!form.name.trim()}>
+      pending={update.isPending} submitDisabled={!form.name.trim() || invalidCoordinates || drawing}>
       <Stack spacing={2}>
         <LocationPicker locations={parentChoices} value={form.parentLocationId} stockOnly={false} label={t('pages.storageLocations.insideOf')}
           helperText={form.keepParent ? t('review.hiddenHierarchy') : t(`pages.storageLocations.roleHelp.${locationRole({ depth })}`)}
@@ -67,7 +71,7 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
           onChange={(event) => setForm({ ...form, description: event.target.value })} />
         <FormControlLabel label={t('enum.value.active')} control={<Checkbox checked={form.active ?? true} onChange={(event) => setForm({ ...form, active: event.target.checked })} />} />
         <Alert severity="info">{t('pages.storageLocations.inactiveLocationsRemainVisibleForStockAndHistoryDeactivateChild')}</Alert>
-        {hasMap ? <>
+        <>
           <Divider />
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <MapIcon color="primary" />
@@ -75,20 +79,25 @@ export function StorageLocationEditDialog({ location, locations, onClose }: {
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <TextField label={t('pages.storageLocations.latitude')} type="number" value={form.latitude ?? ''} fullWidth slotProps={{ htmlInput: { step: 0.000001 } }}
-              onChange={(event) => setForm({ ...form, latitude: Number(event.target.value) })} />
+              onChange={(event) => setForm({ ...form, latitude: event.target.value === '' ? undefined : Number(event.target.value) })} />
             <TextField label={t('pages.storageLocations.longitude')} type="number" value={form.longitude ?? ''} fullWidth slotProps={{ htmlInput: { step: 0.000001 } }}
-              onChange={(event) => setForm({ ...form, longitude: Number(event.target.value) })} />
+              onChange={(event) => setForm({ ...form, longitude: event.target.value === '' ? undefined : Number(event.target.value) })} />
           </Stack>
           <Button title={translate('pages.storageLocations.chooseAnImageFileForTheMapOverlay')} component="label" variant="outlined">
             {t('pages.storageLocations.uploadCustomMapOverlay')}
             <input hidden type="file" accept="image/*" onChange={(event) => setForm({ ...form, mapOverlayFile: event.target.files?.[0], removeMapOverlay: false })} />
           </Button>
-          {location.mapOverlay && !form.removeMapOverlay && <Button title={translate('pages.storageLocations.removeTheSavedMapOverlay')} color="error"
+          {ownsMap && location.mapOverlay && !form.removeMapOverlay && <Button title={translate('pages.storageLocations.removeTheSavedMapOverlay')} color="error"
             onClick={() => setForm({ ...form, removeMapOverlay: true, mapOverlayFile: undefined })}>{t('pages.storageLocations.removeExistingMapOverlay')}</Button>}
-          <StorageLocationMap editable latitude={form.latitude} longitude={form.longitude} zoom={form.mapZoom} overlayBounds={form.overlayBounds}
-            overlayUrl={overlayPreview || (!form.removeMapOverlay ? apiFileUrl(location.mapOverlay) : undefined)}
+          {invalidCoordinates && <Alert severity="warning">{t('maps.storageLocationMap.invalidCoordinates')}</Alert>}
+          <StorageLocationMap editable onDrawingChange={setDrawing} latitude={mapLatitude} longitude={mapLongitude}
+            showPoint={!invalidCoordinates && form.latitude != null && form.longitude != null} outline={form.mapOutline}
+            onOutlineChange={(mapOutline) => setForm((current) => ({ ...current, mapOutline }))}
+            onZoomChange={(mapZoom) => setForm((current) => ({ ...current, mapZoom }))} zoom={form.mapZoom} overlayBounds={form.overlayBounds}
+            overlayUrl={overlayPreview || (!form.removeMapOverlay ? apiFileUrl(form.mapOverlay ?? undefined) : undefined)}
             onCenterChange={(latitude, longitude) => setForm((current) => ({ ...current, latitude, longitude }))} />
-        </> : <Alert severity="info" icon={<MapIcon />}>{t('pages.storageLocations.placesUseTheMapOfTheirSection')}</Alert>}
+          <Button onClick={() => setForm((current) => ({ ...current, latitude: undefined, longitude: undefined, mapOutline: undefined }))}>{t('maps.storageLocationMap.clearPlacement')}</Button>
+        </>
       </Stack>
     </DialogForm>
   </FormDialog>;

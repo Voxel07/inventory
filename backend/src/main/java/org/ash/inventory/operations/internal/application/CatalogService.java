@@ -508,6 +508,7 @@ public class CatalogService {
         root.name = input.name().trim();
         root.description = input.description();
         hierarchy.apply(root, null, input.code(), null);
+        applyMap(root, input.map());
         saveNodes(root, input.sections());
         inheritance.refreshLocationSubtree(root);
         catalogChanged("storage-locations", root.id, "updated");
@@ -528,6 +529,7 @@ public class CatalogService {
             location.name = node.name().trim();
             location.description = node.description();
             hierarchy.apply(location, parent, node.code(), null);
+            applyMap(location, node.map());
             // Grants flow down a private location tree, so it must not contain public sub-locations.
             if (parent.accessPolicy != null && location.accessPolicy == null)
                 throw ApiException.badRequest("Sub-locations of a private location must be private");
@@ -564,8 +566,7 @@ public class CatalogService {
     }
 
     private void apply(StorageLocation target, StorageLocation parent, ApiModels.StorageLocationInput input) {
-        if ((input.latitude() == null) != (input.longitude() == null))
-            throw ApiException.badRequest("Latitude and longitude must be supplied together");
+        validateMap(input.latitude(), input.longitude(), input.mapOutline());
         if (input.overlayBounds() != null) for (var corner : input.overlayBounds()) {
             double latitude = corner.get(0), longitude = corner.get(1);
             if (!Double.isFinite(latitude) || !Double.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180)
@@ -580,10 +581,41 @@ public class CatalogService {
         target.mapZoom = input.mapZoom() == null ? 16 : input.mapZoom();
         target.mapOverlayUrl = input.mapOverlay() == null ? null : media.attachToLocation(input.mapOverlay(), target.id);
         target.overlayBounds = input.overlayBounds();
+        target.mapOutline = input.mapOutline();
         hierarchy.apply(target, parent, input.code(), input.active());
         // Grants flow down a private location tree, so it must not contain public sub-locations.
         if (target.parent != null && target.parent.accessPolicy != null && target.accessPolicy == null)
             throw ApiException.badRequest("Sub-locations of a private location must be private");
+    }
+
+    private void applyMap(StorageLocation target, ApiModels.StorageMapInput map) {
+        if (map == null) return;
+        validateMap(map.latitude(), map.longitude(), map.mapOutline());
+        target.latitude = map.latitude();
+        target.longitude = map.longitude();
+        if (map.mapZoom() != null) target.mapZoom = map.mapZoom();
+        target.mapOutline = map.mapOutline();
+    }
+
+    private void validateMap(Double latitude, Double longitude, List<List<Double>> outline) {
+        if ((latitude == null) != (longitude == null))
+            throw ApiException.badRequest("Latitude and longitude must be supplied together");
+        if (latitude != null && (!Double.isFinite(latitude) || !Double.isFinite(longitude)
+                || Math.abs(latitude) > 90 || Math.abs(longitude) > 180))
+            throw ApiException.badRequest("Map coordinates must be valid latitude/longitude pairs");
+        if (outline == null) return;
+        if (latitude == null) throw ApiException.badRequest("A building outline requires a map position");
+        if (outline.size() < 3 || outline.size() > 200)
+            throw ApiException.badRequest("Building outlines require 3 to 200 corners");
+        var unique = new java.util.HashSet<List<Double>>();
+        for (var point : outline) {
+            if (point == null || point.size() != 2 || point.get(0) == null || point.get(1) == null
+                    || !Double.isFinite(point.get(0)) || !Double.isFinite(point.get(1))
+                    || Math.abs(point.get(0)) > 90 || Math.abs(point.get(1)) > 180)
+                throw ApiException.badRequest("Building outlines must contain valid latitude/longitude pairs");
+            unique.add(point);
+        }
+        if (unique.size() < 3) throw ApiException.badRequest("A building outline needs three distinct corners");
     }
 
     @Transactional

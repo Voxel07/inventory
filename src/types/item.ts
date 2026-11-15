@@ -22,6 +22,9 @@ export interface StorageLocation {
   latitude?: number;
   longitude?: number;
   mapZoom?: number;
+  /** The visible location supplying the displayed map coordinates. */
+  mapSourceId?: string;
+  mapOutline?: [number, number][];
   mapOverlay?: string;
   overlayBounds?: MapBounds;
   created: number;
@@ -42,6 +45,7 @@ export interface StorageLocationFormData {
   latitude?: number;
   longitude?: number;
   mapZoom?: number;
+  mapOutline?: [number, number][];
   mapOverlayFile?: File;
   removeMapOverlay?: boolean;
   overlayBounds?: MapBounds;
@@ -53,6 +57,7 @@ export interface StorageNodeInput {
   name: string;
   code?: string;
   description?: string;
+  map?: StorageMapInput;
   children: StorageNodeInput[];
 }
 
@@ -63,7 +68,15 @@ export interface StorageStructureInput {
   code?: string;
   description?: string;
   privateResource?: boolean;
+  map?: StorageMapInput;
   sections: StorageNodeInput[];
+}
+
+export interface StorageMapInput {
+  latitude?: number;
+  longitude?: number;
+  mapZoom?: number;
+  mapOutline?: [number, number][];
 }
 
 export interface ItemStock {

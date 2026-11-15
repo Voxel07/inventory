@@ -21,6 +21,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import RoomIcon from '@mui/icons-material/Room';
+import MapIcon from '@mui/icons-material/Map';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStorageLocations, useDeleteStorageLocation } from '../hooks/useStorageLocations';
@@ -30,6 +31,7 @@ import { queryKeys } from '../utils/queryKeys';
 import { useUIStore } from '../store/uiStore';
 import type { StorageLocation } from '../types';
 import { translate, useT } from '../utils/naming';
+import { SITE_CENTER, SITE_ZOOM } from '../components/maps/storageMapDefaults';
 import { StorageLocationMap } from '../components/maps/StorageLocationMap';
 import { apiFileUrl } from '../services/apiClient';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
@@ -68,6 +70,8 @@ export function StorageLocations() {
     const allLocations = hierarchy.data ?? [];
     const activeLocation = allLocations.find((l) => l.id === selectedLocId) ?? null;
     const canEditLocation = (location: StorageLocation) => (location.access?.privateResource ? Boolean(location.access.canEdit) : canEdit);
+
+    const editableRoot = activeLocation ? allLocations.find((location) => location.id === (activeLocation.rootLocationId ?? activeLocation.id) && location.depth === 0 && canEditLocation(location)) : undefined;
 
     // One location's stock is bounded: read all of it, then exactly the items stored there.
     const stocked = Boolean(activeLocation && holdsStock(activeLocation));
@@ -108,21 +112,31 @@ export function StorageLocations() {
                     <Typography variant="h4">
                         {t('nav.storageLocations')}
                     </Typography>
-                    {canCreate && <Button title={translate('pages.storageLocations.createANewStorageLocation')}
+                    {canCreate && <Stack direction="row" spacing={1}>
+                    <Button variant="outlined" startIcon={<MapIcon />} disabled={hierarchy.isLoading} onClick={() => setStructureTarget(activeLocation && editableRoot ? { rootId: editableRoot.id, focusId: activeLocation.id } : {})}>{t('maps.storageLocationMap.openEditor')}</Button>
+                    <Button title={translate('pages.storageLocations.createANewStorageLocation')}
                         variant="contained"
                         startIcon={<AddIcon />}
                         disabled={hierarchy.isLoading}
                         onClick={() => setStructureTarget({})}
                     >
                         {t('pages.storageLocations.newStorageLocation')}
-                    </Button>}
+                    </Button></Stack>}
                 </Box>
             )}
 
-            {canEdit && <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2, minWidth: 0, maxWidth: '100%' }} aria-label={t('pages.storageLocations.storageLocationSections')}>
+            <Tabs value={tab} onChange={(_, value: string) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2, minWidth: 0, maxWidth: '100%' }} aria-label={t('pages.storageLocations.storageLocationSections')}>
                 <Tab value="locations" label={t('pages.storageLocations.locationsStock')} id="storage-tab-locations" aria-controls="storage-panel-locations" />
-                <Tab value="responsibilities" label={t('pages.storageLocations.responsibilityMissingInformation')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />
-            </Tabs>}
+                <Tab value="map" label={t('maps.storageLocationMap.overview')} id="storage-tab-map" aria-controls="storage-panel-map" />
+                {canEdit && <Tab value="responsibilities" label={t('pages.storageLocations.responsibilityMissingInformation')} id="storage-tab-responsibilities" aria-controls="storage-panel-responsibilities" />}
+            </Tabs>
+            {tab === 'map' && <Box role="tabpanel" id="storage-panel-map" aria-labelledby="storage-tab-map">
+                <Paper sx={{ p: 2 }}>
+                    <StorageLocationMap tall latitude={SITE_CENTER[0]} longitude={SITE_CENTER[1]} zoom={SITE_ZOOM}
+                        features={allLocations.filter((location) => location.active && location.mapSourceId === location.id)}
+                        onFeatureSelect={(id) => { setSelectedLocId(id); setTab('locations'); }} showPoint={false} />
+                </Paper>
+            </Box>}
             {tab === 'responsibilities' && canEdit && <Box role="tabpanel" id="storage-panel-responsibilities" aria-labelledby="storage-tab-responsibilities">
                 <StorageResponsibilities locations={allLocations} loading={hierarchy.isLoading} onEditLocation={setEditingLoc} />
             </Box>}
@@ -166,7 +180,7 @@ export function StorageLocations() {
                                         </Box>
                                     </Box>
                                     <ActionBar size="small" sx={{ flex: '1 0 auto' }} actions={[
-                                        canCreate && activeLocation.active && { key: 'structure',
+                                        canCreate && editableRoot && canEditLocation(activeLocation) && activeLocation.active && { key: 'structure',
                                             label: role === 'location' ? t('pages.storageLocations.editStructure') : t('pages.storageLocations.addStoragePlaces'),
                                             title: role === 'location' ? t('pages.storageLocations.addOrRenameSectionsAndStoragePlaces') : t('pages.storageLocations.addStoragePlacesInsideThisOne'),
                                             icon: role === 'location' ? <AccountTreeIcon /> : <AddIcon />,
@@ -192,6 +206,9 @@ export function StorageLocations() {
                                     <Box sx={{ mb: 2 }}>
                                         <StorageLocationMap
                                             compact
+                                            outline={activeLocation.mapOutline}
+                                            features={allLocations.filter((location) => location.active && location.rootLocationId === activeLocation.rootLocationId && location.mapSourceId === location.id)}
+                                            selectedId={activeLocation.id} onFeatureSelect={setSelectedLocId}
                                             latitude={activeLocation.latitude}
                                             longitude={activeLocation.longitude}
                                             zoom={activeLocation.mapZoom}

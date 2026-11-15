@@ -115,17 +115,13 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
         );
     }
 
-    function orderEvent(tx: StockTransaction) {
+    function eventLink(tx: StockTransaction) {
         const event = tx.expand?.eventOccurrence;
-        const order = orderChip(tx, true);
-        if (!event && !order) return null;
-        return <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 160 }}>
-            {order}
-            {event && <Box>
-                <Typography component={Link} to={`/events/${event.id}`} variant="body2" sx={{ color: 'primary.main', display: 'block' }}>{event.name}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>{event.eventType} · {formatDate(event.startDate)}</Typography>
-            </Box>}
-        </Stack>;
+        if (!event) return null;
+        return <Box sx={{ minWidth: 140 }}>
+            <Typography component={Link} to={`/events/${event.id}`} variant="body2" sx={{ color: 'primary.main', display: 'block' }}>{event.name}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap' }}>{event.eventType} · {formatDate(event.startDate)}</Typography>
+        </Box>;
     }
 
     if (isMobile) return (
@@ -146,9 +142,15 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <Box><Typography variant="body2" color="text.secondary">{tx.reason}{tx.notes ? ` · ${tx.notes}` : ''}</Typography>{reversalActor(tx)}</Box><MovementReversalButton movement={tx} />
                         <Typography variant="h6" sx={{ flexShrink: 0 }}>× {tx.quantityChanged}</Typography>
                     </Box>
-                    {(tx.orderId || tx.expand?.eventOccurrence || (tx.eventType && tx.faction)) && <Box sx={{ mt: 1 }}>
-                        <Typography variant="caption" color="text.secondary">{t('lists.transactionHistory.orderEvent')}</Typography>
-                        {orderEvent(tx)}
+                    {(orderChip(tx, true) || eventLink(tx)) && <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                        {orderChip(tx, true) && <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t('lists.transactionHistory.order')}</Typography>
+                            {orderChip(tx, true)}
+                        </Box>}
+                        {eventLink(tx) && <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t('lists.transactionHistory.event')}</Typography>
+                            {eventLink(tx)}
+                        </Box>}
                     </Box>}
                 </Paper>
             ))}
@@ -166,7 +168,8 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                         <TableCell>{t('common.user')}</TableCell>
                         <TableCell align="right">{t('common.quantity')}</TableCell>
                         <TableCell>{t('common.reason')}</TableCell>
-                        <TableCell>{t('lists.transactionHistory.orderEvent')}</TableCell>
+                        <TableCell>{t('lists.transactionHistory.order')}</TableCell>
+                        <TableCell>{t('lists.transactionHistory.event')}</TableCell>
                         <TableCell>{t('common.notes')}</TableCell>
                     </TableRow>
                 </TableHead>
@@ -190,7 +193,8 @@ export function TransactionHistory({ transactions, users, isLoading }: Props) {
                             <TableCell>{getUserName(tx)}</TableCell>
                             <TableCell align="right">{tx.quantityChanged}</TableCell>
                             <TableCell>{tx.reason}</TableCell>
-                            <TableCell>{orderEvent(tx) ?? '—'}</TableCell>
+                            <TableCell>{orderChip(tx, true) ?? '—'}</TableCell>
+                            <TableCell>{eventLink(tx) ?? '—'}</TableCell>
                             <TableCell>{tx.notes}{reversalActor(tx)}<MovementReversalButton movement={tx} /></TableCell>
                         </TableRow>
                     ))}

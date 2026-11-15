@@ -750,6 +750,7 @@ create table storage_locations (
     description varchar(255),
     name varchar(255) not null,
     overlay_bounds jsonb,
+    map_outline jsonb,
     primary key (id),
     constraint storage_location_not_own_parent check (parent_location_id <> id)
 );

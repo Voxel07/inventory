@@ -166,11 +166,10 @@ public class ApiMapper {
         while (root.parent != null && seen.add(root.parent.id) && canViewLocation(root.parent)) root = root.parent;
         return root;
     }
-    /** Storage places show the map of their nearest visible section or location. */
+    /** Use an exact placement first, then the nearest visible ancestor. */
     private StorageLocation mapSource(StorageLocation value) {
-        if (value.depth() < 2) return value;
         var seen = new java.util.HashSet<UUID>();
-        for (var current = value.parent; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
+        for (var current = value; current != null && seen.add(current.id) && canViewLocation(current); current = current.parent)
             if (current.latitude != null && current.longitude != null) return current;
         return value;
     }
@@ -193,6 +192,8 @@ public class ApiMapper {
                 map.mapZoom,
                 media.mediaReference(map.mapOverlayUrl),
                 map.overlayBounds,
+                map.id.toString(),
+                value.mapOutline,
                 root.id.toString(),
                 root.name,
                 canViewLocation(value.parent) ? value.parent.id.toString() : null,

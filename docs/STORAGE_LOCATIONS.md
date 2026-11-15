@@ -26,7 +26,7 @@ Garage - Matze (private)         same model for tenants and members
 - **No stock in a location.** Item home and return locations, positions, assets, receipts, transfers and pickup points must be a section or a storage place (`LocationHierarchyService.requireStockLocation`). A node can only become top-level while it holds nothing.
 - **Codes.** Each level has a short code that is unique among the siblings its editor can see; it is derived from the name (`Regal 3` → `R3`) unless one is given. A rename keeps the existing code. `fullCode` joins the codes from the location down (`BH-CE-R2-F7`). Labels and CSV import accept the full code, the path (`Betriebshof / Lager / Regal 3`) or a unique name.
 - **Privacy.** A location (site) is public (staff) or private (owner). Everything inside a private location is private. Shares of a location apply to everything below it and to the items stored there.
-- **Map.** Locations and sections keep coordinates and a floor-plan overlay. Storage places show the map of their nearest section or location.
+- **Map.** Every level can keep its own exact coordinates, zoom, floor-plan overlay and building/area outline (`map_outline` JSONB, 3–200 latitude/longitude corners). Without coordinates it displays the nearest visible ancestor’s map. `mapSourceId` identifies the coordinate source; `mapOutline` always belongs to the requested node. Reparenting preserves exact placements.
 - **Retirement.** Locations are deactivated, never deleted. Children have to be deactivated first. New stock, receipts, registrations, returns and relocations require an active destination and active ancestors. Existing stock may leave a retired source.
 - **Filters.** A location used as a filter (items, counts, reports, MCP `list_storage_locations`) covers its whole subtree.
 
@@ -39,9 +39,16 @@ Preparation reserves exact positions and can split one item across places/lots. 
 ## Flow
 
 1. **New storage location** opens the structure dialog, including from the new-item form. Select an existing location to extend it, or click the dedicated **Create new location** button to enter a new name immediately. Typing a new name in the picker also offers creation.
-2. Add sections, then storage places inside them, one by one or with **Generate** (e.g. `Regal` 1–4, each with `Fach` 1–8). Sections may stay empty.
+2. The **Map & building editor** shows the structure and map side by side. Add buildings/sections, then storage places inside them, one by one or with **Generate** (e.g. `Regal` 1–4, each with `Fach` 1–8). Sections may stay empty.
 3. **Save** sends everything in one request: `PUT /api/storage-locations/structure` (MCP: `save_storage_structure`). Nodes with an id are renamed in place, nodes without one are created, and nodes that are left out stay untouched.
-4. The list shows **Grouped** (tree per location) or **Flat** (all nodes, paged, optionally limited to one location). The detail panel offers **Edit structure** / **Add storage places**, **Print labels** (QR sheet for every active section and place below, `/storage-locations/:id/labels`), edit (rename, move, map) and deactivate.
+4. Use the map button beside a row to select it. **Place pin** sets its exact position; **Draw building** adds corners. After at least three corners, clicking within 12 screen pixels of the first corner closes the outline automatically without adding a duplicate endpoint. You can also finish with the toolbar, drag handles to adjust, double-click a corner to remove it, or remove/redraw the outline. **Clear exact placement** returns to the ancestor map. Ctrl + mouse wheel zooms around the pointer; ordinary wheel scrolls the dialog. **Close view** zooms into the current map center. The **Site map** tab shows saved placements across sites.
+5. The list shows **Grouped** (tree per location) or **Flat** (all nodes, paged, optionally limited to one location). The detail panel offers **Edit structure** / **Add storage places**, **Print labels** (QR sheet for every active section and place below, `/storage-locations/:id/labels`), edit (rename, move, map) and deactivate.
+
+## Map storage and defaults
+
+The default map uses OpenStreetMap centered at `52.37899, 11.82328`, zoom 16, matching the supplied site reference. Zoom is available through 22; levels above native OSM zoom 19 enlarge existing tiles rather than adding survey detail. Existing OSM buildings form the background; drawing outlines creates inventory geometry without editing OSM.
+
+Structure roots and child nodes accept an optional `map: { latitude?, longitude?, mapZoom?, mapOutline? }`. Omit `map` to preserve saved placement; `{}` clears it. Supplying `map` replaces that node’s placement and outline, while floor-plan overlays remain unchanged. The single-location endpoint accepts `mapOutline` alongside its existing coordinate and overlay fields. Maps are saved in the same transaction as names, descriptions and new hierarchy nodes.
 
 ## Comparison with common inventory systems
 

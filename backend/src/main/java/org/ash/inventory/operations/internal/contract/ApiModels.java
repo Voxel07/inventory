@@ -62,17 +62,25 @@ public final class ApiModels {
             @jakarta.validation.constraints.DecimalMin("-180") @jakarta.validation.constraints.DecimalMax("180") Double longitude,
             @Min(0) @jakarta.validation.constraints.Max(22) Integer mapZoom, @InputText(max = 1000) String mapOverlay,
             @Size(min = 2, max = 2) List<@NotNull @Size(min = 2, max = 2) List<@NotNull Double>> overlayBounds,
-            UUID parentLocationId, Boolean active, Boolean privateResource, Boolean keepParent) {}
+            UUID parentLocationId, Boolean active, Boolean privateResource, Boolean keepParent,
+            @Size(min = 3, max = 200) List<@NotNull @Size(min = 2, max = 2) List<@NotNull Double>> mapOutline) {}
+
+    /** Explicit map placement at any level; omitted map input leaves the placement untouched. */
+    public record StorageMapInput(
+            @jakarta.validation.constraints.DecimalMin("-90") @jakarta.validation.constraints.DecimalMax("90") Double latitude,
+            @jakarta.validation.constraints.DecimalMin("-180") @jakarta.validation.constraints.DecimalMax("180") Double longitude,
+            @Min(0) @jakarta.validation.constraints.Max(22) Integer mapZoom,
+            @Size(min = 3, max = 200) List<@NotNull @Size(min = 2, max = 2) List<@NotNull Double>> mapOutline) {}
 
     /** A top-level location (id null = new) with its sections; see {@code CatalogService.saveStructure}. */
     public record StorageStructureInput(
             UUID id, @NotBlank @InputText String name, @InputText(max = 32) String code, @InputText String description, Boolean privateResource,
-            @Size(max = 999) List<@NotNull @Valid StorageNodeInput> sections) {}
+            @Size(max = 999) List<@NotNull @Valid StorageNodeInput> sections, @Valid StorageMapInput map) {}
 
     /** A section or storage place; children nest further (shelf to compartment). */
     public record StorageNodeInput(
             UUID id, @NotBlank @InputText String name, @InputText(max = 32) String code, @InputText String description,
-            @Size(max = 999) List<@NotNull @Valid StorageNodeInput> children) {}
+            @Size(max = 999) List<@NotNull @Valid StorageNodeInput> children, @Valid StorageMapInput map) {}
 
     public record AssemblyInput(
             @NotBlank @InputText String name, @InputText String category, @InputText String subcategory, @InputText String description, @InputText String hint, @Size(max = 100) List<@NotBlank @InputText String> eventTypes,

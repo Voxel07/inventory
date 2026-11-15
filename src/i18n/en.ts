@@ -1291,7 +1291,8 @@ export default {
     transactionHistory: {
       noTransactionsFound: 'No transactions found',
       factionList: 'Faction list',
-      orderEvent: 'Order / event',
+      order: 'Order',
+      event: 'Event',
     },
   },
   maintenance: {
@@ -1349,6 +1350,25 @@ export default {
   },
   maps: {
     storageLocationMap: {
+      zoomHelp: 'Ctrl + mouse wheel to zoom · drag to pan',
+      showAll: 'Show all',
+      closeView: 'Close view',
+      pan: 'Move map',
+      placePin: 'Place pin',
+      drawBuilding: 'Draw building',
+      finishOutline: 'Finish outline ({{count}} corners)',
+      undoCorner: 'Undo corner',
+      removeOutline: 'Remove outline',
+      outlineHelp: 'Click the building corners, then click near the first corner to close automatically or use Finish outline. Drag corners to adjust; double-click a corner to remove it.',
+      editHelp: 'Choose a tool to place a pin or draw an outline. Drag an existing pin or corner to adjust its position.',
+      selectLocation: 'Select this location on the map',
+      sitePosition: 'Site position',
+      unnamedLocation: 'New location',
+      selectedLocationHelp: 'Map tools change the selected location. Select another building or storage place in the list or on the map.',
+      clearPlacement: 'Clear exact placement',
+      invalidCoordinates: 'Enter both coordinates: latitude −90 to 90 and longitude −180 to 180.',
+      overview: 'Site map',
+      openEditor: 'Map & building editor',
       clickTheMapToSetTheExactPickupPoint: 'Click the map to set the exact pickup point.',
       clickTheMapToSetTheStorageLocation: 'Click the map to set the storage location.',
       pickupPoint: 'Pickup point',
@@ -2878,6 +2898,8 @@ export default {
       sharePrivateItemsKitsAndStorageLocationsWithAGroup: 'Share private items, kits and storage locations with a group instead of single people. When you share a storage location, the group also sees everything stored there.',
     },
     storageLocations: {
+      addBuilding: 'Add building / section',
+      mapStructureHelp: 'Create a site, add buildings or sections, then add rooms, shelves and compartments inside them. Use the map button beside a row to place it precisely. Save applies all changes together.',
       storageLocationUpdatedSuccessfully: 'Storage location updated successfully',
       storageLocationDeactivated: 'Storage location deactivated',
       createANewStorageLocation: 'Create a new location or add sections and storage places to an existing one',
@@ -2986,7 +3008,7 @@ export default {
       addCount_one: 'Add {{count}}',
       addCount_other: 'Add {{count}}',
       insideOf: 'Inside',
-      placesUseTheMapOfTheirSection: 'Storage places use the map of their section or location.',
+      placesUseTheMapOfTheirSection: 'Storage places can have their own exact map position.',
     },
     teamOverview: {
       recentTransactions: 'Recent transactions',

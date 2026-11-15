@@ -129,6 +129,8 @@ public final class ApiResponses {
             Integer mapZoom,
             String mapOverlay,
             List<List<Double>> overlayBounds,
+            String mapSourceId,
+            List<List<Double>> mapOutline,
             String rootLocationId,
             String rootLocationName,
             String parentLocationId,

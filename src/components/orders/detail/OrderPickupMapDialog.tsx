@@ -112,7 +112,7 @@ export function OrderPickupMapDialog({
           </FormControl>
         )}
 
-        <Box sx={{ height: 350, width: '100%', borderRadius: 1, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
+        <Box sx={{ width: '100%', minWidth: 0 }}>
           <StorageLocationMap
             latitude={latitude ?? selectedLocation?.latitude}
             longitude={longitude ?? selectedLocation?.longitude}

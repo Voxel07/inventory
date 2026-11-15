@@ -42,6 +42,9 @@ public class StorageLocation extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "overlay_bounds", columnDefinition = "jsonb")
     public List<List<Double>> overlayBounds;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "map_outline", columnDefinition = "jsonb")
+    public List<List<Double>> mapOutline;
     @Column(nullable = false) public boolean active = true;
 
     /** Top-level locations only group sections; stock is kept in sections and storage places. */

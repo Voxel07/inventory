@@ -65,10 +65,6 @@ public class LocationHierarchyService {
                 if (child.active) throw ApiException.conflict("Deactivate child locations first");
         }
         target.parent = parent; target.active = active;
-        // Storage places show the map of their section or location.
-        if (target.depth() >= 2) {
-            target.latitude = null; target.longitude = null; target.mapOverlayUrl = null; target.overlayBounds = null;
-        }
         target.code = siblingUniqueCode(target, code);
         refreshCodes(target);
     }

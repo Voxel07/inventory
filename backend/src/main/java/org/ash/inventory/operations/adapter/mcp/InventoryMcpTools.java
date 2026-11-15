@@ -205,7 +205,7 @@ public class InventoryMcpTools {
     @Tool(description = "Create or extend a top-level storage location (e.g. Betriebshof) with nested sections and storage places in one step. "
             + "Nodes with an id are renamed, nodes without one are created; omitted nodes stay. Returns the whole location tree.")
     public List<ApiResponses.StorageLocationResponse> save_storage_structure(
-            @ToolArg(description = "StorageStructureInput: {id?, name, code?, description?, privateResource?, sections: [{id?, name, code?, description?, children: [...]}]}", required = true)
+            @ToolArg(description = "StorageStructureInput: {id?, name, code?, description?, privateResource?, map?: {latitude?, longitude?, mapZoom?, mapOutline?: [[lat,lon], ...]}, sections: [{id?, name, code?, description?, map?, children: [...]}]}. Omit map to keep placement; supply an empty map to clear it. Outlines require a position and 3 to 200 corners.", required = true)
             ApiModels.StorageStructureInput input) {
         return call("save_storage_structure", () -> service.saveStorageStructure(input));
     }
