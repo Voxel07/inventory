@@ -128,10 +128,9 @@ public class LifecycleService {
         if (input.active() != null) schedule.active = input.active();
     }
 
-    public List<RepairCase> repairs(String status, int page, int size) {
+    public List<RepairCase> repairs(org.ash.inventory.operations.internal.contract.dto.TaskFilters filters, int page, int size) {
         actors.current();
-        try { return orm.repairs(status, PageBounds.of(page, size).offset(), size); }
-        catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown repair status"); }
+        return orm.repairs(filters, PageBounds.of(page, size).offset(), size);
     }
 
     @Transactional

@@ -3,8 +3,9 @@ import { apiPage, apiRequest } from './apiClient';
 import type { Page } from './apiPagination';
 import type { UserAccessHistoryEntry } from '../types/user';
 
-export function getUsers(page: number, size: number, search?: string, role?: UserRole): Promise<Page<User>> {
-  return apiPage('/api/users', page, size, { query: { search, role } });
+/** `active`: undefined lists every account, otherwise only active or only deactivated ones. */
+export function getUsers(page: number, size: number, search?: string, role?: UserRole, active?: boolean): Promise<Page<User>> {
+  return apiPage('/api/users', page, size, { query: { search, role, active } });
 }
 
 export function getUserAccessHistory(id: string, page: number, size: number): Promise<Page<UserAccessHistoryEntry>> {

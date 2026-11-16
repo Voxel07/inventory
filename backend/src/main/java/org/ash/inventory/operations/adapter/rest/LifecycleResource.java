@@ -68,10 +68,10 @@ public class LifecycleResource {
     @Paged @GET
     @Path("/repairs")
     public List<LifecycleDtos.RepairResponse> repairs(
-            @QueryParam("status") @org.ash.inventory.platform.api.InputText String status,
+            @Valid @jakarta.ws.rs.BeanParam org.ash.inventory.operations.internal.contract.dto.TaskFilters filters,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("100") int size) {
-        return service.repairs(status, page, size).stream().map(this::repair).toList();
+        return service.repairs(filters, page, size).stream().map(this::repair).toList();
     }
 
     @POST
@@ -109,7 +109,9 @@ public class LifecycleResource {
                 value.assetInstance == null ? null : value.assetInstance.id,
                 value.handover == null ? null : value.handover.id, value.status.name(),
                 value.repairOwner == null ? null : value.repairOwner.id,
+                value.repairOwner == null ? null : value.repairOwner.name,
                 value.repairVendor == null ? null : value.repairVendor.id,
+                value.repairVendor == null ? null : value.repairVendor.name,
                 value.safetyImpact, value.partsAndCostNotes, value.startedAt, value.completedAt,
                 value.verificationResult, value.approvedBy == null ? null : value.approvedBy.id,
                 value.notes, value.createdAt, value.updatedAt);

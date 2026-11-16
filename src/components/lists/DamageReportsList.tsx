@@ -73,7 +73,7 @@ export function DamageReportsList({ reports, isLoading, loadError, onRetry, sear
         }
     }
     const actions = (report: DamageReport) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-        {view === 'open' && canMaintain && report.repairCaseId && <Button component={RouterLink} to="/damage-reports?tab=repairs" size="small" variant="contained">{t('operations.review.manageRepair')}</Button>}
+        {view === 'open' && canMaintain && report.repairCaseId && <Button component={RouterLink} to={`/damage-reports?${new URLSearchParams({ tab: 'repairs', 'repairs.search': report.assetCode ?? report.itemName ?? report.assemblyName ?? '' })}`} size="small" variant="contained">{t('operations.review.manageRepair')}</Button>}
         {view === 'open' && canMaintain && !report.repairCaseId && getUnresolvedAmount(report) > 0 && <Button
             size="small" variant="contained" startIcon={<BuildIcon />} disabled={isUpdating}
             onClick={() => setResolution(report)}>{t('operations.review.resolveDamage')}</Button>}

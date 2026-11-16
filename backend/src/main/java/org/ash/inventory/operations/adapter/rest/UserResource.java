@@ -65,8 +65,9 @@ public class UserResource {
     @Paged @GET @Path("/users")
     public List<ApiResponses.UserResponse> users(@jakarta.ws.rs.QueryParam("page") @DefaultValue("0") int page,
             @jakarta.ws.rs.QueryParam("size") @DefaultValue("100") int size,
-            @jakarta.ws.rs.QueryParam("search") String search, @jakarta.ws.rs.QueryParam("role") String role) {
-        return queries.users(search, role, page, size);
+            @jakarta.ws.rs.QueryParam("search") String search, @jakarta.ws.rs.QueryParam("role") String role,
+            @jakarta.ws.rs.QueryParam("active") Boolean active) {
+        return queries.users(search, role, active, page, size);
     }
 
     @Paged @GET @Path("/users/{id}/history")

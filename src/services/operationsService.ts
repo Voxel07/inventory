@@ -25,7 +25,7 @@ export const operationsApi = {
   schedules: (query: ApiQuery = {}) => list<Schedule>('maintenance-schedules', query),
   saveSchedule: (data: ScheduleInput, id?: string) => save<Schedule>('maintenance-schedules', data, id),
   retireSchedule: (id: string) => apiRequest<void>(`/api/maintenance-schedules/${id}`, { method: 'DELETE' }),
-  repairs: list<Repair>('repairs'),
+  repairs: (query: ApiQuery = {}) => list<Repair>('repairs', query),
   createRepair: (data: RepairInput) => save<Repair>('repairs', data),
   repairCommand: (id: string, data: RepairTransitionInput) => save<Repair>(`repairs/${id}/transitions`, data),
   receipts: (purchaseOrderId?: string, query: ApiQuery = {}) => list<Receipt>('goods-receipts', { ...query, purchaseOrderId }),

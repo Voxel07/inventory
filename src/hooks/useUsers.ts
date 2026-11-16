@@ -5,10 +5,10 @@ import type { UserRole } from '../types';
 import { useAuth } from './useAuth';
 import { canManageUsers } from '../utils/access';
 
-export function useUsers(page: number, size: number, search: string, role?: UserRole) {
+export function useUsers(page: number, size: number, search: string, role?: UserRole, active?: boolean) {
   const { user } = useAuth();
-  return useQuery({ queryKey: ['users', { page, size, search, role }], enabled: canManageUsers(user),
-    queryFn: () => getUsers(page, size, search, role) });
+  return useQuery({ queryKey: ['users', { page, size, search, role, active }], enabled: canManageUsers(user),
+    queryFn: () => getUsers(page, size, search, role, active) });
 }
 
 /** Explicit complete read of the people directory, for person filters and assignment selects. */

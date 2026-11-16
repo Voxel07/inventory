@@ -34,7 +34,7 @@ public final class LifecycleDtos {
     /** Carries the damaged item/assembly identity so lists need no catalog or damage-report lookups. */
     public record RepairResponse(UUID id, UUID damageReportId, UUID itemId, String itemName, String assemblyName, String assetCode,
             String damageDescription, int unresolvedQuantity, int repairedPendingQuantity, UUID assetInstanceId, UUID handoverId,
-            String status, UUID repairOwnerId, UUID vendorId, boolean safetyImpact,
+            String status, UUID repairOwnerId, String repairOwnerName, UUID vendorId, String vendorName, boolean safetyImpact,
             String partsAndCostNotes, Instant startedAt, Instant completedAt,
             String verificationResult, UUID approvedById, String notes, Instant createdAt, Instant updatedAt) {}
 }

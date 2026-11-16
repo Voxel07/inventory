@@ -15,7 +15,8 @@ export interface InventoryAccess {
   sources: { kind: 'owner' | 'admin' | 'person' | 'group' | 'location' | 'public_use'; principalId: string; name: string; canEdit: boolean }[];
   audience: { kind: 'owner' | 'person' | 'group'; principalId: string; name: string; canEdit: boolean }[];
 }
-export interface AccessPerson { id: string; name: string }
+/** `active` is false for deactivated accounts that keep an existing membership. */
+export interface AccessPerson { id: string; name: string; active: boolean }
 /** `ownerId` null: managed by the inventory admin. Members see their group's membership. */
 export interface AccessGroup {
   id: string; name: string; revision: number; memberIds: string[];

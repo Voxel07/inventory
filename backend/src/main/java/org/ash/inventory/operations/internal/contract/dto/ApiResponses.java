@@ -51,7 +51,7 @@ public final class ApiResponses {
     /** Attribution outside account administration never discloses contact details or access assignments. */
     public record ActorSummary(UUID id, String name) {}
 
-    public record UserAccessState(List<String> roles, List<String> factions) {}
+    public record UserAccessState(List<String> roles, List<String> factions, boolean active) {}
 
     public record UserAccessHistoryResponse(UUID id, Instant occurredAt, ActorSummary changedBy,
             UserAccessState before, UserAccessState after, String reason) {}

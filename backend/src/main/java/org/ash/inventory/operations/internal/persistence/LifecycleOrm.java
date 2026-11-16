@@ -1,5 +1,7 @@
 package org.ash.inventory.operations.internal.persistence;
 
+import org.ash.inventory.operations.internal.contract.dto.TaskFilters;
+import org.ash.inventory.operations.internal.model.DomainEnums.RepairStatus;
 import org.ash.inventory.operations.internal.model.MaintenanceSchedule;
 import org.ash.inventory.operations.internal.model.RepairCase;
 
@@ -22,14 +24,16 @@ public class LifecycleOrm extends EntityOrm {
         return query.setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
-    public List<RepairCase> repairs(String status, int offset, int limit) {
-        var jpql = "select repair from RepairCase repair join fetch repair.damageReport report left join fetch report.item reportItem left join fetch report.assembly left join fetch repair.assetInstance left join fetch repair.repairOwner left join fetch repair.repairVendor left join fetch repair.approvedBy where "
-                + "(reportItem is null or " + InventoryAccessOrm.visible("reportItem.accessPolicy") + ")"
-                + (status == null || status.isBlank() ? "" : " and repair.status = :status") + " order by repair.createdAt desc";
-        var query = entityManager.createQuery(jpql, RepairCase.class);
-        if (status != null && !status.isBlank()) query.setParameter("status", org.ash.inventory.operations.internal.model.DomainEnums.RepairStatus.valueOf(status));
-        InventoryAccessOrm.bind(query, accessActor.current());
-        return query.setFirstResult(offset).setMaxResults(limit).getResultList();
+    public List<RepairCase> repairs(TaskFilters filters, int offset, int limit) {
+        var predicates = new TaskQuery("select repair from RepairCase repair join fetch repair.damageReport report left join fetch report.item reportItem left join fetch report.assembly reportAssembly left join fetch repair.assetInstance asset left join fetch repair.repairOwner owner left join fetch repair.repairVendor vendor left join fetch repair.approvedBy where "
+                + "(reportItem is null or " + InventoryAccessOrm.visible("reportItem.accessPolicy") + ")");
+        predicates.status("repair.status", filters.status, RepairStatus.class, List.of(RepairStatus.returned_to_service, RepairStatus.written_off));
+        predicates.search(filters.search, "reportItem.name", "reportItem.sku", "reportAssembly.name", "asset.assetCode", "report.description",
+                "repair.notes", "repair.partsAndCostNotes", "owner.name", "vendor.name");
+        if (filters.itemId != null) predicates.parameter("itemId", filters.itemId).where("reportItem.id = :itemId");
+        if (filters.vendorId != null) predicates.parameter("vendorId", filters.vendorId).where("vendor.id = :vendorId");
+        var query = predicates.bind(entityManager.createQuery(predicates.ordered("repair.safetyImpact desc, repair.createdAt desc, repair.id desc"), RepairCase.class));
+        return InventoryAccessOrm.bind(query, accessActor.current()).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     public RepairCase repairForDamage(UUID damageId) {

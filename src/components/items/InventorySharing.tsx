@@ -23,11 +23,20 @@ function SharingEditor({ kind, id, access, onClose }: { kind: string; id: string
     mutationFn: () => saveInventoryAccess(kind, id, { revision: access.revision, grants, ownerId, ...(kind === 'items' ? { publicUse } : {}) }),
     onSuccess: async () => { await client.invalidateQueries(); onClose(); },
   });
-  const principals = [
+  const key = (g: InventoryGrant) => g.userId ? `user:${g.userId}` : `group:${g.groupId}`;
+  const listed = [
     ...(people.data ?? []).filter(p => p.id !== access.ownerId).map(p => ({ key: `user:${p.id}`, label: p.name, userId: p.id, groupId: undefined as string | undefined })),
     ...(groups.data ?? []).map(g => ({ key: `group:${g.id}`, label: `${t('enum.value.group')}: ${g.name}`, groupId: g.id, userId: undefined as string | undefined })),
   ];
-  const key = (g: InventoryGrant) => g.userId ? `user:${g.userId}` : `group:${g.groupId}`;
+  // Existing shares stay visible and removable although they cannot be newly chosen: deactivated people
+  // and groups this manager cannot list (e.g. another user's group, shared by the inventory admin).
+  const retained = people.data && groups.data ? access.grants.filter(g => !listed.some(p => p.key === key(g))).map(g => ({
+    key: key(g), userId: g.userId ?? undefined, groupId: g.groupId ?? undefined,
+    label: g.userId
+      ? g.userId === access.ownerId ? g.name ?? '' : t('items.inventorySharing.inactivePerson', { name: g.name ?? '' })
+      : `${t('enum.value.group')}: ${t('items.inventorySharing.groupNotInYourList', { name: g.name ?? '' })}`,
+  })) : [];
+  const principals = [...listed, ...retained];
   const selected = principals.filter(p => grants.some(g => key(g) === p.key));
   return <Dialog open onClose={save.isPending ? undefined : onClose} fullWidth maxWidth="sm">
     <DialogTitle>{t('items.inventorySharing.manageSharing')}</DialogTitle>

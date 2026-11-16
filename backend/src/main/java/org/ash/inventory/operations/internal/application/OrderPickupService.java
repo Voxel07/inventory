@@ -66,7 +66,7 @@ public class OrderPickupService {
     @Transactional
     public List<InventoryAccessService.Person> responsibilityPeople(UUID itemId) {
         var item = orm.require(Item.class, itemId, "Item"); actors.requireItemEdit(item);
-        return orm.responsibilityPeople(actors.current()).stream().map(u -> new InventoryAccessService.Person(u.id, u.name)).toList();
+        return orm.responsibilityPeople(actors.current()).stream().map(u -> new InventoryAccessService.Person(u.id, u.name, true)).toList();
     }
 
     private Responsibility responsibilityOf(Item item) {

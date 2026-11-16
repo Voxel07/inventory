@@ -31,8 +31,10 @@ export function canCreateInventory(user: User | null | undefined): boolean {
   return Boolean(user) && effectiveAccess(user) !== 'read_only';
 }
 
-/** Sharing groups are available to accounts that can create private inventory. */
-export const canAccessSharingGroups = canCreateInventory;
+/** Every signed-in account sees its sharing groups; creating them needs {@link canCreateInventory}. */
+export function canAccessSharingGroups(user: User | null | undefined): boolean {
+  return Boolean(user);
+}
 
 /** Private-inventory tenants and ASH/warehouse staff use operational pages. */
 export function canAccessWarehouseTasks(user: User | null | undefined): boolean {

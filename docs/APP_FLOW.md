@@ -39,7 +39,7 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/storage-locations` | Locations → sections → storage places, grouped or flat, structure editor and map ([Storage locations](STORAGE_LOCATIONS.md)) | Catalog guard; backend policy/redaction |
 | `/storage-locations/:locationId/labels` | Printable QR labels for every section and storage place below a location | Catalog guard; backend policy/redaction |
 | `/locations/:locationId` | Location scan destination | Signed-in app shell; backend resource policy |
-| `/sharing` | Own share groups (all groups for the inventory admin) | Any signed-in user |
+| `/sharing` | Own share groups and groups the user belongs to (all groups for the inventory admin); read-only accounts create none | Any signed-in user |
 | `/orders` | Faction tab by default; `?tab=general` selects general orders | OrganizationGuard (read only and up); writes per faction / ASH crew (general orders) in services |
 | `/orders/faction/:orderId` | Faction order detail and lifecycle | OrganizationGuard; faction write policy in services |
 | `/events`, `/events/:reportId` | Event planning and occurrence detail | OrganizationGuard; inventory admin edits |
@@ -52,7 +52,7 @@ Source: [App.tsx](../src/App.tsx), [access guards](../src/components/shared/Acce
 | `/damage-reports` | Damage reports | InventoryManagerGuard; finer action permissions |
 | `/maintenance` | Maintenance work | InventoryManagerGuard; finer action permissions |
 | `/operations` | Grouped warehouse, purchasing and reporting tasks | WarehouseTasksGuard; permitted tabs only |
-| `/users` | Account directory: set role and factions per user (Authentik only grants access); all share groups | Inventory admin |
+| `/users` | Account directory with role and active/inactive filters: set role and factions per user (Authentik only grants access), lifecycle actions; all share groups | Inventory admin |
 | `/profile` | Own profile | Any signed-in user |
 | Unmatched path | Redirect to `/` | Signed-in app shell |
 

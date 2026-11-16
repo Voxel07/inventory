@@ -424,7 +424,8 @@ public class ApiQueryService {
     }
 
     @Transactional
-    public List<ApiResponses.UserResponse> users(String search, String role, int page, int size) {
+    /** {@code active}: null lists every account, otherwise only active or only deactivated ones. */
+    public List<ApiResponses.UserResponse> users(String search, String role, Boolean active, int page, int size) {
         actors.requireAdmin();
         var bounds = bounds(page, size);
         DomainEnums.UserRole filter = null;
@@ -432,7 +433,7 @@ public class ApiQueryService {
             try { filter = DomainEnums.UserRole.valueOf(role); }
             catch (IllegalArgumentException exception) { throw ApiException.badRequest("Unknown user role"); }
         }
-        return users.directory(search, filter, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
+        return users.directory(search, filter, active, bounds.offset(), bounds.limit()).stream().map(mapper::user).toList();
     }
 
     @Transactional

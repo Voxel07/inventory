@@ -58,9 +58,9 @@ describe('role ladder', () => {
     expect(canWriteFaction(user('tenant', ['DE:kgg']), 'DE:kgg')).toBe(false);
   });
 
-  test('page visibility hides sharing for read-only members and warehouse tasks for faction leaders', () => {
+  test('page visibility shows sharing to every account and hides warehouse tasks for faction leaders', () => {
     for (const role of ROLE_LADDER) {
-      expect(canAccessSharingGroups(user(role))).toBe(role !== 'read_only');
+      expect(canAccessSharingGroups(user(role))).toBe(true);
       expect(canAccessWarehouseTasks(user(role))).toBe(!['read_only', 'faction_leader'].includes(role));
     }
     expect(canAccessSharingGroups(null)).toBe(false);

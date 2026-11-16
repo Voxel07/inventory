@@ -51,7 +51,7 @@ public class CsvImportOperations {
             case "damage" -> result = inventory.reportDamage(csv.input(data, ApiModels.DamageInput.class)).id;
             case "repair" -> result = lifecycle.createRepair(csv.input(data, LifecycleDtos.RepairInput.class)).id;
             case "repair_transition" -> {
-                var repair = CsvImportSupport.all((page, size) -> lifecycle.repairs(null, page, size)).stream()
+                var repair = CsvImportSupport.all((page, size) -> lifecycle.repairs(new TaskFilters(), page, size)).stream()
                         .filter(entry -> entry.id.equals(CsvImportSupport.id(data.path("repairId")))).findFirst()
                         .orElseThrow(() -> ApiException.badRequest("Repair case not found"));
                 var stages = List.of("reported", "triaged", "awaiting_repair", "in_repair", "repaired", "verified", "returned_to_service");

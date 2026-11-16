@@ -74,14 +74,16 @@ public class UserOrm {
     }
 
     /** Admin directory filters match independently assigned roles, not only the highest role. */
-    public List<UserAccount> directory(String search, DomainEnums.UserRole role, int offset, int limit) {
+    public List<UserAccount> directory(String search, DomainEnums.UserRole role, Boolean active, int offset, int limit) {
         boolean searching = search != null && !search.isBlank();
         var query = entityManager.createNativeQuery("select * from app_users where true"
                 + (searching ? " and (strpos(lower(name), :search) > 0 or strpos(lower(coalesce(email, '')), :search) > 0)" : "")
                 + (role != null ? " and jsonb_exists(roles, :role)" : "")
+                + (active != null ? " and active = :active" : "")
                 + " order by name, email, id", UserAccount.class);
         if (searching) query.setParameter("search", search.trim().toLowerCase(java.util.Locale.ROOT));
         if (role != null) query.setParameter("role", role.name());
+        if (active != null) query.setParameter("active", active);
         List<?> rows = query.setFirstResult(offset).setMaxResults(limit).getResultList();
         return rows.stream().map(UserAccount.class::cast).toList();
     }

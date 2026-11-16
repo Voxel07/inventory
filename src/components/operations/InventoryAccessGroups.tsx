@@ -4,9 +4,10 @@ import { Alert, Autocomplete, Checkbox, Chip, DialogActions, DialogContent, Dial
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { Button, MenuItem } from '../shared/ActionButtons';
 import { Dialog } from '../shared/ClosableDialog';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ListPagination } from '../shared/ListPagination';
 import { deleteAccessGroup, getAccessGroups, getAccessPeople, saveAccessGroup } from '../../services/inventoryAccessService';
-import type { AccessGroup } from '../../types/inventoryAccess';
+import type { AccessGroup, AccessPerson } from '../../types/inventoryAccess';
 import { useAuth } from '../../hooks/useAuth';
 import { useClientPagination } from '../../hooks/useClientPagination';
 import { canCreateInventory, canManageUsers } from '../../utils/access';
@@ -20,6 +21,11 @@ function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => voi
   const [members, setMembers] = useState(group?.memberIds ?? []);
   const [reason, setReason] = useState('');
   const [adminManaged, setAdminManaged] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Deactivated members stay in the group (and selectable for removal) although they are no longer offered to new groups.
+  const retained = (group?.members ?? []).filter(member => !(people.data ?? []).some(person => person.id === member.id));
+  const options = [...(people.data ?? []), ...retained];
+  const label = (person: AccessPerson) => person.active ? person.name : t('operations.inventoryAccessGroups.inactiveMember', { name: person.name });
   const save = useMutation({ mutationFn: () => saveAccessGroup(group?.id, { name, memberIds: members, revision: group?.revision ?? 0, reason, ...(group ? {} : { adminManaged }) }),
     onSuccess: async () => { await client.invalidateQueries(); onDone(); } });
   const remove = useMutation({ mutationFn: () => deleteAccessGroup(group!.id, { revision: group!.revision, reason }),
@@ -30,8 +36,8 @@ function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => voi
     <DialogTitle>{group ? t('operations.inventoryAccessGroups.editGroup') : t('operations.inventoryAccessGroups.createGroup')}</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
     <TextField required label={t('operations.inventoryAccessGroups.groupName')} value={name} disabled={pending} onChange={e => setName(e.target.value)} />
-    <Autocomplete multiple options={people.data ?? []} getOptionLabel={p => p.name} isOptionEqualToValue={(a, b) => a.id === b.id} disabled={pending}
-      value={(people.data ?? []).filter(p => members.includes(p.id))} onChange={(_, values) => setMembers(values.map(p => p.id))}
+    <Autocomplete multiple options={options} getOptionLabel={label} isOptionEqualToValue={(a, b) => a.id === b.id} disabled={pending}
+      value={options.filter(p => members.includes(p.id))} onChange={(_, values) => setMembers(values.map(p => p.id))}
       renderInput={params => <TextField {...params} label={t('operations.inventoryAccessGroups.members')} />} />
     {!group && canManageUsers(user) && <FormControlLabel label={t('operations.inventoryAccessGroups.adminGroupVisibleToEveryoneForSharingManagedByInventory')}
       control={<Checkbox checked={adminManaged} disabled={pending} onChange={(_, checked) => setAdminManaged(checked)} />} />}
@@ -39,10 +45,14 @@ function GroupEditor({ group, onDone }: { group?: AccessGroup; onDone: () => voi
     {error && <Alert severity="error">{error.message}</Alert>}
     </Stack></DialogContent>
     <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-      {group && <Button title={t('operations.inventoryAccessGroups.deleteTheGroupAndAllOfItsShares')} color="error" disabled={pending || !reason.trim()} onClick={() => remove.mutate()}>{t('common.delete')}</Button>}
+      {group && <Button title={t('operations.inventoryAccessGroups.deleteTheGroupAndAllOfItsShares')} color="error" disabled={pending || !reason.trim()} onClick={() => setConfirmDelete(true)}>{t('common.delete')}</Button>}
       <Button title={t('common.cancel')} disabled={pending} onClick={onDone}>{t('common.cancel')}</Button>
-      {canCreateInventory(user) && <Button title={t('common.save')} variant="contained" disabled={pending || !name.trim() || !reason.trim() || !people.data} onClick={() => save.mutate()}>{t('common.save')}</Button>}
+      {/* Read-only accounts create no groups but still manage one they own. */}
+      {(group ? group.canManage : canCreateInventory(user)) && <Button title={t('common.save')} variant="contained" disabled={pending || !name.trim() || !reason.trim() || !people.data} onClick={() => save.mutate()}>{t('common.save')}</Button>}
     </DialogActions>
+    {group && <ConfirmDialog open={confirmDelete} title={t('operations.inventoryAccessGroups.confirmDeleteTitle')}
+      message={t('operations.inventoryAccessGroups.confirmDeleteMessage', { name: group.name })} actionLabel={t('common.delete')} actionColor="error"
+      pending={remove.isPending} onClose={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); remove.mutate(); }} />}
   </Dialog>;
 }
 
@@ -51,7 +61,7 @@ const wideOnly = { display: { xs: 'none', sm: 'table-cell' } } as const;
 
 /**
  * Share groups: everyone who owns private inventory (e.g. a tenant for the people allowed into their
- * building) manages their own groups; read-only accounts only see the groups they belong to.
+ * building) manages their own groups; read-only accounts create none and see the groups they belong to.
  * Inventory admins see and manage all groups and create admin groups.
  */
 export function InventoryAccessGroups() {
@@ -105,7 +115,8 @@ export function InventoryAccessGroups() {
             label={group.ownerId ? t('operations.inventoryAccessGroups.personal') : t('operations.inventoryAccessGroups.adminManaged')}
             sx={{ bgcolor: group.ownerId ? '#1d4ed8' : '#c2410c', color: '#fff' }} /></TableCell>
           <TableCell>{group.canManage || group.memberIds.includes(user?.id ?? '') ? <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-            {group.members.length ? group.members.map(member => <Chip key={member.id} size="small" variant="outlined" label={member.name} />) : '—'}
+            {group.members.length ? group.members.map(member => <Chip key={member.id} size="small" variant="outlined"
+              label={member.active ? member.name : t('operations.inventoryAccessGroups.inactiveMember', { name: member.name })} />) : '—'}
           </Stack>
             : <Tooltip title={t('operations.inventoryAccessGroups.membersVisibleToManagers')}><span aria-label={t('operations.inventoryAccessGroups.membersVisibleToManagers')}>—</span></Tooltip>}</TableCell>
           <TableCell>{group.canManage

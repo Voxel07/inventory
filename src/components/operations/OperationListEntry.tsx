@@ -7,8 +7,8 @@ import { ActionBar, type Action } from '../shared/ActionBar';
 import { formatStatus } from '../../utils/formatters';
 
 /** Visible record rows: reference, working details, and commands stay in view. */
-export function OperationListEntry({ title, status, children, actions: candidates = [] }: {
-  title: ReactNode; status?: string; children: ReactNode; actions?: (Action | false | null | undefined)[];
+export function OperationListEntry({ title, status, badges, children, actions: candidates = [] }: {
+  title: ReactNode; status?: string; badges?: ReactNode; children: ReactNode; actions?: (Action | false | null | undefined)[];
 }) {
   const actions = candidates.some(Boolean);
   const color = status && ['cancelled', 'rejected', 'written_off', 'expired', 'failed'].includes(status) ? 'error'
@@ -20,6 +20,7 @@ export function OperationListEntry({ title, status, children, actions: candidate
     <Stack direction={{ xs: 'row', md: 'column' }} useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'flex-start', minWidth: 0 }}>
       <Typography component="div" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{title}</Typography>
       {status && <Chip size="small" variant="outlined" color={color} label={formatStatus(status)} />}
+      {badges}
     </Stack>
     <Stack spacing={0.5} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{children}</Stack>
     {/* Actions keep the shared touch target; on phones they get a full row below the details. Pinned steps stay visible
@@ -53,4 +54,15 @@ export function OperationDetail({ label, children }: { label: string; children: 
   return <Typography sx={{ whiteSpace: 'pre-wrap' }}>
     <Box component="span" sx={{ color: 'text.secondary', fontWeight: 600 }}>{label}: </Box>{children}
   </Typography>;
+}
+
+/** Secondary record text stays one click away so rows keep to the essentials. */
+export function OperationMore({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <Box>
+    <Button size="small" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={id}
+      startIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ px: 0.5, minHeight: 32 }}>{label}</Button>
+    <Collapse in={open} unmountOnExit><Stack id={id} spacing={0.5} sx={{ pl: 1, borderLeft: 2, borderColor: 'divider' }}>{children}</Stack></Collapse>
+  </Box>;
 }

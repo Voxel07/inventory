@@ -45,7 +45,8 @@ public class InventoryAccessService {
     public record Source(String kind, UUID principalId, String name, boolean canEdit) {}
     /** kind: owner (of the location), person or group. */
     public record Inherited(UUID locationId, String locationName, String kind, UUID principalId, String name, boolean canEdit) {}
-    public record Person(UUID id, String name) {}
+    /** {@code active}: false for deactivated accounts that keep an existing membership or share. */
+    public record Person(UUID id, String name, boolean active) {}
     /** {@code ownerId} null: managed by the inventory admin. Members are listed for managers and group members. */
     public record Group(UUID id, String name, long revision, List<@NotNull UUID> memberIds, List<Person> members, UUID ownerId, String ownerName, boolean canManage) {}
     /** {@code adminManaged}: admin only, creates a shared admin group without a personal owner. */
@@ -187,16 +188,24 @@ public class InventoryAccessService {
         }
         var seen = new HashSet<String>(); var values = new ArrayList<InventoryAccessGrant>();
         if (input.grants().size() > 200) throw ApiException.badRequest("Too many shares");
+        // Existing shares may be kept as they are: with deactivated people (deactivation retains shares)
+        // and with groups the current manager cannot see (e.g. another user's group, shared by the admin).
+        var retainedUsers = new HashSet<UUID>(); var retainedGroups = new HashSet<UUID>();
+        for (var existing : orm.grants(policy)) {
+            if (existing.user != null) retainedUsers.add(existing.user.id);
+            if (existing.group != null) retainedGroups.add(existing.group.id);
+        }
         for (var g : input.grants()) {
             if (g == null || (g.userId() == null) == (g.groupId() == null)) throw ApiException.badRequest("Select exactly one person or group per share");
             String key = g.userId() == null ? "group:" + g.groupId() : "user:" + g.userId();
             if (!seen.add(key)) throw ApiException.badRequest("Duplicate share");
             var value = new InventoryAccessGrant(); value.policy = policy; value.canEdit = g.canEdit();
-            if (g.userId() != null) value.user = person(g.userId());
+            if (g.userId() != null) value.user = person(g.userId(), retainedUsers);
             else {
                 value.group = orm.findLocked(InventoryAccessGroup.class, g.groupId());
-                // Other users' private groups stay unknown; only shareable groups may be used.
-                if (value.group == null || !canUse(value.group, actors.current())) throw ApiException.badRequest("Group not found");
+                // Other users' private groups stay unknown; only shareable groups may be newly used.
+                if (value.group == null || !retainedGroups.contains(value.group.id) && !canUse(value.group, actors.current()))
+                    throw ApiException.badRequest("Group not found");
             }
             values.add(value);
         }
@@ -209,7 +218,7 @@ public class InventoryAccessService {
         events.record("access.changed", kind, id, actors.current().id, null, Map.of("before", before, "after", after));
         return after;
     }
-    public List<Person> people() { actors.current(); return orm.people().stream().map(u -> new Person(u.id, u.name)).toList(); }
+    public List<Person> people() { actors.current(); return orm.people().stream().map(u -> new Person(u.id, u.name, true)).toList(); }
     /**
      * The inventory admin sees every group. Others see the groups they own (with members), groups they
      * belong to and admin-managed groups; other users' private groups stay hidden.
@@ -220,17 +229,21 @@ public class InventoryAccessService {
     }
     /**
      * Every account that owns private inventory may create share groups (e.g. a tenant for the people
-     * allowed into their building). Read-only accounts own nothing to share and only join groups.
+     * allowed into their building). Read-only accounts own nothing to share and only join groups; a
+     * group they still own (e.g. after a role change) stays manageable by them, like deletion.
+     * The group type ({@code adminManaged}) is fixed at creation.
      */
     public Group saveGroup(UUID id, GroupInput input) {
         var actor = actors.current();
-        if (!ActorService.createsInventory(actor)) throw ApiException.forbidden("Read-only accounts cannot manage sharing groups");
+        if (id == null && !ActorService.createsInventory(actor)) throw ApiException.forbidden("Read-only accounts cannot create sharing groups");
         boolean admin = actor.role == DomainEnums.UserRole.admin;
-        if (Boolean.TRUE.equals(input.adminManaged()) && !admin) throw ApiException.forbidden("Only the inventory admin manages admin groups");
+        if (id == null && Boolean.TRUE.equals(input.adminManaged()) && !admin) throw ApiException.forbidden("Only the inventory admin manages admin groups");
         if (id != null) orm.lockGroupPolicies(id);
         var g = id == null ? new InventoryAccessGroup() : orm.findLocked(InventoryAccessGroup.class, id);
         if (g == null || id != null && !canUse(g, actor)) throw ApiException.notFound("Group not found");
         if (id != null && !canManage(g, actor)) throw ApiException.forbidden("Only the group owner or the inventory admin can change this group");
+        if (id != null && input.adminManaged() != null && input.adminManaged() != (g.owner == null))
+            throw ApiException.badRequest("The group type cannot be changed; create a new group instead");
         if (id == null) g.owner = Boolean.TRUE.equals(input.adminManaged()) ? null : actor;
         if (g.revision != input.revision()) throw ApiException.conflict("Group changed; reload");
         UUID scope = g.owner == null ? null : g.owner.id;
@@ -238,8 +251,10 @@ public class InventoryAccessService {
                 && other.name.equalsIgnoreCase(input.name().trim()))) throw ApiException.conflict("Group name already exists");
         var before = g.members.stream().map(u -> u.id).toList();
         var beforeName = g.name == null ? "" : g.name;
+        // Deactivated members are retained (deactivation keeps memberships); new members must be active.
+        var retained = new HashSet<>(before);
         g.name = input.name().trim(); g.members = new HashSet<>();
-        for (var member : input.memberIds()) g.members.add(person(member));
+        for (var member : input.memberIds()) g.members.add(person(member, retained));
         g.revision++; if (id == null) orm.persist(g); orm.flush();
         events.record("access.changed", "access_group", g.id, actor.id, null,
                 Map.of("beforeName", beforeName, "name", g.name, "beforeMembers", before, "members", input.memberIds(), "reason", input.reason()));
@@ -272,11 +287,17 @@ public class InventoryAccessService {
         boolean manage = canManage(g, actor);
         boolean showMembers = manage || g.members.stream().anyMatch(u -> u.id.equals(actor.id));
         var members = showMembers ? g.members.stream().sorted(Comparator.comparing(u -> u.name, String.CASE_INSENSITIVE_ORDER))
-                .map(u -> new Person(u.id, u.name)).toList() : List.<Person>of();
+                .map(u -> new Person(u.id, u.name, u.active)).toList() : List.<Person>of();
         return new Group(g.id, g.name, g.revision, members.stream().map(Person::id).toList(), members,
                 g.owner == null ? null : g.owner.id, g.owner == null ? null : g.owner.name, manage);
     }
-    private UserAccount person(UUID id) { var u = id == null ? null : orm.find(UserAccount.class, id); if (u == null || !u.active) throw ApiException.badRequest("Active person not found"); return u; }
+    private UserAccount person(UUID id) { return person(id, Set.of()); }
+    /** {@code retained}: people already listed may stay although deactivated; others must be active. */
+    private UserAccount person(UUID id, Set<UUID> retained) {
+        var u = id == null ? null : orm.find(UserAccount.class, id);
+        if (u == null || !u.active && !retained.contains(u.id)) throw ApiException.badRequest("Active person not found");
+        return u;
+    }
     private InventoryAccessPolicy lockedPolicy(String kind, UUID id) {
         // Commands lock policies before stock/catalog rows; sharing uses the same order.
         var currentPolicy = policy(kind, id);

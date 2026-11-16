@@ -43,9 +43,11 @@ export type UserRole = typeof ROLE_LADDER[number];
 
 export type AccessRole = UserRole;
 
+/** Audited access state; role edits and (de)activation both record it. */
 export interface UserAccessState {
   roles: UserRole[];
   factions: string[];
+  active: boolean;
 }
 
 export interface UserAccessHistoryEntry {

@@ -16,7 +16,7 @@ export function ItemResponsiblePerson({ itemId, canEdit, actions }: { itemId: st
   const [draft, setDraft] = useState<ItemResponsibility | null>(null);
   const current = draft ?? query.data;
   const value: AccessPerson | string | null = current?.responsiblePersonId
-    ? { id: current.responsiblePersonId, name: current.responsiblePersonName ?? '' }
+    ? { id: current.responsiblePersonId, name: current.responsiblePersonName ?? '', active: true }
     : current?.responsiblePersonName ?? null;
   const save = useMutation({ mutationFn: (data: ItemResponsibility) => orderPickupApi.setResponsibility(itemId,
     data.responsiblePersonId || null, data.responsiblePersonId ? null : data.responsiblePersonName?.trim() || null),

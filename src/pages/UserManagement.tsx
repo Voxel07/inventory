@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AccountLifecyclePanel } from '../components/operations/AccountLifecyclePanel';
+import { useAccountLifecycle } from '../hooks/useAccountLifecycle';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { InventoryAccessGroups } from '../components/operations/InventoryAccessGroups';
 import { Alert, Autocomplete, Box, Chip, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography,
@@ -51,10 +52,14 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
   const [roles, setRoles] = useState<AccessRole[]>(user.roles);
   const [memberships, setMemberships] = useState<string[]>(user.faction ?? []);
   const [reason, setReason] = useState('');
+  // Lifecycle actions in this dialog advance the access revision; save against the current one.
+  const lifecycle = useAccountLifecycle(user.id);
+  const revision = lifecycle.data?.revision ?? user.revision ?? 0;
   const save = useMutation({
-    mutationFn: () => updateUserAccess(user.id, { roles, factions: memberships, revision: user.revision ?? 0, reason }),
+    mutationFn: () => updateUserAccess(user.id, { roles, factions: memberships, revision, reason }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['users'] });
+      await client.invalidateQueries({ queryKey: ['account-lifecycle', user.id] });
       if (user.id === me?.id) await refreshCurrentUser();
       onClose();
     },
@@ -78,11 +83,11 @@ function AccessEditor({ user, factions, onClose }: { user: User; factions: Facti
         slotProps={{ htmlInput: { maxLength: 1000 } }} helperText={t('pages.userManagement.reasonSavedInHistory')}
         onChange={(e) => setReason(e.target.value)} />
       {save.error && <Alert severity="error">{save.error.message}</Alert>}
-      <AccountLifecyclePanel user={user} />
+      <AccountLifecyclePanel user={user} onPseudonymized={onClose} />
     </Stack></DialogContent>
     <DialogActions>
       <Button title={t('common.close')} disabled={save.isPending} onClick={onClose}>{t('common.cancel')}</Button>
-      <Button title={t('pages.userManagement.saveRolesAndFactions')} variant="contained" disabled={!roles.length || !reason.trim() || save.isPending} onClick={() => save.mutate()}>{t('common.save')}</Button>
+      <Button title={t('pages.userManagement.saveRolesAndFactions')} variant="contained" disabled={!roles.length || !reason.trim() || save.isPending || lifecycle.isFetching} onClick={() => save.mutate()}>{t('common.save')}</Button>
     </DialogActions>
   </Dialog>;
 }
@@ -122,6 +127,7 @@ function UserRow({ user, factions, compact, onEdit, onHistory }: { user: User; f
     <TableRow hover>
       <TableCell component="th" scope="row" sx={{ fontWeight: 700, whiteSpace: compact ? undefined : 'nowrap', overflowWrap: 'anywhere' }}>
         {user.name || user.email}
+        {!user.active && <Chip size="small" color="warning" label={t('pages.userManagement.inactive')} sx={{ ml: 1, fontWeight: 400 }} />}
         {compact && user.email && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 400 }}>{user.email}</Typography>}
       </TableCell>
       {!compact && <TableCell sx={{ whiteSpace: 'nowrap' }}>{user.email}</TableCell>}
@@ -163,6 +169,7 @@ function AdminUserManagement() {
   const { factions } = useFactionCatalog();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<AccessRole | ''>('');
+  const [status, setStatus] = useState<'' | 'active' | 'inactive'>('');
   const term = useDebouncedValue(search.trim());
   const [editing, setEditing] = useState<User | null>(null);
   const [history, setHistory] = useState<User | null>(null);
@@ -178,8 +185,14 @@ function AdminUserManagement() {
         <MenuItem value="">{t('pages.userManagement.allRoles')}</MenuItem>
         {[...ROLE_LADDER].reverse().map(value => <MenuItem key={value} value={value}>{labels[value]}</MenuItem>)}
       </TextField>
+      <TextField select size="small" label={t('pages.userManagement.filterByStatus')} value={status}
+        onChange={event => setStatus(event.target.value as '' | 'active' | 'inactive')} sx={{ minWidth: 180 }}>
+        <MenuItem value="">{t('pages.userManagement.allStatuses')}</MenuItem>
+        <MenuItem value="active">{t('pages.userManagement.activeOnly')}</MenuItem>
+        <MenuItem value="inactive">{t('pages.userManagement.inactiveOnly')}</MenuItem>
+      </TextField>
     </Stack>
-    <UserDirectory key={JSON.stringify([term, role])} search={term} role={role || undefined}
+    <UserDirectory key={JSON.stringify([term, role, status])} search={term} role={role || undefined} active={status ? status === 'active' : undefined}
       factions={factions} onEdit={setEditing} onHistory={setHistory} />
     {editing && <AccessEditor key={`${editing.id}:${editing.revision ?? 0}`} user={editing} factions={factions} onClose={() => setEditing(null)} />}
     {history && <UserAccessHistory key={history.id} user={history} factions={factions} onClose={() => setHistory(null)} />}
@@ -187,13 +200,13 @@ function AdminUserManagement() {
   </Box>;
 }
 
-function UserDirectory({ search, role, factions, onEdit, onHistory }: {
-  search: string; role?: AccessRole; factions: Faction[]; onEdit: (user: User) => void; onHistory: (user: User) => void;
+function UserDirectory({ search, role, active, factions, onEdit, onHistory }: {
+  search: string; role?: AccessRole; active?: boolean; factions: Faction[]; onEdit: (user: User) => void; onHistory: (user: User) => void;
 }) {
   const t = useT();
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(20);
-  const result = useUsers(page, size, search, role);
+  const result = useUsers(page, size, search, role, active);
   const users = result.data?.rows ?? [];
   const theme = useTheme();
   // Phones keep name and roles; the e-mail moves under the name, factions show in the access editor.

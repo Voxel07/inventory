@@ -47,14 +47,19 @@ public class UserService {
         if (user.accessRevision != input.revision()) throw ApiException.conflict("User changed; reload");
         if (user.active && user.role == DomainEnums.UserRole.admin && !roles.contains(DomainEnums.UserRole.admin) && users.admins() <= 1)
             throw ApiException.conflict("Keep at least one inventory admin");
-        var before = java.util.Map.of("roles", java.util.List.copyOf(user.roles), "factions", java.util.List.copyOf(user.factions));
+        var before = accessState(user);
         user.setRoles(roles);
         user.factions = new java.util.ArrayList<>(factions);
         user.accessRevision++;
         events.record("user.changed", "user", user.id, actors.current().id, null, java.util.Map.of(
-                "before", before, "after", java.util.Map.of("roles", java.util.List.copyOf(user.roles), "factions", java.util.List.copyOf(factions)),
-                "reason", input.reason().trim()));
+                "before", before, "after", accessState(user), "reason", input.reason().trim()));
         return user;
+    }
+
+    /** Audited access state of {@code user.changed}: role/faction edits and (de)activation share this shape. */
+    public static java.util.Map<String, Object> accessState(UserAccount user) {
+        return java.util.Map.of("roles", user.roles.stream().map(Object::toString).toList(),
+                "factions", java.util.List.copyOf(user.factions), "active", user.active);
     }
 
     /** The current user chooses their own ntfy topic and webhook; null or blank clears one. */

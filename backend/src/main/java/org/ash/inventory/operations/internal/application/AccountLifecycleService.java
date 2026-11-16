@@ -52,9 +52,10 @@ public class AccountLifecycleService {
         if (!input.active() && actor.id.equals(id)) throw ApiException.badRequest("Another administrator must deactivate this account");
         if (!input.active() && user.active && user.role == DomainEnums.UserRole.admin && users.admins() <= 1)
             throw ApiException.conflict("Keep at least one active inventory administrator");
+        var before = UserService.accessState(user);
         user.active = input.active(); user.deactivatedAt = user.active ? null : Instant.now();
         user.offboardingReason = input.reason().trim(); user.accessRevision++;
-        events.record("user.changed", "user", id, actor.id, null, Map.of("active", user.active, "reason", input.reason()));
+        events.record("user.changed", "user", id, actor.id, null, Map.of("before", before, "after", UserService.accessState(user), "reason", input.reason().trim()));
     }
 
     public TransferResult transfer(UUID id, TransferInput input) {
@@ -73,9 +74,13 @@ public class AccountLifecycleService {
         actors.requireAdmin();
         if (!required(successor).active) throw ApiException.badRequest("The successor must be active");
         var group=em.find(InventoryAccessGroup.class,policy,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-        if(group!=null && group.owner!=null && owner.equals(group.owner.id)) {
-            group.owner=required(successor);group.revision++;
-            events.record("access.group_changed","access_group",group.id,actors.current().id,null,Map.of("oldOwner",owner,"owner",successor,"reason",reason));
+        if (group != null && group.owner != null && owner.equals(group.owner.id)) {
+            // Group names are unique per owner (case-insensitive): report a clash instead of failing the batch.
+            boolean clash = !em.createQuery("select g.id from InventoryAccessGroup g where g.owner.id = :owner and lower(g.name) = lower(:name)", UUID.class)
+                    .setParameter("owner", successor).setParameter("name", group.name).setMaxResults(1).getResultList().isEmpty();
+            if (clash) throw ApiException.conflict("The successor already owns a group named \"" + group.name + "\"; rename one of them first");
+            group.owner = required(successor); group.revision++;
+            events.record("access.changed", "access_group", group.id, actors.current().id, null, Map.of("oldOwner", owner, "owner", successor, "reason", reason));
             return;
         }
         Resource resource = null;

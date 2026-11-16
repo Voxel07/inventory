@@ -170,11 +170,11 @@ public class NtfyTopicFeed {
         return switch (event.type()) {
             case "user.created" -> "New account: " + user + " (" + join(payload.get("roles")) + ")";
             case "user.pseudonymized" -> "Account pseudonymized: " + user + by(event.actorId()) + reason;
-            case "user.changed" -> payload.containsKey("active")
-                    ? (Boolean.TRUE.equals(payload.get("active")) ? "Account reactivated: " : "Account deactivated: ") + user + by(event.actorId()) + reason
-                    : payload.get("after") instanceof Map<?, ?> after
-                        ? "Access changed: " + user + " → roles " + join(after.get("roles")) + ", factions " + join(after.get("factions")) + by(event.actorId()) + reason
-                        : null;
+            case "user.changed" -> payload.get("after") instanceof Map<?, ?> after && payload.get("before") instanceof Map<?, ?> before
+                    ? !java.util.Objects.equals(before.get("active"), after.get("active"))
+                        ? (Boolean.TRUE.equals(after.get("active")) ? "Account reactivated: " : "Account deactivated: ") + user + by(event.actorId()) + reason
+                        : "Access changed: " + user + " → roles " + join(after.get("roles")) + ", factions " + join(after.get("factions")) + by(event.actorId()) + reason
+                    : null;
             default -> null;
         };
     }

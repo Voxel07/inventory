@@ -17,6 +17,7 @@ import { UserRoleChips } from './UserRoleChips';
 function AccessState({ state, factions }: { state: UserAccessState; factions: Faction[] }) {
   const t = useT();
   return <Stack spacing={1}>
+    {!state.active && <Chip size="small" color="warning" label={t('pages.userManagement.inactive')} sx={{ alignSelf: 'flex-start' }} />}
     <UserRoleChips roles={state.roles} />
     <Typography variant="caption" color="text.secondary">{t('profile.assignedFactions')}</Typography>
     {state.factions.length ? <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
