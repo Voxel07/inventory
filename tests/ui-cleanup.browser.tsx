@@ -110,7 +110,7 @@ const repairs: Repair[] = [{ id: 'repair-1', damageReportId: 'damage-1', itemId:
 const loans: Loan[] = [{ id: 'loan-1', itemId: 'rental-1', item: 'My checked-out rental', commitmentId: 'commitment-1', providerLocationId: 'location-b', provider: 'Preview supplier',
   contact: 'preview@example.test', kind: 'rental', quantity: 4, collected: 4, returned: 1, collectionDate: 1790812800000, availableUntil: 1791590400000, returnDue: 1791763200000,
   status: 'collected', terms: 'Return to supplier', assetCodes: [], history: [], revision: 0 }];
-const receipts: Receipt[] = [{ id: 'receipt-1', receiptNumber: 'GR-PREVIEW', purchaseOrderId: 'purchase-1', receivingLocationId: 'location-a', status: 'accepted', receivedAt: now,
+const receipts: Receipt[] = [{ id: 'receipt-1', receiptNumber: 'GR-PREVIEW', purchaseOrderId: 'purchase-1', orderNumber: 'PO-PREVIEW', vendorName: 'Preview supplier', receivingLocationId: 'location-a', status: 'accepted', receivedAt: now,
   lines: [{ id: 'receipt-line', itemId: items[0].id, itemName: 'Radio', acceptedQuantity: 5, damagedQuantity: 0, rejectedQuantity: 0 }] }];
 const vendors: Vendor[] = [{ id: 'vendor-1', name: 'Preview supplier', active: true }];
 const report: OperationalReport = { name: 'stock', definition: 'Fixture operational report', startedAt: now, generatedAt: now, stale: false, total: 1,
