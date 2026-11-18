@@ -2,7 +2,7 @@
 name: inventory-native-local
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.7-alpine
     environment:
       POSTGRES_DB: inventory_native_local
       POSTGRES_USER: inventory

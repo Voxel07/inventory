@@ -1,10 +1,10 @@
 # Build from the repository root:
 #   docker build -f backend/Dockerfile.native -t inventory-api:native backend
 ## Stage 1: Build native executable with Quarkus Mandrel (GraalVM)
-FROM quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 AS build
+FROM quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25.0.5 AS build
 # The Mandrel builder supplies native-image, but not Maven. Reuse the same
 # Maven distribution as the JVM build; Java still comes from Mandrel.
-COPY --from=maven:3.9.11-eclipse-temurin-25 /usr/share/maven /usr/share/maven
+COPY --from=maven:3.9.16-eclipse-temurin-25 /usr/share/maven /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven
 ENV PATH="${MAVEN_HOME}/bin:${PATH}"
 USER root
@@ -21,7 +21,7 @@ COPY --chown=quarkus:quarkus src ./src
 RUN mvn -B -DskipTests -Dquarkus.native.container-build=false package -Pnative
 
 ## Stage 2: Ultra-lightweight native runner container
-FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0-2026-11-18
 WORKDIR /work/
 
 RUN mkdir -p /data/media \

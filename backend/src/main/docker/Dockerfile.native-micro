@@ -3,12 +3,12 @@
 #
 # Run from backend/ with Java 25, Maven and Docker/Podman installed.
 # Build a Linux runner for the container's CPU architecture first:
-#   mvn package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 -DskipTests
+#   mvn package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25.0.5 -DskipTests
 #
 # Then build the docker container:
 #   docker build -f src/main/docker/Dockerfile.native-micro -t inventory-api:native .
 ####
-FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0-2026-11-18
 WORKDIR /work/
 
 RUN mkdir -p /data/media \

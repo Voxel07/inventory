@@ -4,6 +4,9 @@
     "config:recommended"
   ],
   "enabledManagers": [
+    "dockerfile",
+    "docker-compose",
+    "github-actions",
     "bun",
     "maven"
   ],

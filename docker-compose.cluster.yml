@@ -90,7 +90,7 @@ x-inventory-api: &inventory-api
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.7-alpine
     command:
       - postgres
       - -c
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
 
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9.1.3-alpine
     command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
     ports:
       # Valkey has no password here: bind only to loopback or a firewalled private address.
@@ -134,7 +134,7 @@ services:
     restart: unless-stopped
 
   garage:
-    image: dxflrs/garage:v2.3.0
+    image: dxflrs/garage:v2.5.0
     restart: unless-stopped
     ports:
       - "${GARAGE_S3_BIND_ADDRESS:-0.0.0.0}:3900:3900" # S3 API
@@ -209,7 +209,7 @@ services:
       args:
         - APP_VERSION=${APP_VERSION:-cluster}
     ports:
-      - "${APP_BIND_ADDRESS:-127.0.0.1}:3333:80"
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:3333:8080"
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
       VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY-}
